@@ -97,9 +97,25 @@ enum GameFiles {
         }
     }()
 
+    /// The GTA VI test map's files (Sandbox › GTA VI test map). Some copies of the game leave them out;
+    /// the game itself doesn't need them, so they're checked on their own and only that map greys out.
+    static func isTestMapFile(_ name: String) -> Bool {
+        name.contains("levels/env_test/") || name.hasPrefix("common/data/env_test_")
+    }
+    static let testMapManifest = manifest.filter { isTestMapFile($0.0) }
+
+    /// Whether every test map file is in `data` with its exact size.
+    static func hasTestMap(_ data: URL) -> Bool {
+        let base = data.path
+        return testMapManifest.allSatisfy { name, expected in
+            var info = stat()
+            return stat(base + "/" + name, &info) == 0 && UInt64(info.st_size) == expected
+        }
+    }
+
     /// Checks every file of the game in `data` (presence and exact size). Takes well under a second.
     static func check(_ data: URL) -> Report {
-        let list = manifest
+        let list = manifest.filter { !isTestMapFile($0.0) }
         var problems: [Problem] = []
         var total: UInt64 = 0
         let base = data.path

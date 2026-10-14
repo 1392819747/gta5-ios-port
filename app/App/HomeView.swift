@@ -9,6 +9,7 @@ final class HomeView: UIView {
     let playButton = Theme.primaryButton(AppLanguage.choose("Play"), symbol: "play.fill")
     let settingsButton = Theme.glassButton(AppLanguage.choose("Settings"), symbol: "gearshape.fill")
     let layoutButton = Theme.glassButton(AppLanguage.choose("Controls layout"), symbol: "hand.tap.fill")
+    let telegramButton = Theme.glassButton(AppLanguage.choose("Telegram"), symbol: "paperplane.fill")
     let preloadLabel = UILabel()
     let controllerLabel = UILabel()
     /// Taps on the game files card.
@@ -75,7 +76,9 @@ final class HomeView: UIView {
         modeDetail.adjustsFontSizeToFitWidth = true
         modeDetail.minimumScaleFactor = 0.8
 
-        let secondary = UIStackView(arrangedSubviews: [layoutButton, settingsButton])
+        telegramButton.addAction(UIAction { _ in UIApplication.shared.open(Theme.telegramURL) }, for: .touchUpInside)
+        telegramButton.accessibilityLabel = AppLanguage.choose("Five Star Port on Telegram")
+        let secondary = UIStackView(arrangedSubviews: [telegramButton, layoutButton, settingsButton])
         secondary.spacing = 10
         secondary.translatesAutoresizingMaskIntoConstraints = false
         for label in [preloadLabel, controllerLabel] {
@@ -171,6 +174,7 @@ final class HomeView: UIView {
         playButton.configuration?.title = AppLanguage.choose("Play")
         settingsButton.configuration?.title = AppLanguage.choose("Settings")
         layoutButton.configuration?.title = AppLanguage.choose("Controls layout")
+        telegramButton.configuration?.title = AppLanguage.choose("Telegram")
         for (index, card) in modeCards.enumerated() {
             card.setTitle(GameMode.allCases[index].title)
         }
@@ -245,12 +249,13 @@ final class HomeView: UIView {
 
     /// Marks the chosen mode (nil: none yet) and shows its description.
     /// Shows the map choice (Sandbox) instead of the mode description, with `index` selected.
-    func setMap(_ index: Int, visible: Bool, enabled: Bool) {
+    func setMap(_ index: Int, visible: Bool, enabled: Bool, testMapAvailable: Bool = true) {
         mapRow.isHidden = !visible
         modeDetail.isHidden = visible
         for (i, chip) in mapChips.enumerated() {
             let selected = i == index
-            chip.isEnabled = enabled
+            // The GTA VI test map greys out when the game files don't include it.
+            chip.isEnabled = enabled && (i != 1 || testMapAvailable)
             chip.configuration?.baseForegroundColor = selected ? Theme.accent : Theme.text
             chip.configuration?.background.backgroundColor = selected ? Theme.accent.withAlphaComponent(0.18) : UIColor(white: 1, alpha: 0.1)
             chip.configuration?.background.strokeColor = selected ? Theme.accent : .clear

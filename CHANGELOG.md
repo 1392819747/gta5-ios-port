@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.3.3
+- **No more crash at the end of Marriage Counseling** (the Vinewood Hills fences). The engine wrote the list of where a model's pieces are in memory one entry past the space the model reserved for it, which broke the fence model. That same overflow hit other models too, so it may fix other rare glitches as well.
+- **The game's intro plays when you press Play.** The original Rockstar intro runs while the game loads behind it, instead of the blue loading log. Tap to skip.
+- **Runs cooler and stutters less.**
+  - The game's audio processing uses about a third less CPU (the whole app about 12% less, measured on an iPhone 13 Pro Max).
+  - The game no longer plans its textures as if every phone had 4 GB of video memory; the texture budget now fits your phone's memory.
+  - New switch, Settings › Graphics › Steady frame rate when hot: lowers the frame rate while the iPhone is hot for fewer stutters, and raises it again once it cools down. Off by default.
+- **No more app-wide lag and "stuck" buttons late in a session.** The game could print millions of log lines, and each one went through the app's main thread, so menus lagged and buttons acted as if held. Thanks to the player who traced it.
+- **No more lock-ups after long sessions on phones with lots of memory.** The game's memory was capped at 4 GB even where the phone allowed more; phones with a limit of about 7.5 GB or more now give it up to 6 GB, and the app backs off loading instead of retrying when the game's memory is full.
+- **Memory cap**, Settings › Graphics: limit how much memory the game may use (Automatic by default). Lower it if the game closes on its own.
+- **Story cheats in Settings.** While playing, Settings lists the game's own cheats (invincibility, health and armor, weapons, wanted level, Buzzard, Comet and more); tap one and the app enters it for you. Thanks to GitHub user @ITSUPERVISOR (#9).
+- **Steering buttons**, Settings › Touch controls: Left and Right buttons instead of the steering stick in cars, bikes and boats.
+- **Phone keypad with touch controls.** A new button on the phone controls (the controller's X) opens the keypad for a custom number and the phone's other options.
+- **Taxi rides work with touch controls** (Story mode; Sandbox has no taxi service). As a passenger, Left/Right change the destination, Select picks it, and there are Hurry up, Stop and Exit buttons (#6).
+- **The aircraft weapon button switches weapons** (cannon and missiles) instead of changing the radio station.
+- **Game files without the GTA VI test map work.** Some copies of the game leave out the test level; the file check no longer calls them incomplete, and the GTA VI test map button greys out instead.
+- **Settings during play only shows what works during play.** Game mode, Sandbox map, game files, graphics presets and frame rate apply at the next start, so they're hidden while you play.
+- **Telegram links** on the start screen and in Settings. The Telegram group is the official place for updates and help.
+- **One IPA for everyone.** It works with SideStore, AltStore and Sideloadly, and gets the extra memory where your account allows it.
+- **Clearer logs.** Hundreds of engine messages that printed as empty "Error:" lines now show their text, repeats are collapsed, sent logs keep the start of the run as well as the end, and logs report heat, CPU use and stutters every 10 seconds.
+
+Thanks to everyone who sent logs with exact failures and their own analysis: those reports found the Story mode bugs fixed here (the Marriage Counseling crash, the lock-ups after long sessions, the lag with stuck buttons).
+
 ## v1.3.2
 - **Fewer missing and blurry textures.** The app used much more memory for textures than the game planned for, so the game threw detailed textures away to stay under the limit.
   - iPads and Macs with Apple chips keep textures compressed: 2 to 8 times less texture memory.

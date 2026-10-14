@@ -35,13 +35,16 @@ enum ControlStyle {
         "detonate": "burst.fill", "zoom_in": "plus.magnifyingglass", "zoom_out": "minus.magnifyingglass",
         "weapon_prev": "chevron.left", "weapon_next": "chevron.right", "throttle_up": "chevron.up.2",
         "throttle_down": "chevron.down.2", "yaw_left": "rotate.left.fill", "yaw_right": "rotate.right.fill",
-        "tow_hook": "car.side.rear.tow.hitch.fill", "tow_arm_up": "arrow.up.to.line", "tow_arm_down": "arrow.down.to.line", "roof": "convertible.side.arrowtriangle.up.arrowtriangle.down.fill"]
+        "tow_hook": "car.side.rear.tow.hitch.fill", "tow_arm_up": "arrow.up.to.line", "tow_arm_down": "arrow.down.to.line", "roof": "convertible.side.arrowtriangle.up.arrowtriangle.down.fill",
+        "steer_left": "arrowtriangle.left.fill", "steer_right": "arrowtriangle.right.fill",
+        "phone_option": "circle.grid.3x3.fill", "taxi_hurry": "hare.fill", "taxi_stop": "stop.fill"]
     /// iOS 17 has no tow hitch or convertible symbols (they came in iOS 18).
     static let olderSymbol: [String: String] = [
         "tow_hook": "truck.pickup.side.fill", "roof": "car.side.arrowtriangle.up.arrowtriangle.down.fill"]
     /// Model name hashes (joaat) from the game's vehicles.meta: tow trucks, whose hook releases
     /// with INPUT_VEH_GRAPPLING_HOOK, and cars with an animated convertible roof (animConvRoofDictName).
     static let towTrucks: Set<UInt32> = [0xB12314E0 /* towtruck */, 0xE5A2D6C6 /* towtruck2 */]
+    static let taxi: UInt32 = 0xC703DB5F
     static let convertibles: Set<UInt32> = [
         0xA8E38B01 /* ninef2 */, 0x7B8AB45F /* carbonizzare */, 0x13B57D8A /* cogcabrio */, 0xFAAD85EE /* felon2 */,
         0xB9CB3B69 /* issi2 */, 0x679450AF /* rapidgt2 */, 0x3412AE2D /* sentinel2 */, 0xB8E2AE18 /* zion2 */,
@@ -360,6 +363,9 @@ final class TouchControlsView: UIView {
     private let gas = ControlButton("gas", icon: "gas", label: AppLanguage.choose("Gas"))
     private let brake = ControlButton("brake", icon: "brake", label: AppLanguage.choose("Brake and reverse"))
     private let handbrake = ControlButton("handbrake", icon: "handbrake", label: AppLanguage.choose("Handbrake"))
+    // Settings › Steering buttons: left/right buttons instead of the steering stick.
+    private let steerLeft = ControlButton("steer_left", icon: "steer_left", label: AppLanguage.choose("Steer left"))
+    private let steerRight = ControlButton("steer_right", icon: "steer_right", label: AppLanguage.choose("Steer right"))
     private let driveBy = ControlButton("driveBy", icon: "fire", label: AppLanguage.choose("Aim and shoot from vehicle"))
     private let horn = ControlButton("horn", icon: "horn", label: AppLanguage.choose("Horn"))
     private let lookBack = ControlButton("lookBack", icon: "look_back", label: AppLanguage.choose("Look behind"))
@@ -391,14 +397,19 @@ final class TouchControlsView: UIView {
     private let right = ControlButton("right", icon: "right", label: AppLanguage.choose("Right"))
     private let accept = ControlButton("accept", icon: "accept", label: AppLanguage.choose("Select"))
     private let back = ControlButton("back", icon: "back", label: AppLanguage.choose("Back"))
+    // The phone's X (Xbox) / Square: keypad for a custom number, and the phone's other options.
+    private let phoneOption = ControlButton("phone_option", icon: "phone_option", label: AppLanguage.choose("Phone options"))
+    // Taxi ride: X hurries the driver, B stops the taxi.
+    private let taxiHurry = ControlButton("taxi_hurry", icon: "taxi_hurry", label: AppLanguage.choose("Hurry up"))
+    private let taxiStop = ControlButton("taxi_stop", icon: "taxi_stop", label: AppLanguage.choose("Stop the taxi"))
     private let tabLeft = ControlButton("tabLeft", icon: "tab_left", label: AppLanguage.choose("Previous tab"))
     private let tabRight = ControlButton("tabRight", icon: "tab_right", label: AppLanguage.choose("Next tab"))
 
     private var allButtons: [ControlButton] {
         [fire, aim, leftFire, jump, enter, weapons, reload, cover, crouch, switcher, special, interact, detonate, zoomIn, zoomOut,
-         weaponPrev, weaponNext, gas, brake, handbrake, driveBy, horn, lookBack,
+         weaponPrev, weaponNext, gas, brake, handbrake, steerLeft, steerRight, driveBy, horn, lookBack,
          vehicleWeapon, towHook, towArmUp, towArmDown, roof, dive, surface, airFire, gear, throttleUp, throttleDown, yawLeft, yawRight, camera, phone, pause, settings, lights, radio,
-         up, down, left, right, accept, back, tabLeft, tabRight]
+         up, down, left, right, accept, back, phoneOption, taxiHurry, taxiStop, tabLeft, tabRight]
     }
     /// Refresh accessibility names for the active language without recreating controls.
     func refreshLanguage() {
@@ -451,6 +462,11 @@ final class TouchControlsView: UIView {
             "back": AppLanguage.choose("Back"),
             "tabLeft": AppLanguage.choose("Previous tab"),
             "tabRight": AppLanguage.choose("Next tab"),
+            "steer_left": AppLanguage.choose("Steer left"),
+            "steer_right": AppLanguage.choose("Steer right"),
+            "phone_option": AppLanguage.choose("Phone options"),
+            "taxi_hurry": AppLanguage.choose("Hurry up"),
+            "taxi_stop": AppLanguage.choose("Stop the taxi"),
         ]
         for button in allButtons { if let label = labels[button.name] { button.accessibilityLabel = label } }
         updateVisibility()
@@ -512,7 +528,7 @@ final class TouchControlsView: UIView {
     /// Engine state for the situational buttons; called every frame.
     func updateHints(_ next: PGControlHints) {
         let changed = next.specialShown != hints.specialShown || next.canDetonate != hints.canDetonate || next.helpContext != hints.helpContext
-            || next.vehicleModel != hints.vehicleModel
+            || next.vehicleModel != hints.vehicleModel || next.passenger != hints.passenger || next.taxiMenu != hints.taxiMenu
         if changed || next.specialReady != hints.specialReady || next.specialActive != hints.specialActive || next.radioWheelOpen != hints.radioWheelOpen {
             hintsChanged?("Control hints: special \(next.specialShown ? (next.specialActive ? "active" : next.specialReady ? "ready" : "charging") : "none") \(Int(next.specialFill * 100))%, detonate \(next.canDetonate), help \(next.helpShown ? (next.helpContext ? "asks for interact" : "shown") : "none"), radio wheel \(next.radioWheelOpen ? "open" : "closed"), vehicle model 0x\(String(next.vehicleModel, radix: 16))")
         }
@@ -521,25 +537,32 @@ final class TouchControlsView: UIView {
         special.setProgress(next.specialActive ? 0 : CGFloat(next.specialFill))
         if changed { updateVisibility() }
     }
+    /// A taxi ride with the destination menu (the taxiservice script runs, the player is a passenger).
+    private var taxiRide: Bool { hints.passenger && hints.taxiMenu && hints.vehicleModel == ControlStyle.taxi }
     private func baseVisible() -> [ControlButton] {
         let utility: [ControlButton] = context.driving ? [radio, lights, camera, phone, pause, settings] : [camera, phone, pause, settings]
+        let steering: [ControlButton] = GameSettings.shared.steeringButtons ? [steerLeft, steerRight] : []
         if context == .menu { return [pause, settings, up, down, left, right, accept, back, tabLeft, tabRight] }
-        if phoneDock { return [camera, phone, pause, settings, up, down, left, right, accept, back] }
+        if phoneDock { return [camera, phone, pause, settings, up, down, left, right, accept, back, phoneOption] }
         // A prompt (Mission failed, warning screens) waits for Accept/Back; play controls do nothing then.
         // Shop menus that lock player control also need the D-pad to move through the items.
         if promptActive && !editing { return [camera, pause, settings, up, down, left, right, accept, back] }
+        // A taxi ride: the destination menu takes D-pad left/right to change and A to choose.
+        if taxiRide && !editing {
+            return [camera, phone, pause, settings, radio, left, right, accept, taxiHurry, taxiStop, enter, lookBack]
+        }
         switch context {
         case .onFoot:
             return aimActive ? utility + [fire, aim, enter, weapons, reload, cover, leftFire]
                              : utility + [fire, aim, jump, enter, weapons, reload, cover, crouch]
         case .car, .boat:
-            return utility + [gas, brake, handbrake, enter, driveBy, horn, lookBack, vehicleWeapon]
+            return utility + [gas, brake, handbrake, enter, driveBy, horn, lookBack, vehicleWeapon] + steering
         case .bike:
-            return utility + [gas, brake, handbrake, enter, driveBy, horn, lookBack]
+            return utility + [gas, brake, handbrake, enter, driveBy, horn, lookBack] + steering
         case .bicycle:
-            return [camera, phone, pause, settings, radio, gas, brake, handbrake, enter, lookBack]
+            return [camera, phone, pause, settings, radio, gas, brake, handbrake, enter, lookBack] + steering
         case .sub:
-            return utility + [gas, brake, enter, dive, surface, lookBack]
+            return utility + [gas, brake, enter, dive, surface, lookBack] + steering
         // Aircraft: next weapon is a D-pad left tap; the same input held is the radio wheel.
         case .heli:
             return utility + [airFire, vehicleWeapon, enter, throttleUp, throttleDown, yawLeft, yawRight]
@@ -657,6 +680,8 @@ final class TouchControlsView: UIView {
         pedal(gas, 0.905, 0.72, 74, 108)
         pedal(brake, 0.775, 0.80, 74, 78)
         place(handbrake, 0.79, 0.52, 56)
+        place(steerLeft, 0.08, 0.76, 80)
+        place(steerRight, 0.215, 0.76, 80)
         place(driveBy, 0.655, 0.50, 58)
         place(horn, 0.06, 0.36, 46)
         place(lookBack, 0.155, 0.36, 44)
@@ -685,6 +710,9 @@ final class TouchControlsView: UIView {
         place(right, 0.12 + stepX, 0.70, 52)
         place(accept, 0.905, 0.70, 68)
         place(back, 0.765, 0.84, 56)
+        place(phoneOption, 0.765, 0.56, 56)
+        place(taxiHurry, 0.765, 0.52, 58)
+        place(taxiStop, 0.765, 0.84, 58)
         place(tabLeft, 0.05, 0.12, 46)
         place(tabRight, 0.95, 0.12, 46)
 
@@ -765,6 +793,8 @@ final class TouchControlsView: UIView {
                 if !has(isLook) { roles[id] = .look; lookStick.begin(at: point) }
             } else if context.flying, leftZone {
                 if !has(isStick) { roles[id] = .moveStick; moveStick.begin(at: point) }
+            } else if leftZone, context.driving, GameSettings.shared.steeringButtons {
+                // Steering buttons replace the steering stick; the rest of the left side does nothing.
             } else if leftZone {
                 // In swipe modes the entire left side is reserved for movement;
                 // even a second left finger must not become a camera gesture.
@@ -830,9 +860,9 @@ final class TouchControlsView: UIView {
         case settings:
             DispatchQueue.main.async { self.openSettings?() }
         case vehicleWeapon where context.flying:
-            // INPUT_VEH_FLY_SELECT_NEXT_WEAPON and INPUT_VEH_RADIO_WHEEL are both D-pad left: a tap
-            // switches the weapon, a hold opens the radio wheel. Send a tap however long the finger stays.
-            pulse(.left, for: 0.1)
+            // INPUT_VEH_FLY_SELECT_NEXT_WEAPON shares D-pad left with the radio (a tap changes the
+            // station), so the weapon is switched directly instead.
+            PGNextAircraftWeapon()
         case roof:
             // INPUT_VEH_ROOF is D-pad right held (a short press is the headlights).
             pulse(.right, for: 0.8)
@@ -1011,7 +1041,7 @@ final class TouchControlsView: UIView {
                 state.rightY = length > 24 ? Float(-d.y / length) : 0
             }
         case .car, .bike, .bicycle, .boat, .sub:
-            let steer = moveStick.value.x
+            let steer = GameSettings.shared.steeringButtons ? (steerRight.pressed ? 1 : 0) - (steerLeft.pressed ? 1 : 0) : moveStick.value.x
             state.leftX = Float(copysign(pow(abs(steer), 1.3), steer))
             let tilt = moveStick.value.y
             if context == .bike || context == .bicycle {
@@ -1096,10 +1126,19 @@ final class TouchControlsView: UIView {
         if phone.pressed && gamePhoneOut { held.insert(.b) }
         if up.pressed { held.insert(.up) }
         if down.pressed { held.insert(.down) }
-        if left.pressed { held.insert(.left) }
-        if right.pressed { held.insert(.right) }
+        if taxiRide {
+            // The taxi's destination menu reads the left stick (D-pad left would change the station).
+            if left.pressed { state.leftX = -1 }
+            if right.pressed { state.leftX = 1 }
+        } else {
+            if left.pressed { held.insert(.left) }
+            if right.pressed { held.insert(.right) }
+        }
         if accept.pressed { held.insert(.a) }
         if back.pressed { held.insert(.b) }
+        if phoneOption.pressed { held.insert(.x) }
+        if taxiHurry.pressed { held.insert(.x) }
+        if taxiStop.pressed { held.insert(.b) }
         if tabLeft.pressed { held.insert(.l1) }
         if tabRight.pressed { held.insert(.r1) }
         // Without a phone on screen the dock closes itself: after a moment when the phone did not

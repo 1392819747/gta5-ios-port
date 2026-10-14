@@ -4,6 +4,8 @@ import UIKit
 /// over blue, glass panels on top of the background art, and one warm accent for the main actions.
 enum Theme {
     /// The app's version as players should quote it in reports, e.g. "v1.3 (6)".
+    /// The community: official releases, help and announcements.
+    static let telegramURL = URL(string: "https://t.me/fivestarport")!
     static let appVersion: String = {
         let info = Bundle.main.infoDictionary
         // Each release has one build number, so the marketing version alone identifies it.

@@ -182,3 +182,12 @@ Settings shows the memory limit iOS gave the app at the bottom.
 ## License
 
 The code written for this project is MIT licensed (see `LICENSE`). It does not cover the game, its data, or the third-party files fetched at build time.
+
+## Thanks
+
+This port is better because of people outside the project:
+
+- **[@k49kg9xmsd-prog](https://github.com/k49kg9xmsd-prog)**: the app in 13 languages and swipe-to-look ([#4](https://github.com/kevinerikjs/gta5-ios-port/pull/4)).
+- **[@ITSUPERVISOR](https://github.com/ITSUPERVISOR)**: the story cheats in Settings ([#9](https://github.com/kevinerikjs/gta5-ios-port/pull/9)).
+- **[@TomerGamerTV](https://github.com/TomerGamerTV)**: the ideas behind the v1.3.2 fixes for pedestrian spawning crashes, the Replay editor's free space check and flickering props.
+- **Everyone who sent logs** from Settings › Send log to the developer, especially those who described exactly what failed and added their own analysis. Those reports found the Story mode bugs fixed in v1.3.3: the crash at the end of Marriage Counseling, the lock-ups after long sessions, and the lag with stuck buttons.

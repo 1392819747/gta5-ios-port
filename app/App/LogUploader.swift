@@ -4,8 +4,18 @@ import UIKit
 /// Sends the app's logs to the developer (5★ Port Builder site, which forwards them on Telegram).
 enum LogUploader {
     static let endpoint = URL(string: "https://fivestarport.vercel.app/api/log")!
-    /// The site accepts up to 4 MB, so each log is trimmed to its last 1.8 MB.
+    /// The site accepts up to 4 MB, so each log is trimmed to 1.8 MB: its start (device, settings,
+    /// game files) and its end (where it stopped or crashed).
     private static let perLog = 1_800_000
+    private static let head = 256_000
+
+    static func trimmed(_ data: Data) -> Data {
+        guard data.count > perLog else { return data }
+        var result = Data(data.prefix(head))
+        result.append("\n… \(data.count - perLog) bytes cut …\n".data(using: .utf8)!)
+        result.append(data.suffix(perLog - head))
+        return result
+    }
 
     static func send(note: String, done: @escaping ((String, String)) -> Void) {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -13,7 +23,7 @@ enum LogUploader {
         for (title, name) in [("PREVIOUS RUN", "native-port-previous.log"), ("THIS RUN", "native-port.log")] {
             guard let data = try? Data(contentsOf: documents.appendingPathComponent(name)), !data.isEmpty else { continue }
             body.append("===== \(title) (\(name)) =====\n".data(using: .utf8)!)
-            body.append(data.count > perLog ? data.suffix(perLog) : data)
+            body.append(trimmed(data))
             body.append("\n".data(using: .utf8)!)
         }
         guard !body.isEmpty else { DispatchQueue.main.async { done((AppLanguage.choose("No log yet"), AppLanguage.choose("Start the game once, then try again."))) }; return }

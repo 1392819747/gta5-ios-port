@@ -13,15 +13,16 @@ final class SettingsViewController: UITableViewController {
     var editLayout: (() -> Void)?
     var targetingChanged: (() -> Void)?
     var gameModeChanged: (() -> Void)?
+    var cheatSelected: ((StoryCheat) -> Void)?
 
-    private enum Section: Int, CaseIterable { case language, mode, graphics, controls, gyro, files, device }
+    private enum Section: Int, CaseIterable { case language, mode, graphics, controls, cheats, gyro, files, device }
     // The switch controls both the visible settings group and the active
     // camera input. It does NOT spoof the engine's last-input-device flag:
     // that flag is shared by the game's own aim-assist logic.
     private enum ControlsTab: Int { case stick = 0, swipe = 1 }
     private enum ControlsRow {
         case tab, swipeLook, swipeAim, stickLook, stickAim
-        case targeting, fireAlsoAims, buttonSize, buttonOpacity, editLayout
+        case targeting, fireAlsoAims, steeringButtons, buttonSize, buttonOpacity, editLayout
         case hideTouchWithController, keyboardMouse, inputState
     }
     private var controlsTab: ControlsTab {
@@ -30,7 +31,7 @@ final class SettingsViewController: UITableViewController {
     /// The camera choice only swaps its two speed rows; every other control setting is always there.
     private var controlsRows: [ControlsRow] {
         let camera: [ControlsRow] = controlsTab == .stick ? [.stickLook, .stickAim] : [.swipeLook, .swipeAim]
-        return [.tab] + camera + [.targeting, .fireAlsoAims, .buttonSize, .buttonOpacity,
+        return [.tab] + camera + [.targeting, .fireAlsoAims, .steeringButtons, .buttonSize, .buttonOpacity,
                                   .editLayout, .hideTouchWithController, .keyboardMouse]
     }
 
@@ -76,8 +77,8 @@ final class SettingsViewController: UITableViewController {
         preloader.refresh()
         let arguments = ProcessInfo.processInfo.arguments
         if let i = arguments.firstIndex(of: "--settings-section"), i + 1 < arguments.count,
-           let section = ["files": Section.files, "graphics": Section.graphics, "resolution": Section.graphics][arguments[i + 1]] {
-            let row = arguments[i + 1] == "resolution" ? settings.tier.allowed.count : 0
+           let section = ["files": Section.files, "graphics": Section.graphics, "resolution": Section.graphics, "device": Section.device][arguments[i + 1]] {
+            let row = arguments[i + 1] == "resolution" ? (engineRunning ? 0 : settings.tier.allowed.count) : arguments[i + 1] == "device" ? 3 : 0
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 self.tableView.scrollToRow(at: IndexPath(row: row, section: section.rawValue), at: .middle, animated: false)
             }
@@ -108,12 +109,14 @@ final class SettingsViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         switch Section(rawValue: section)! {
-        case .mode: return GameMode.allCases.count + (settings.gameModeChoice == .sandbox ? 1 : 0)
-        case .graphics: return settings.tier.allowed.count + 4
+        // While the game runs, settings that only take effect at the next start are hidden.
+        case .mode: return engineRunning ? 0 : GameMode.allCases.count + (settings.gameModeChoice == .sandbox ? 1 : 0)
+        case .graphics: return engineRunning ? Self.liveGraphicsRows.count : settings.tier.allowed.count + 6
         case .controls: return controlsRows.count
+        case .cheats: return engineRunning ? StoryCheats.all.count : 0
         case .gyro: return (settings.gyroAim == .off ? 1 : 3) + (settings.tiltSteer == .off ? 1 : 2)
-        case .files: return fileRows.count
-        case .device: return 3
+        case .files: return engineRunning ? 0 : fileRows.count
+        case .device: return 4
         case .language: return 1
         }
     }
@@ -126,10 +129,17 @@ final class SettingsViewController: UITableViewController {
     }
 
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        [AppLanguage.choose("Language"), AppLanguage.choose("Game mode"), AppLanguage.choose("Graphics"), AppLanguage.choose("Touch controls"), AppLanguage.choose("Gyro"), AppLanguage.choose("Game files"), AppLanguage.choose("This device")][section]
+        if Section(rawValue: section) == .cheats, !engineRunning { return nil }
+        if engineRunning, [.mode, .files].contains(Section(rawValue: section)) { return nil }
+        return [AppLanguage.choose("Language"), AppLanguage.choose("Game mode"), AppLanguage.choose("Graphics"), AppLanguage.choose("Touch controls"), AppLanguage.choose("Story cheats"), AppLanguage.choose("Gyro"), AppLanguage.choose("Game files"), AppLanguage.choose("This device")][section]
     }
 
+    /// Graphics rows that act during play: resolution, fill the screen, FPS counter, steady when hot
+    /// (row numbers after the presets). Presets and the frame rate apply at the next start.
+    private static let liveGraphicsRows = [0, 1, 3, 4]
+
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
+        if engineRunning, [.mode, .files].contains(Section(rawValue: section)) { return nil }
         switch Section(rawValue: section)! {
         case .mode:
             var text = AppLanguage.choose("Story mode saves stay on this phone between launches. Sandbox keeps its own separate files.")
@@ -146,6 +156,10 @@ final class SettingsViewController: UITableViewController {
             return text
         case .controls:
             return AppLanguage.choose("Switching tabs changes the camera control and the settings below. It does not force GTA V's in-game button prompt icons.")
+        case .cheats:
+            return engineRunning
+                ? AppLanguage.choose("The game's own story cheats. This screen closes and the buttons are pressed for you, which takes a few seconds; the controls don't respond meanwhile. Stand still, not in a cutscene or the pause menu. Works in Story mode and Sandbox.")
+                : nil
         case .gyro:
             return AppLanguage.choose("Move the phone to fine-tune your aim; turning your body turns the camera. Tilt steering turns the phone like a steering wheel: Assist adds fine control on top of the touch steering, Tilt to steer replaces it. The straight-ahead angle is however you hold the phone when you get in.")
         case .files: return filesFooter()
@@ -169,7 +183,8 @@ final class SettingsViewController: UITableViewController {
             let button = UIButton(configuration: .gray())
             button.configuration?.title = GameSettings.sandboxMapTitles[settings.sandboxMap]
             button.menu = UIMenu(children: GameSettings.sandboxMapTitles.enumerated().map { index, title in
-                UIAction(title: title, state: index == settings.sandboxMap ? .on : .off) { [weak self] _ in
+                UIAction(title: title, attributes: index == 1 && !(GameFolder.isChosen && GameFolder.testMapAvailable) ? .disabled : [],
+                         state: index == settings.sandboxMap ? .on : .off) { [weak self] _ in
                     self?.settings.sandboxMap = index
                     self?.gameModeChanged?()
                     UIView.performWithoutAnimation { self?.tableView.reloadSections([Section.mode.rawValue], with: .none) }
@@ -185,14 +200,15 @@ final class SettingsViewController: UITableViewController {
             content.secondaryText = mode.detail
             cell.accessoryType = settings.gameModeChoice == mode ? .checkmark : .none
         case .graphics:
-            if indexPath.row < presets.count {
-                let preset = presets[indexPath.row]
+            let graphicsRow = engineRunning ? presets.count + Self.liveGraphicsRows[indexPath.row] : indexPath.row
+            if graphicsRow < presets.count {
+                let preset = presets[graphicsRow]
                 content.text = preset.title + (preset == settings.tier.recommended ? AppLanguage.choose(" (recommended)") : "")
                 content.secondaryText = AppLanguage.interpolate(AppLanguage.choose("Detail level, default {arg0}p · "), [String(describing: preset.height)]) + preset.detail + (settings.tier.risky(preset) ? AppLanguage.choose("\n⚠︎ Heavier than this phone's recommended setting: may run out of memory or overheat.") : "")
                 if settings.tier.risky(preset) { content.secondaryTextProperties.color = .systemOrange }
                 cell.accessoryType = preset == settings.graphicsPreset ? .checkmark : .none
             } else {
-                let row = indexPath.row - presets.count
+                let row = graphicsRow - presets.count
                 cell.selectionStyle = .none
                 if row == 0 {
                     content.text = AppLanguage.choose("Resolution")
@@ -222,6 +238,30 @@ final class SettingsViewController: UITableViewController {
                     content.text = AppLanguage.choose("Show FPS counter")
                     cell.accessoryView = toggle(settings.showFPS, label: AppLanguage.choose("Show FPS counter")) { [weak self] in
                         self?.settings.showFPS = $0
+                    }
+                } else if row == 5 {
+                    content.text = AppLanguage.choose("Memory cap")
+                    content.secondaryText = AppLanguage.choose("The most memory the game may use. Lower it if the game closes on its own. Applies when you press Play.")
+                    let title: (Int) -> String = { $0 == 0 ? AppLanguage.choose("Automatic") : AppLanguage.interpolate(AppLanguage.choose("{arg0} GB"), [String(format: "%g", Double($0) / 1024)]) }
+                    let limit = settings.tier.memoryLimitMB
+                    let choices = [0] + [2560, 3072, 3584, 4096, 5120, 6144, 7168].filter { $0 < limit }
+                    let button = UIButton(type: .system)
+                    button.setTitle(title(settings.memoryCapMB) + " ▾", for: .normal)
+                    button.showsMenuAsPrimaryAction = true
+                    button.accessibilityLabel = AppLanguage.choose("Memory cap")
+                    button.menu = UIMenu(children: choices.map { mb in
+                        UIAction(title: title(mb), state: mb == settings.memoryCapMB ? .on : .off) { [weak self] _ in
+                            self?.settings.memoryCapMB = mb; self?.tableView.reloadData()
+                        }
+                    })
+                    button.sizeToFit()
+                    cell.accessoryView = button
+                } else if row == 4 {
+                    content.text = AppLanguage.choose("Steady frame rate when hot")
+                    content.secondaryText = AppLanguage.choose("Fewer stutters and steadier play: lowers the frame rate while the iPhone is hot, and raises it again once it cools down")
+                    cell.accessoryView = toggle(settings.steadyWhenHot, label: AppLanguage.choose("Steady frame rate when hot")) { [weak self] in
+                        self?.settings.steadyWhenHot = $0
+                        NotificationCenter.default.post(name: ProcessInfo.thermalStateDidChangeNotification, object: nil)
                     }
                 } else {
                     content.text = AppLanguage.choose("Frame rate")
@@ -312,6 +352,12 @@ final class SettingsViewController: UITableViewController {
                 content.text = AppLanguage.choose("Fire also aims")
                 content.secondaryText = AppLanguage.choose("Fire locks on first, like the classic mobile GTA games")
                 cell.accessoryView = toggle(settings.fireAlsoAims, label: AppLanguage.choose("Fire also aims")) { [weak self] in self?.settings.fireAlsoAims = $0 }
+            case .steeringButtons:
+                content.text = AppLanguage.choose("Steering buttons")
+                content.secondaryText = AppLanguage.choose("Left and right buttons instead of the steering stick in cars, bikes and boats")
+                cell.accessoryView = toggle(settings.steeringButtons, label: AppLanguage.choose("Steering buttons")) { [weak self] in
+                    self?.settings.steeringButtons = $0; self?.controlsChanged?()
+                }
             case .buttonSize:
                 content.text = AppLanguage.choose("Button size")
                 cell.accessoryView = slider(settings.controlScale, 0.7, 1.5, label: AppLanguage.choose("Button size")) { [weak self] in
@@ -347,6 +393,10 @@ final class SettingsViewController: UITableViewController {
                 let kind = device == -4 ? AppLanguage.choose("Mouse/keyboard") : (0...3).contains(device) ? AppLanguage.choose("Controller") : AppLanguage.choose("Unknown")
                 content.secondaryText = AppLanguage.interpolate(AppLanguage.choose("{arg0} [{arg1}] · Aim mode: {arg2}"), [kind, String(device), String(PGTargetingMode())])
             }
+        case .cheats:
+            let cheat = StoryCheats.all[indexPath.row]
+            content.text = AppLanguage.choose(cheat.title)
+            content.secondaryText = AppLanguage.choose(cheat.detail)
         case .gyro:
             let aimRows = settings.gyroAim == .off ? 1 : 3
             if indexPath.row == aimRows {
@@ -434,9 +484,13 @@ final class SettingsViewController: UITableViewController {
                 content.text = AppLanguage.choose("Send log to the developer")
                 content.secondaryText = AppLanguage.choose("One tap. Helps fix crashes and loading problems")
                 content.textProperties.color = .systemBlue
-            } else {
+            } else if indexPath.row == 2 {
                 content.text = AppLanguage.choose("Share log")
                 content.secondaryText = AppLanguage.choose("Save or send this run's log and the previous one yourself")
+                content.textProperties.color = .systemBlue
+            } else {
+                content.text = AppLanguage.choose("Five Star Port on Telegram")
+                content.secondaryText = AppLanguage.choose("Official updates, help and the latest version")
                 content.textProperties.color = .systemBlue
             }
         }
@@ -453,8 +507,14 @@ final class SettingsViewController: UITableViewController {
         tableView.deselectRow(at: indexPath, animated: true)
         if indexPath.section == Section.device.rawValue, indexPath.row == 1 { sendLog(); return }
         if indexPath.section == Section.device.rawValue, indexPath.row == 2 { shareLogs(from: tableView.cellForRow(at: indexPath)); return }
+        if indexPath.section == Section.device.rawValue, indexPath.row == 3 { UIApplication.shared.open(Theme.telegramURL); return }
         if indexPath.section == Section.controls.rawValue,
            controlsRows[indexPath.row] == .editLayout { editLayout?(); return }
+        if indexPath.section == Section.cheats.rawValue {
+            let cheat = StoryCheats.all[indexPath.row]
+            dismiss(animated: true) { self.cheatSelected?(cheat) }
+            return
+        }
         if indexPath.section == Section.mode.rawValue {
             guard indexPath.row < GameMode.allCases.count else { return }
             settings.gameMode = GameMode.allCases[indexPath.row]
@@ -464,7 +524,7 @@ final class SettingsViewController: UITableViewController {
         }
         if indexPath.section == Section.files.rawValue { selectFileRow(fileRows[indexPath.row]); return }
         let presets = settings.tier.allowed
-        guard indexPath.section == Section.graphics.rawValue, indexPath.row < presets.count else { return }
+        guard indexPath.section == Section.graphics.rawValue, !engineRunning, indexPath.row < presets.count else { return }
         settings.graphicsPreset = presets[indexPath.row]
         resolutionChanged?()
         UIView.performWithoutAnimation { tableView.reloadSections([Section.graphics.rawValue], with: .none) }

@@ -2,14 +2,49 @@ import UIKit
 import MetalKit
 import GameController
 import AVFAudio
+import AVFoundation
 import UniformTypeIdentifiers
 import os
 
 private func engineLog(_ message: UnsafePointer<CChar>?, _ context: UnsafeMutableRawPointer?) {
     guard let message, let context else { return }
-    let line = String(cString: message)
     let controller = Unmanaged<NativePortViewController>.fromOpaque(context).takeUnretainedValue()
-    DispatchQueue.main.async { controller.appendLog(line) }
+    LogWriter.shared.engine(String(cString: message), to: controller)
+}
+
+/// The log file and the engine's lines. The engine can print thousands of lines a second (a player's
+/// log had 3 million in one session); one main-thread hop per line, each opening the file, starved
+/// the UI: the whole app lagged and touch releases arrived late, so buttons acted held. Each line is
+/// written at once through one open file handle on the thread that logs it (a crash's last lines
+/// must reach the file), and the UI gets the lines in batches at most every 50 ms.
+final class LogWriter {
+    static let shared = LogWriter()
+    private let queue = DispatchQueue(label: "log-writer", qos: .utility)
+    private var handle: FileHandle?
+    private let lock = NSLock()
+    private var pending: [String] = []
+    private var flushScheduled = false
+
+    func open(_ file: URL) {
+        lock.lock(); try? handle?.close(); handle = try? FileHandle(forWritingTo: file); _ = try? handle?.seekToEnd(); lock.unlock()
+    }
+    /// One line from the app itself, written in order with the engine's.
+    func write(_ line: String) {
+        guard let data = (line + "\n").data(using: .utf8) else { return }
+        lock.lock(); try? handle?.write(contentsOf: data); lock.unlock()
+    }
+    func engine(_ line: String, to controller: NativePortViewController) {
+        let data = (line + "\n").data(using: .utf8)
+        lock.lock()
+        if let data { try? handle?.write(contentsOf: data) }
+        pending.append(line); let schedule = !flushScheduled; flushScheduled = true
+        lock.unlock()
+        guard schedule else { return }
+        queue.asyncAfter(deadline: .now() + 0.05) {
+            self.lock.lock(); let batch = self.pending; self.pending.removeAll(keepingCapacity: true); self.flushScheduled = false; self.lock.unlock()
+            DispatchQueue.main.async { controller.engineLines(batch) }
+        }
+    }
 }
 
 final class NativePortViewController: UIViewController, MTKViewDelegate {
@@ -42,8 +77,38 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
     private var bootedMode: GameMode?
     private var stableTimer: Timer?
     private var healthTimer: Timer?
+    private var introView: IntroVideoView?
+    private var lastCPU: (cpu: Double, wall: Double)?
+    private var thermalFrameLimit: Int32 = -1
+
+    /// A hot phone runs slower (iOS lowers the chip's speed), so uncapped frame rates swing between
+    /// 60 and 15 within minutes; a player's log went "serious" 30 s in. With "Steady frame rate when
+    /// hot" (off by default) the cap steps down while the phone is hot (fair: at most 60, serious: 30)
+    /// and back to the player's choice when it cools; switching it off restores the choice.
+    @objc private func thermalChanged() {
+        // Benchmarks keep their own frame limit.
+        if ProcessInfo.processInfo.environment["PG_BENCHMARK"] != nil { return }
+        DispatchQueue.main.async { [self] in
+            let cap = GameSettings.shared.frameRateCap
+            let chosen: Int32 = cap == 0 ? 0 : cap == 60 ? 1 : 2
+            let state = ProcessInfo.processInfo.thermalState
+            var limit = chosen
+            if GameSettings.shared.steadyWhenHot {
+                if state == .fair, chosen == 0 { limit = 1 }
+                if state == .serious || state == .critical { limit = 2 }
+            }
+            guard limit != thermalFrameLimit else { return }
+            if thermalFrameLimit >= 0 || limit != chosen {
+                appendLog("Thermal state \(["nominal", "fair", "serious", "critical"][min(3, state.rawValue)]): frame limit \(limit == 0 ? "off" : limit == 1 ? "60 FPS" : "30 FPS").")
+                PGSetFrameLimit(limit)
+            }
+            thermalFrameLimit = limit
+        }
+    }
     private var lastHealth: [UInt64] = [0, 0, 0, 0, 0, 0, 0, 0]
     private var padProof: PGPadState?
+    /// Bumps when a new story-cheat sequence starts, so an older one stops writing the pad.
+    private var storyCheatToken = 0
     private var lastGameStatus: UInt32 = 999
     private var worldReadyAt: CFTimeInterval?
     private var tiltNeutral: Double?
@@ -219,6 +284,7 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
             try? FileManager.default.moveItem(at: logFile!, to: previous)
         }
         try? Data().write(to: logFile!)
+        LogWriter.shared.open(logFile!)
         appendLog("GTA V Port \(Theme.appVersion) on iOS \(UIDevice.current.systemVersion)")
         appendLog("Native UIKit + Metal host. Engine compiled into the app; no WebView or JIT.")
         appendLog("Metal device: \(device?.name ?? "unavailable")")
@@ -238,6 +304,11 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(controllerChanged), name: .GCControllerDidConnect, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(releaseTouchControls), name: UIApplication.willResignActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(leftApp), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        // The log says when the app was in the background, so measurements and stalls can be told apart.
+        for (name, label) in [(UIApplication.willResignActiveNotification, "inactive"), (UIApplication.didEnterBackgroundNotification, "in the background"),
+                              (UIApplication.willEnterForegroundNotification, "back in the foreground"), (UIApplication.didBecomeActiveNotification, "active")] {
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in self?.appendLog("App \(label).") }
+        }
         if let recovery = GameSettings.shared.recoverFromFailedBoot() {
             appendLog("Previous launch on \(recovery.failed.title) did not finish; lowered to \(recovery.fallback.title)\(recovery.resetHeight.map { ", resolution \($0)p back to Auto" } ?? "").")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { self.explainRecovery(recovery) }
@@ -277,10 +348,23 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         preloadLabel.isHidden = summary == nil
     }
 
+    /// A batch of engine lines (LogWriter has written them to the file already).
+    func engineLines(_ batch: [String]) {
+        // Only the last 500 lines can show; older ones in a big batch only need their checks.
+        for line in batch { handleLine(line, written: true, show: false) }
+        lines.append(contentsOf: batch.suffix(500))
+        if lines.count > 500 { lines.removeFirst(lines.count - 500) }
+        refreshLogView()
+    }
+
     func appendLog(_ line: String) {
         // Lines also come from background work (checking the game files); the log view is UI.
         guard Thread.isMainThread else { DispatchQueue.main.async { self.appendLog(line) }; return }
         NSLog("[native-port] %@", line)
+        handleLine(line, written: false, show: true)
+    }
+
+    private func handleLine(_ line: String, written: Bool, show: Bool) {
         if line.hasPrefix("ASSET_WARM_PROGRESS ") {
             let parts = line.split(separator: " ")
             if parts.count >= 3 {
@@ -305,9 +389,15 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 30) { self.verifyMovement() }
         }
         if line == "WORLD_READY" { PGSetTargetingMode(Int32(GameSettings.shared.targetingMode)); if worldReadyAt == nil { worldReadyAt = CACurrentMediaTime() } }
+        // Debug: --open-settings-in-game opens Settings 10 s into the world.
+        if line == "WORLD_READY", ProcessInfo.processInfo.arguments.contains("--open-settings-in-game") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) { self.showSettings() }
+        }
         if line == "WORLD_READY", healthTimer == nil {
             // Every 10 s: memory, how often the memory guard held streaming back, and game-file reads.
             healthTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in self?.logHealth() }
+            NotificationCenter.default.addObserver(self, selector: #selector(thermalChanged), name: ProcessInfo.thermalStateDidChangeNotification, object: nil)
+            thermalChanged()
         }
         if line == "WORLD_READY", stableTimer == nil {
             // Three minutes in the world counts as a launch that fits in memory.
@@ -323,29 +413,57 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             metalView.isPaused = true
         }
-        if let logFile, let data = (line + "\n").data(using: .utf8),
-           let handle = try? FileHandle(forWritingTo: logFile) {
-            defer { try? handle.close() }
-            do { try handle.seekToEnd(); try handle.write(contentsOf: data) } catch {}
-        }
+        if !written { LogWriter.shared.write(line) }
         for key in ["[wgpu] fps:", "[wgpu] draw costs", "Native frame costs:", "Phone memory:", "WORLD_READY"] where line.hasPrefix(key) {
             metrics[key] = line
             if let data = try? JSONSerialization.data(withJSONObject: metrics, options: [.prettyPrinted, .sortedKeys]), let logFile {
                 try? data.write(to: logFile.deletingLastPathComponent().appendingPathComponent("native-metrics.json"), options: .atomic)
             }
         }
+        guard show else { return }
         lines.append(line)
         if lines.count > 500 { lines.removeFirst(lines.count - 500) }
+        refreshLogView()
+    }
+
+    private func refreshLogView() {
         guard diagnosticsOverlay?.isHidden != true else { return }
         output.text = lines.joined(separator: "\n")
         if !output.text.isEmpty { output.scrollRangeToVisible(NSRange(location: output.text.utf16.count - 1, length: 1)) }
+    }
+
+    /// The game's intro (Resources/intro.mp4) plays over the boot screen while the engine loads
+    /// behind it; it fades out when it ends or on a tap, onto whatever the game shows by then.
+    private func playIntro() {
+        let arguments = ProcessInfo.processInfo.arguments
+        let forced = ProcessInfo.processInfo.environment["PG_TEST_INTRO"] != nil // automated launches skip it unless asked
+        guard introView == nil, forced || !arguments.contains("--boot-engine"), ProcessInfo.processInfo.environment["PG_BENCHMARK"] == nil,
+              let url = Bundle.main.url(forResource: "intro", withExtension: "mp4") else { return }
+        let intro = IntroVideoView(frame: view.bounds, url: url, muted: arguments.contains("--mute"))
+        intro.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        intro.finished = { [weak self, weak intro] in
+            introPlaying = false
+            UIView.animate(withDuration: 0.4, animations: { intro?.alpha = 0 }) { _ in intro?.removeFromSuperview(); self?.introView = nil }
+        }
+        view.addSubview(intro)
+        introView = intro
+        introPlaying = true
+        intro.play()
+        // Overlays added while it plays (touch controls, the FPS label) stay underneath it.
+        Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self, weak intro] timer in
+            guard let self, let intro, intro.superview != nil else { timer.invalidate(); return }
+            self.view.bringSubviewToFront(intro)
+        }
+        appendLog("Intro video playing.")
     }
 
     /// The launch screen asks for a mode once; after that it remembers it.
     private func refreshModeChoice() {
         let choice = GameSettings.shared.gameModeChoice
         home.setMode(choice.flatMap { GameMode.allCases.firstIndex(of: $0) }, detail: choice?.detail ?? AppLanguage.choose("Choose Story mode or Sandbox to play."), enabled: !engineStarted)
-        home.setMap(GameSettings.shared.sandboxMap, visible: choice == .sandbox, enabled: !engineStarted)
+        let testMap = GameFolder.isChosen && GameFolder.testMapAvailable
+        if !testMap && GameSettings.shared.sandboxMap == 1 { GameSettings.shared.sandboxMap = 0 }
+        home.setMap(GameSettings.shared.sandboxMap, visible: choice == .sandbox, enabled: !engineStarted, testMapAvailable: testMap)
         updatePlayEnabled()
     }
 
@@ -377,6 +495,7 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         appendLog("Graphics: " + GraphicsConfiguration.apply(GameSettings.shared, screen: view.bounds.size))
         appendLog("Device: " + GameSettings.shared.tier.summary)
         GameSettings.shared.markBootStarted()
+        playIntro()
         launchButton.setTitle(AppLanguage.choose("Loading…"), for: .disabled); launchButton.setNeedsUpdateConfiguration()
         appendLog("Native touch controls support held buttons, sprint and weapon selection.")
         startAudio()
@@ -434,7 +553,7 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
     }
 
     /// Debug: scripted controller input, "step;step;..." with steps "wait:<s>", "hold:<buttons>:<s>"
-    /// (buttons: a b x y l1 r1 lt rt down up left right start rx+ rx- ry+ ry-, joined with +), "frame:<name>".
+    /// (buttons: a b x y l1 r1 lt rt down up left right start rx+ rx- ry+ ry- lx+ lx- ly+ ly-, joined with +), "frame:<name>".
     /// Debug: --watch-memory <address> <length> logs which bytes change between pad-script frames.
     private var watchSnapshot: [UInt8]?
     private func watchMemory(_ label: String) {
@@ -456,18 +575,29 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
             let parts = step.split(separator: ":").map(String.init)
             switch parts.first {
             case "wait": at += Double(parts.count > 1 ? parts[1] : "1") ?? 1
+            case "limit":
+                let value = Int32(parts.count > 1 ? parts[1] : "2") ?? 2
+                DispatchQueue.main.asyncAfter(deadline: .now() + at) { PGSetFrameLimit(value) }
+            case "weapon":
+                DispatchQueue.main.asyncAfter(deadline: .now() + at) { PGNextAircraftWeapon(); self.appendLog("Pad script: next aircraft weapon") }
             case "frame":
                 let name = parts.count > 1 ? parts[1] : "script"
                 DispatchQueue.main.asyncAfter(deadline: .now() + at) { PGCaptureNativeFrame(name); self.appendLog("Pad script: frame \(name)"); self.watchMemory(name) }
             case "hold":
                 var state = PGPadState(); var held = PadButtons()
-                for name in (parts.count > 1 ? parts[1] : "").split(separator: "+") {
+                // Stick directions end in + or -, so "ly++a+rx+" is ly+, a and rx+.
+                let spec = parts.count > 1 ? parts[1] : ""
+                let names = (try? NSRegularExpression(pattern: "[lr][xy][+-]|[a-z0-9]+"))?
+                    .matches(in: spec, range: NSRange(spec.startIndex..., in: spec))
+                    .compactMap { Range($0.range, in: spec).map { String(spec[$0]) } } ?? []
+                for name in names {
                     switch name {
                     case "a": held.insert(.a); case "b": held.insert(.b); case "x": held.insert(.x); case "y": held.insert(.y)
                     case "l1": held.insert(.l1); case "r1": held.insert(.r1); case "down": held.insert(.down); case "up": held.insert(.up)
                     case "left": held.insert(.left); case "right": held.insert(.right); case "start": held.insert(.start)
                     case "lt": state.leftTrigger = 1; case "rt": state.rightTrigger = 1
                     case "rx+": state.rightX = 1; case "rx-": state.rightX = -1; case "ry+": state.rightY = 1; case "ry-": state.rightY = -1
+                    case "ly+": state.leftY = 1; case "ly-": state.leftY = -1; case "lx+": state.leftX = 1; case "lx-": state.leftX = -1
                     default: break
                     }
                 }
@@ -482,6 +612,41 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         }
         // Hand input back to the touch controls (and controller) when the script ends.
         DispatchQueue.main.asyncAfter(deadline: .now() + at + 0.5) { self.padProof = nil; self.appendLog("Pad script: done") }
+    }
+
+    /// Presses one of the game's own controller cheat sequences, then gives the pad back.
+    private func playStoryCheat(_ cheat: StoryCheat) {
+        let status = PGGameStatus()
+        if PGPauseMenuActive() || (status & (1 | 4 | 8 | 16)) != 0 {
+            appendLog("Story cheat skipped (\(cheat.title)): pause menu, cutscene, or no player.")
+            return
+        }
+        storyCheatToken += 1
+        let token = storyCheatToken
+        appendLog("Story cheat: \(cheat.title)")
+        var at = 0.4
+        // Each press spans several frames even when a frame runs long (a 0.09 s press was about
+        // 3 frames at 30 FPS, and one stutter could drop it and void the whole cheat).
+        let hold = 0.15
+        let gap = 0.1
+        for input in cheat.inputs {
+            let state = input.state
+            DispatchQueue.main.asyncAfter(deadline: .now() + at) { [weak self] in
+                guard let self, self.storyCheatToken == token else { return }
+                self.padProof = state
+            }
+            at += hold
+            DispatchQueue.main.asyncAfter(deadline: .now() + at) { [weak self] in
+                guard let self, self.storyCheatToken == token else { return }
+                self.padProof = PGPadState()
+            }
+            at += gap
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + at + 0.15) { [weak self] in
+            guard let self, self.storyCheatToken == token else { return }
+            self.padProof = nil
+            self.appendLog("Story cheat entered: \(cheat.title)")
+        }
     }
 
     /// Simulator proof that the engine accepts the virtual controller and
@@ -523,6 +688,8 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
                 let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
                 guard buffers.count >= 2, let left = buffers[0].mData, let right = buffers[1].mData else { return noErr }
                 PGFillAudio(left.assumingMemoryBound(to: Float.self), right.assumingMemoryBound(to: Float.self), count)
+                // The game's sound waits for the intro video (its ring is still read, so nothing piles up).
+                if introPlaying { memset(left, 0, Int(count) * 4); memset(right, 0, Int(count) * 4) }
                 return noErr
             }
             audioSource = source
@@ -719,8 +886,16 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         let d = zip(now, lastHealth).map { $0 &- $1 }
         lastHealth = now
         let avgMS = d[1] > 0 ? Double(d[6]) / Double(d[1]) / 1000 : 0
-        appendLog(String(format: "Health: memory %d MB used, %d MB free · guard stopped streaming growth %llu×, asked to evict %llu× · reads %llu (%.1f MB, avg %.1f ms, slow %llu, errors %llu) · %.0f FPS",
-                         used, free, d[0], d[7], d[1], Double(d[2]) / 1_048_576, avgMS, d[5], d[3], PGRenderedFramesPerSecond()))
+        // iOS slows the chip down as the phone heats up; the same frames then take longer.
+        let thermal = ["nominal", "fair", "serious", "critical"][min(3, ProcessInfo.processInfo.thermalState.rawValue)]
+        // CPU time the whole app used, in cores, since the last line (what heats the phone).
+        var usage = rusage(); getrusage(RUSAGE_SELF, &usage)
+        let cpu = Double(usage.ru_utime.tv_sec + usage.ru_stime.tv_sec) + Double(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) / 1e6
+        let wall = CACurrentMediaTime()
+        let cores = lastCPU.map { (cpu - $0.cpu) / max(0.001, wall - $0.wall) } ?? 0
+        lastCPU = (cpu, wall)
+        appendLog(String(format: "Health: memory %d MB used, %d MB free · guard stopped streaming growth %llu×, asked to evict %llu× · reads %llu (%.1f MB, avg %.1f ms, slow %llu, errors %llu) · %.0f FPS · thermal %@ · CPU %.2f cores",
+                         used, free, d[0], d[7], d[1], Double(d[2]) / 1_048_576, avgMS, d[5], d[3], PGRenderedFramesPerSecond(), thermal, cores))
     }
 
     @objc private func leftApp() { if stableTimer?.isValid != false { GameSettings.shared.markBootInterrupted() } }
@@ -754,6 +929,7 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         controller.controlsChanged = { [weak self] in self?.touchControls.updateVisibility() }
         controller.editLayout = { [weak self] in self?.showLayoutEditor() }
         controller.targetingChanged = { PGSetTargetingMode(Int32(GameSettings.shared.targetingMode)) }
+        controller.cheatSelected = { [weak self] cheat in self?.playStoryCheat(cheat) }
         let navigation = UINavigationController(rootViewController: controller)
         Theme.styleNavigation(navigation)
         present(navigation, animated: true)
@@ -858,12 +1034,13 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
             touchControls.updateGameState(status)
             touchControls.updateContext(vehicle: vehicle, pauseMenu: pauseMenu)
             var hints = PGReadControlHints(vehicle)
-            // Debug: --preview-hints special,detonate,help shows the situational buttons.
+            // Debug: --preview-hints special,detonate,help,taxi shows the situational buttons.
             if let i = arguments.firstIndex(of: "--preview-hints"), i + 1 < arguments.count {
                 let wanted = arguments[i + 1]
                 if wanted.contains("special") { hints.specialShown = true; hints.specialReady = true; hints.specialFill = 0.7 }
                 if wanted.contains("detonate") { hints.canDetonate = true }
                 if wanted.contains("help") { hints.helpShown = true; hints.helpContext = true }
+                if wanted.contains("taxi") { hints.vehicleModel = 0xC703DB5F; hints.passenger = true; hints.taxiMenu = true }
             }
             touchControls.updateHints(hints)
             // Deliberately let the native game decide if relative mouse motion
@@ -978,5 +1155,37 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         encoder.endEncoding()
         command.present(drawable)
         command.commit()
+    }
+}
+
+/// Read from the audio thread: the game's sound is silent while the intro plays.
+nonisolated(unsafe) private var introPlaying = false
+
+/// Full-screen intro video; a tap skips it.
+final class IntroVideoView: UIView {
+    override class var layerClass: AnyClass { AVPlayerLayer.self }
+    private let player: AVPlayer
+    private var ended: NSObjectProtocol?
+    var finished: (() -> Void)?
+
+    init(frame: CGRect, url: URL, muted: Bool) {
+        player = AVPlayer(url: url)
+        player.isMuted = muted
+        super.init(frame: frame)
+        backgroundColor = .black
+        (layer as! AVPlayerLayer).player = player
+        (layer as! AVPlayerLayer).videoGravity = .resizeAspect
+        addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(finish)))
+        ended = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: player.currentItem, queue: .main) { [weak self] _ in self?.finish() }
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+    deinit { if let ended { NotificationCenter.default.removeObserver(ended) } }
+
+    func play() { player.play() }
+    @objc private func finish() {
+        guard let finished else { return }
+        self.finished = nil
+        player.pause()
+        finished()
     }
 }

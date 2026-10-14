@@ -143,6 +143,7 @@ enum GraphicsConfiguration {
         let preset = settings.graphicsPreset
         let (width, height) = size(for: preset, renderHeight: settings.renderHeight, screen: screen, matchScreenShape: settings.matchScreenShape)
         let options = preset.engineOptions
+        PGSetMemoryCap(Int32(settings.memoryCapMB))
         var pointers = options.map { strdup($0) }
         defer { pointers.forEach { free($0) } }
         pointers.withUnsafeMutableBufferPointer { buffer in

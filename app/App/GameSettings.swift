@@ -177,6 +177,21 @@ final class GameSettings {
         set { defaults.set(newValue, forKey: "matchScreenShape") }
     }
     /// A hardware keyboard and mouse play through the game's own PC controls (on by default).
+    /// Settings › Memory cap: the most memory (MB) the game may use, 0 automatic (the app's limit).
+    var memoryCapMB: Int {
+        get { defaults.integer(forKey: "memoryCapMB") }
+        set { defaults.set(max(0, newValue), forKey: "memoryCapMB") }
+    }
+    /// Left/right buttons instead of the steering stick in vehicles. Off by default.
+    var steeringButtons: Bool {
+        get { defaults.bool(forKey: "steeringButtons") }
+        set { defaults.set(newValue, forKey: "steeringButtons") }
+    }
+    /// Lower the frame rate while the phone is hot (NativePortViewController.thermalChanged). Off by default.
+    var steadyWhenHot: Bool {
+        get { defaults.bool(forKey: "steadyWhenHot") }
+        set { defaults.set(newValue, forKey: "steadyWhenHot") }
+    }
     var showFPS: Bool {
         get { defaults.object(forKey: "showFPS") as? Bool ?? true }
         set { defaults.set(newValue, forKey: "showFPS") }

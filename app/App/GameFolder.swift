@@ -33,6 +33,7 @@ enum GameFolder {
     static var appFolder: URL { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0] }
 
     static func clear() {
+        testMapKnown = nil
         for key in [bookmarkKey, nameKey, subpathKey, inAppKey] { UserDefaults.standard.removeObject(forKey: key) }
     }
 
@@ -68,6 +69,7 @@ enum GameFolder {
         }
         UserDefaults.standard.removeObject(forKey: bookmarkKey)
         UserDefaults.standard.set(true, forKey: inAppKey)
+        testMapKnown = nil
         UserDefaults.standard.set(subpath, forKey: subpathKey)
         UserDefaults.standard.set(displayName(best.data), forKey: nameKey)
         return true
@@ -110,6 +112,7 @@ enum GameFolder {
             let bookmark = try picked.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
             UserDefaults.standard.set(bookmark, forKey: bookmarkKey)
             UserDefaults.standard.set(false, forKey: inAppKey)
+            testMapKnown = nil
             UserDefaults.standard.set(subpath, forKey: subpathKey)
             UserDefaults.standard.set(displayName(best.data), forKey: nameKey)
             acceptedProblemCount = best.problems.count
@@ -167,6 +170,16 @@ enum GameFolder {
         let data = subpath.isEmpty ? (GameFiles.scan(root, depth: 4).best?.data ?? root) : root.appendingPathComponent(subpath)
         return GameFiles.gameData(at: data) == data ? data : nil
     }
+
+    /// Whether the game in use includes the GTA VI test map (checked once per launch).
+    static var testMapAvailable: Bool {
+        if let known = testMapKnown { return known }
+        let available = open().map(GameFiles.hasTestMap) ?? false
+        testMapKnown = available
+        if !available { log("The game files don't include the GTA VI test map; that Sandbox map is unavailable.") }
+        return available
+    }
+    static var testMapKnown: Bool?
 
     /// Checks every file of the game in use (Settings › Check game files).
     static func checkChosen() -> GameFiles.Report? {

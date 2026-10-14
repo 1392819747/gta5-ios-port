@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <time.h>
 #include <unistd.h>
 #include <math.h>
@@ -35,9 +36,30 @@ void pg_record_memory_fault(unsigned long long address,unsigned long long bytes,
  char line[240];snprintf(line,sizeof line,"Native heap access fault: address 0x%llx, bytes %llu, memory limit %llu",address,bytes,limit);pg_log(line);
 }
 
-void pg_log(const char *message) {
+static void pg_log_line(const char *message) {
   fprintf(stderr, "[native-port] %s\n", message);
   if (logCallback) logCallback(message, logContext);
+}
+// Engine lines arrive from several threads. A bare severity prefix (an engine message that
+// formatted to nothing) is dropped, and a run of identical lines is written once with a count,
+// so a long session's log keeps what happened instead of thousands of copies.
+static pthread_mutex_t logLock = PTHREAD_MUTEX_INITIALIZER;
+static char lastLogLine[512];
+static uint64_t lastLogRepeats;
+void pg_log(const char *message) {
+  size_t length = strlen(message);
+  while (length && (message[length-1] == '\n' || message[length-1] == ' ')) length--;
+  if (!length || (length == 6 && !memcmp(message, "Error:", 6)) || (length == 8 && !memcmp(message, "Warning:", 8)) ||
+      (length == 12 && !memcmp(message, "Fatal Error:", 12))) return;
+  pthread_mutex_lock(&logLock);
+  if (length < sizeof lastLogLine && !strncmp(message, lastLogLine, sizeof lastLogLine)) { lastLogRepeats++; pthread_mutex_unlock(&logLock); return; }
+  if (lastLogRepeats) {
+    char line[96]; snprintf(line, sizeof line, "(previous line repeated %llu more times)", (unsigned long long)lastLogRepeats);
+    pg_log_line(line); lastLogRepeats = 0;
+  }
+  snprintf(lastLogLine, sizeof lastLogLine, "%s", message);
+  pg_log_line(message);
+  pthread_mutex_unlock(&logLock);
 }
 
 void pg_missing_import(const char *name) {
@@ -78,6 +100,9 @@ uint64_t PGMemoryBudgetQueries(void){return atomic_load(&memoryBudgetQueries);}
 uint64_t PGMemoryBudgetClamps(void){return atomic_load(&memoryBudgetClamps);}
 uint64_t PGMemoryBudgetEvictions(void){return atomic_load(&memoryBudgetEvictions);}
 static uint64_t simulatedProcessLimit;
+static uint64_t processLimitMB; // the app's memory limit at boot, or the player's cap (0 in the simulator)
+// Settings › Memory cap (0 automatic): the game behaves as if iOS allowed only this much.
+static uint64_t memoryCapMB, capReserveBytes;
 static bool nativeProcessHeadroom(uint64_t *headroom){
  if(!nativeMemoryGuard)return false;
  atomic_fetch_add(&memoryBudgetQueries,1);
@@ -90,6 +115,7 @@ static bool nativeProcessHeadroom(uint64_t *headroom){
  available=simulatedProcessLimit>info.phys_footprint?simulatedProcessLimit-info.phys_footprint:0;
 #else
  available=os_proc_available_memory();
+ available=available>capReserveBytes?available-capReserveBytes:0;
 #endif
  *headroom=available;
  return true;
@@ -100,12 +126,69 @@ uint64_t pg_streaming_available_memory(uint64_t engineAvailable){
  uint64_t result=pg_streaming_headroom_budget(engineAvailable,available,384ull*1048576,256ull*1048576);
  return result;
 }
+// The engine heap has its own ceiling (the reservation), below the process limit on phones that
+// allow more memory. Once it refuses to grow, streaming more only loops on failed allocations
+// (input then stalls), so for a while after a refusal streaming stops growing, and right after
+// one it evicts. Process headroom never sees this: the phone still has memory free.
+extern _Atomic uint64_t pgHeapRefusedAt;
+static int64_t heapCeilingBudget(int64_t result){
+ uint64_t bits=atomic_load(&pgHeapRefusedAt);if(!bits)return result;
+ double refusedAt;memcpy(&refusedAt,&bits,8);
+ struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);double since=now.tv_sec+now.tv_nsec/1e9-refusedAt;
+ if(since<2)return result<-(int64_t)(64ull<<20)?result:-(int64_t)(64ull<<20);
+ if(since<30)return result<0?result:0;
+ return result;
+}
 uint64_t pg_streaming_resource_memory(uint64_t engineAvailable){
  uint64_t available;
- if(!nativeProcessHeadroom(&available))return engineAvailable;
- int64_t result=pg_streaming_resource_budget((int64_t)engineAvailable,available,384ull*1048576,256ull*1048576);
+ int64_t result=(int64_t)engineAvailable;
+ if(nativeProcessHeadroom(&available))result=pg_streaming_resource_budget((int64_t)engineAvailable,available,384ull*1048576,256ull*1048576);
+ result=heapCeilingBudget(result);
  if(result<(int64_t)engineAvailable&&result<=0)atomic_fetch_add(result<0?&memoryBudgetEvictions:&memoryBudgetClamps,1);
  return (uint64_t)result;
+}
+// The engine heap's reservation. 4095 MB unless the process may use clearly more: the game's
+// heap hit that ceiling on 8 GB-limit phones while about 1 GB of the limit was still free.
+// About 3 GB of the limit stays for textures, Metal and the app.
+void PGSetMemoryCap(int mb) { if (!atomic_load(&started)) memoryCapMB = mb > 0 ? (uint64_t)mb : 0; }
+static uint64_t pg_engine_memory_mb(void){
+ const char *configured=getenv("PG_ENGINE_MEMORY_MB");
+ if(configured){long mb=atol(configured);if(mb>=1024&&mb<=8192)return (uint64_t)mb;}
+#if !TARGET_OS_SIMULATOR
+ task_vm_info_data_t info={};mach_msg_type_number_t count=TASK_VM_INFO_COUNT;
+ if(task_info(mach_task_self(),TASK_VM_INFO,(task_info_t)&info,&count)==KERN_SUCCESS){
+  uint64_t limitMB=(os_proc_available_memory()+info.phys_footprint)>>20;
+  if(memoryCapMB&&memoryCapMB<limitMB){
+   capReserveBytes=(limitMB-memoryCapMB)<<20; // headroom the guard leaves unused
+   char line[96];snprintf(line,sizeof line,"Memory cap: %llu MB of the %llu MB limit.",(unsigned long long)memoryCapMB,(unsigned long long)limitMB);pg_log(line);
+   limitMB=memoryCapMB;
+  }
+  processLimitMB=limitMB;
+  if(limitMB>=4095+3072+512)return limitMB-3072<6144?limitMB-3072:6144;
+ }
+#endif
+ return 4095;
+}
+// The adapter's video memory as the engine reads it (Scripts/prepare_video_memory.py). The
+// browser build reports about 4 GB on every device, so the engine streams textures as if a phone
+// had 4 GB of video memory to spare. On GPUs that decode BC textures they also take about 4 times
+// what the engine counts. Memory then fills within minutes and the streaming guard throttles the
+// game for the rest of the session (the slowdown players report). The budget is what the limit
+// leaves after about 1.8 GB for the rest of the game and the guard's reserve, halved where BC
+// textures are decoded (in simulator soaks the GPU held about twice what the engine counted).
+int PGGPUReadsBC(void);
+u64 pg_video_memory(u64 reported){
+ uint64_t mb=0;
+ const char *configured=getenv("PG_VIDEO_MEMORY_MB");
+ if(configured)mb=(uint64_t)atol(configured);
+ else if(processLimitMB){
+  uint64_t textures=processLimitMB>1800+640?processLimitMB-1800:640;
+  mb=PGGPUReadsBC()?textures:textures/2;
+  if(mb<640)mb=640;
+ }
+ if(!mb||(mb<<20)>=reported)return reported;
+ char line[160];snprintf(line,sizeof line,"Video memory for the engine: %llu MB (memory limit %llu MB, %s).",(unsigned long long)mb,(unsigned long long)processLimitMB,PGGPUReadsBC()?"GPU reads BC textures":"BC textures decoded");pg_log(line);
+ return mb<<20;
 }
 static u32 nativeEngineCores=2;
 u32 w2c_env_emscripten_num_logical_cores(struct w2c_env *host) { return nativeEngineCores; }
@@ -380,6 +463,21 @@ PGControlHints PGReadControlHints(uint32_t touchContext){
  uint64_t vehicle,vehicleInfo;uint32_t vehicleModel;
  if(touchContext&&pg_context_u64(m,size,ped+5576,&vehicle)&&vehicle&&pg_context_u64(m,size,vehicle+32,&vehicleInfo)&&vehicleInfo&&
     pg_context_u32(m,size,vehicleInfo+24,&vehicleModel))hints.vehicleModel=vehicleModel;
+ // The seat manager is at +3208, seat pointers from +8 (CSeatManager, f61366/f37888); seat 0 drives.
+ uint64_t driver;
+ if(hints.vehicleModel&&pg_context_u64(m,size,vehicle+3216,&driver))hints.passenger=driver!=ped;
+ // The taxi ride menu is the story's taxiservice script; Sandbox doesn't run it. Script threads:
+ // array at 15409704, count (u16) at 15409712, name at +428 of each thread.
+ if(hints.passenger){
+  uint64_t threads;uint16_t count=0;
+  if(pg_context_u64(m,size,15409704,&threads)&&threads&&pg_context_u16(m,size,15409712,&count)){
+   for(uint16_t i=0;i<count&&i<512;i++){
+    uint64_t thread;
+    if(!pg_context_u64(m,size,threads+8ull*i,&thread)||!thread||thread+440>size)continue;
+    if(!strncasecmp((const char *)(m+thread+428),"taxiservice",12)){hints.taxiMenu=true;break;}
+   }
+  }
+ }
  return hints;
 }
 // The radio wheel reads INPUT_RADIO_WHEEL_UD/LR (332/333) from the main frontend control
@@ -565,16 +663,24 @@ u32 w2c_game_f81498(w2c_game*, u64, u64); // CMovieMgr::PreloadMovie
 void w2c_game_f81499(w2c_game*, u32); // CMovieMgr::Play
 // Test (PG_TEST_TELEPORT="x,y,z"): about 30 s in, moves the player there (a script vector is 3
 // floats 8 bytes apart).
+// Test (PG_TEST_TELEPORT="x,y,z"): moves the player there about 15 s in. With
+// "x,y,z;x2,y2,z2;seconds" it then alternates between the two places, so what streams in at
+// the first place is unloaded and loaded again (the fence crash in the Vinewood Hills).
 static void pg_test_teleport(w2c_game *instance) {
-  static int frames;
+  static int frames, jumps;
   const char *target = getenv("PG_TEST_TELEPORT");
-  float x, y, z;
-  if (frames < 0 || !target || ++frames < 900 || sscanf(target, "%f,%f,%f", &x, &y, &z) != 3) return;
-  frames = -1;
+  float p[2][3]; float seconds = 0;
+  if (frames < 0 || !target) return;
+  int fields = sscanf(target, "%f,%f,%f;%f,%f,%f;%f", &p[0][0], &p[0][1], &p[0][2], &p[1][0], &p[1][1], &p[1][2], &seconds);
+  if (fields != 3 && fields != 7) return;
+  const int period = fields == 7 && seconds >= 5 ? (int)(seconds * 30) : 0;
+  if (++frames < 900 || (frames - 900) % (period ? period : 1)) return;
+  if (!period) frames = -1;
+  const float *t = p[jumps++ & 1];
   uint64_t vector = w2c_game_f100(instance, 32);
-  float *v = pg_pointer(&env, vector, 24); v[0] = x; v[2] = y; v[4] = z;
+  float *v = pg_pointer(&env, vector, 24); v[0] = t[0]; v[2] = t[1]; v[4] = t[2];
   w2c_game_f50133(instance, w2c_game_f58715(instance), vector, 0, 0, 0);
-  char line[96]; snprintf(line, sizeof line, "TEST: player moved to %.1f, %.1f, %.1f.", x, y, z); pg_log(line);
+  char line[96]; snprintf(line, sizeof line, "TEST: player moved to %.1f, %.1f, %.1f (jump %d).", t[0], t[1], t[2], jumps); pg_log(line);
 }
 void w2c_game_f50825(w2c_game*, u32); // graphics_commands::CommandSetTVChannel
 // Test (PG_TEST_TV=1): from about 45 s in, switches the TV on as a script does (SET_TV_CHANNEL),
@@ -631,7 +737,10 @@ static void pg_test_car(w2c_game *instance) {
   const char *target = getenv("PG_TEST_CAR");
   float x, y, z, heading;
   if (frames < 0 || !target || ++frames < 1050 || sscanf(target, "%f,%f,%f,%f", &x, &y, &z, &heading) != 4) return;
-  const uint32_t model = 970598228u; // joaat("sultan")
+  // PG_TEST_CAR_MODEL=<name> picks the vehicle (joaat of the model name), "sultan" by default.
+  uint32_t model = 970598228u; // joaat("sultan")
+  const char *name = getenv("PG_TEST_CAR_MODEL");
+  if (name && *name) { uint32_t h = 0; for (const char *c = name; *c; c++) { h += (uint8_t)(*c >= 'A' && *c <= 'Z' ? *c + 32 : *c); h += h << 10; h ^= h >> 6; } h += h << 3; h ^= h >> 11; h += h << 15; model = h; }
   uint64_t previous = pg_test_enter_script(instance);
   w2c_game_f60322(instance, model);
   if (!w2c_game_f60324(instance, model) && frames < 1650) { pg_test_leave_script(instance, previous); return; }
@@ -643,6 +752,28 @@ static void pg_test_car(w2c_game *instance) {
   pg_test_leave_script(instance, previous);
   if (getenv("PG_TEST_DRIVE")) driving = atoi(getenv("PG_TEST_DRIVE")) + 1;
   char line[96]; snprintf(line, sizeof line, "TEST: player put in car %u at %.1f, %.1f, %.1f.", vehicle, x, y, z); pg_log(line);
+}
+// Test (PG_TEST_REQUEST_MODELS="name,name"): from about 40 s in, requests those models the way a
+// mission script does (REQUEST_MODEL) and logs when each has loaded, to load one model on demand.
+static void pg_test_request_models(w2c_game *instance) {
+  static int frames; static bool requested; static char done[8];
+  const char *list = getenv("PG_TEST_REQUEST_MODELS");
+  if (!list || frames < 0 || ++frames < 1200) return;
+  char names[256]; snprintf(names, sizeof names, "%s", list);
+  int index = 0, pending = 0;
+  for (char *name = strtok(names, ","); name && index < 8; name = strtok(NULL, ","), index++) {
+    uint32_t h = 0; for (const char *c = name; *c; c++) { h += (uint8_t)(*c >= 'A' && *c <= 'Z' ? *c + 32 : *c); h += h << 10; h ^= h >> 6; } h += h << 3; h ^= h >> 11; h += h << 15;
+    uint64_t previous = pg_test_enter_script(instance);
+    if (!requested) { w2c_game_f60322(instance, h); char line[128]; snprintf(line, sizeof line, "TEST: requested model %s (0x%08x).", name, h); pg_log(line); }
+    else if (!done[index]) {
+      if (w2c_game_f60324(instance, h)) { done[index] = 1; char line[128]; snprintf(line, sizeof line, "TEST: model %s loaded.", name); pg_log(line); }
+      else pending++;
+    }
+    pg_test_leave_script(instance, previous);
+  }
+  if (requested && !pending) { pg_log("TEST: all requested models loaded."); frames = -1; }
+  requested = true;
+  if (frames > 1200 + 30 * 120) { pg_log("TEST: requested models still not loaded after 120 s."); frames = -1; }
 }
 void w2c_game_f47028(w2c_game*, u64, u64, f32, u32, u32, u32); // CLoadScene::StartFromScript
 u32 w2c_game_f47030(w2c_game*); // CLoadScene::IsLoaded
@@ -714,11 +845,57 @@ static void pg_keep_on_test_map(w2c_game *instance) {
   char line[128]; snprintf(line, sizeof line, "GTA VI test map: moved the player from %.0f, %.0f, %.0f to the map's start point.", x, y, z); pg_log(line);
   placed = true;
 }
+// Aircraft weapons. INPUT_VEH_FLY_SELECT_NEXT_WEAPON shares D-pad left with the radio, whose tap
+// changes the station, so the touch button asks for the next weapon the way a script does:
+// GET_CURRENT_PED_VEHICLE_WEAPON (f63032), then SET_CURRENT_PED_VEHICLE_WEAPON (f63031) on the next
+// known aircraft weapon until one is accepted (it refuses weapons the vehicle doesn't have).
+void w2c_game_f63031(w2c_game*, u64);
+void w2c_game_f63032(w2c_game*, u64);
+u32 w2c_game_f58715(w2c_game*); // PLAYER_PED_ID
+static _Atomic bool aircraftWeaponRequested;
+void PGNextAircraftWeapon(void) { atomic_store(&aircraftWeaponRequested, true); }
+static uint32_t pg_joaat(const char *text) {
+  uint32_t h = 0;
+  for (const char *c = text; *c; c++) { h += (uint8_t)(*c >= 'A' && *c <= 'Z' ? *c + 32 : *c); h += h << 10; h ^= h >> 6; }
+  h += h << 3; h ^= h >> 11; h += h << 15; return h;
+}
+static void pg_next_aircraft_weapon(w2c_game *instance) {
+  if (!atomic_exchange(&aircraftWeaponRequested, false)) return;
+  static const char *names[] = {"VEHICLE_WEAPON_PLAYER_LAZER", "VEHICLE_WEAPON_SPACE_ROCKET", "VEHICLE_WEAPON_PLAYER_BUZZARD",
+                                "VEHICLE_WEAPON_PLAYER_SAVAGE", "VEHICLE_WEAPON_PLAYER_BULLET", "VEHICLE_WEAPON_PLANE_ROCKET"};
+  enum { COUNT = sizeof names / sizeof *names };
+  static uint64_t call; // native call info: +0 result pointer, +16 arguments; then result and arguments
+  if (!call) call = w2c_game_f100(instance, 64);
+  uint64_t *info = pg_pointer(&env, call, 64);
+  memset(info, 0, 64);
+  info[0] = call + 24; info[2] = call + 32;
+  const uint32_t ped = w2c_game_f58715(instance);
+  info[4] = ped; info[5] = call + 48; // ped, pointer to the hash
+  w2c_game_f63032(instance, call);
+  const uint32_t current = *(uint32_t *)pg_pointer(&env, call + 48, 4), found = *(uint32_t *)pg_pointer(&env, call + 24, 4);
+  int at = -1;
+  for (int i = 0; i < COUNT; i++) if (pg_joaat(names[i]) == current) at = i;
+  char line[160];
+  for (int step = 1; step <= COUNT; step++) {
+    const int next = (at + step + COUNT) % COUNT;
+    if (next == at) break;
+    memset(info, 0, 64); info[0] = call + 24; info[2] = call + 32;
+    info[4] = ped; info[5] = pg_joaat(names[next]);
+    w2c_game_f63031(instance, call);
+    if (*(uint32_t *)pg_pointer(&env, call + 24, 4)) {
+      snprintf(line, sizeof line, "Aircraft weapon: %s (was 0x%x%s).", names[next], current, found ? "" : ", none");
+      pg_log(line); return;
+    }
+  }
+  snprintf(line, sizeof line, "Aircraft weapon: no other weapon on this aircraft (current 0x%x%s).", current, found ? "" : ", none");
+  pg_log(line);
+}
 void pg_virtual_pad_apply(w2c_game *instance, uint64_t pad) {
+  if (pad == 12840656) pg_next_aircraft_weapon(instance);
   if (pad == 12840656) pg_apply_targeting_mode(instance);
   if (pad == 12840656) pg_keep_on_test_map(instance);
 #if TARGET_OS_SIMULATOR
-  if (pad == 12840656) { pg_test_teleport(instance); pg_test_tv(instance); pg_test_video(instance); pg_test_car(instance); pg_test_loadscene(instance); pg_test_loadscene_monitor(instance); }
+  if (pad == 12840656) { pg_test_teleport(instance); pg_test_tv(instance); pg_test_video(instance); pg_test_car(instance); pg_test_request_models(instance); pg_test_loadscene(instance); pg_test_loadscene_monitor(instance); }
 #endif
   if (pad != 12840656 || !atomic_load(&virtualPadActive)) return;
   uint64_t packed = atomic_load(&virtualPad);
@@ -815,25 +992,188 @@ u32 pg_streamed_txd_loaded(w2c_game *instance, u64 name, u32 hash, u32 loaded) {
 }
 // datResourceMap fixup miss (Scripts/prepare_fixup_guard.py). The map: chunk table pointer at +0,
 // resource name at +16, entries {src, size | index << 56} (2 x u64) from +24, entry count (u8) at
-// +4120; the chunk table holds {.., src, dest} (3 x u64) per index. An address inside a chunk this
-// resource was placed in is a pointer fixed up twice: it is already right, so the delta is 0.
-u32 pg_fixup_already_placed(w2c_game *instance, u64 map, u64 address) {
+// +4120; the chunk table holds {.., src, dest} (3 x u64) per index. The engine treats a pointer
+// outside the map as fatal. Two Vinewood Hills fences (ch2_07_fence_03, ch2_07d_fencing_02, the end
+// of Marriage Counseling) always contain such values, straight from their decompressed data
+// (a simulator watchpoint saw only the streamer's decompressor write their chunks). An address
+// inside one of the resource's own chunks is kept (delta 0); any other becomes a null pointer, so
+// the model loads without that part instead of stopping the game.
+static void pg_log_chunk_map(uint64_t map, uint64_t table, unsigned count) {
+  char line[200];
+  for (unsigned k = 0; k < count && k < 64; k++) {
+    const uint64_t *e = pg_pointer(&env, map + 24 + 16ull * k, 16);
+    snprintf(line, sizeof line, "  chunk %llu: file 0x%llx, %llu bytes, placed at 0x%llx", (unsigned long long)(e[1] >> 56),
+             (unsigned long long)e[0], (unsigned long long)(e[1] & 0x00FFFFFFFFFFFFFFull),
+             (unsigned long long)*(uint64_t *)pg_pointer(&env, table + 24 * (e[1] >> 56) + 24, 8));
+    pg_log(line);
+  }
+}
+#if TARGET_OS_SIMULATOR
+// PG_FENCE_DUMP=<dir>: write each chunk of a flagged resource as it is at that moment (diagnostics).
+static void pg_fence_dump(uint64_t map, const char *tag) {
+  const char *dir = getenv("PG_FENCE_DUMP"); if (!dir) return;
+  uint64_t table = *(uint64_t *)pg_pointer(&env, map, 8), name = *(uint64_t *)pg_pointer(&env, map + 16, 8);
+  unsigned count = *(uint8_t *)pg_pointer(&env, map + 4120, 1);
+  for (unsigned k = 0; k < count && k < 64; k++) {
+    const uint64_t *e = pg_pointer(&env, map + 24 + 16ull * k, 16);
+    uint64_t size = e[1] & 0x00FFFFFFFFFFFFFFull, dest = *(uint64_t *)pg_pointer(&env, table + 24 * (e[1] >> 56) + 24, 8);
+    char path[512]; snprintf(path, sizeof path, "%s/%.64s_%s_%u_%llx_%llx.bin", dir, name ? pg_string(&env, name) : "x", tag, k,
+                             (unsigned long long)e[0], (unsigned long long)dest);
+    FILE *f = fopen(path, "wb"); if (f) { fwrite(pg_pointer(&env, dest, size), 1, size, f); fclose(f); }
+  }
+}
+#endif
+u32 pg_fixup_miss(w2c_game *instance, u64 map, u64 address, u64 *delta) {
   (void)instance;
   static _Atomic int logged;
   uint64_t table = *(uint64_t *)pg_pointer(&env, map, 8), name = *(uint64_t *)pg_pointer(&env, map + 16, 8);
   unsigned count = *(uint8_t *)pg_pointer(&env, map + 4120, 1);
-  for (unsigned k = 0; k < count; k++) {
+  bool inside = false;
+  for (unsigned k = 0; k < count && !inside; k++) {
     const uint64_t *entry = pg_pointer(&env, map + 24 + 16ull * k, 16);
     uint64_t size = entry[1] & 0x00FFFFFFFFFFFFFFull, index = entry[1] >> 56;
     uint64_t dest = *(uint64_t *)pg_pointer(&env, table + 24 * index + 24, 8);
-    if (address >= dest && address - dest < size) {
-      if (atomic_fetch_add(&logged, 1) < 16) {
-        char line[200]; snprintf(line, sizeof line, "Resource \"%.64s\": pointer 0x%llx was already fixed up (chunk %u); kept it.",
-                                 name ? pg_string(&env, name) : "?", (unsigned long long)address, (unsigned)index);
-        pg_log(line);
-      }
-      return 1;
+    inside = address >= dest && address - dest < size;
+  }
+  *delta = inside ? 0 : (u64)0 - address; // the engine adds the delta: inside stays, outside becomes 0
+  if (atomic_fetch_add(&logged, 1) < 16) {
+    char line[200]; snprintf(line, sizeof line, "Resource \"%.64s\": pointer 0x%llx %s.", name ? pg_string(&env, name) : "?",
+                             (unsigned long long)address, inside ? "was already fixed up; kept it" : "is in none of its chunks; set it to null");
+    pg_log(line);
+    if (atomic_load(&logged) <= 2) pg_log_chunk_map(map, table, count);
+  }
+#if TARGET_OS_SIMULATOR
+  if (!inside) pg_fence_dump(map, "miss"); else pg_fence_dump(map, "kept");
+#endif
+  return 1;
+}
+// Page map space (Scripts/prepare_fixup_guard.py, f2080, f2082): the resource file reserved entries
+// for its virtual (+8) and physical (+9) page counts. Read before pgBase overwrites them.
+static void pg_page_map_forget(uint64_t map);
+u32 pg_page_map_reserved(w2c_game *instance, u64 map) {
+  (void)instance;
+  if (!map) return 0;
+  pg_page_map_forget(map);
+  const uint8_t *counts = pg_pointer(&env, map + 8, 2);
+  return (u32)counts[0] + counts[1];
+}
+// Entries past the reserved space, by page map address. pgBase writes a map once per placement
+// (pg_page_map_reserved forgets the old extra entries of that address first).
+#define PG_PAGE_MAPS 1024
+static struct { uint64_t map; uint32_t reserved, count; uint64_t entry[8], saved[8]; } pageMaps[PG_PAGE_MAPS];
+static pthread_mutex_t pageMapLock = PTHREAD_MUTEX_INITIALIZER;
+static _Atomic uint64_t pageMapOverflows;
+static int pg_page_map_slot(uint64_t map, bool create) {
+  unsigned start = (unsigned)((map >> 4) * 2654435761u) % PG_PAGE_MAPS;
+  int reuse = -1; // a slot whose map has no extra entries any more
+  for (unsigned k = 0; k < PG_PAGE_MAPS; k++) {
+    unsigned i = (start + k) % PG_PAGE_MAPS;
+    if (pageMaps[i].map == map) return (int)i;
+    if (reuse < 0 && pageMaps[i].map && !pageMaps[i].count) reuse = (int)i;
+    if (!pageMaps[i].map) { if (reuse < 0) reuse = (int)i; break; }
+  }
+  if (!create || reuse < 0) return -1;
+  pageMaps[reuse].map = map; pageMaps[reuse].count = 0;
+  return reuse;
+}
+static void pg_page_map_forget(uint64_t map) {
+  pthread_mutex_lock(&pageMapLock);
+  int i = pg_page_map_slot(map, false);
+  if (i >= 0) pageMaps[i].count = 0; // the slot stays (its address may come back), empty
+  pthread_mutex_unlock(&pageMapLock);
+}
+u32 pg_page_map_entries(w2c_game *instance, u64 map, u32 pages, u32 reserved) {
+  (void)instance;
+  if (!map || !reserved || pages <= reserved) return pages;
+  uint64_t n = atomic_fetch_add(&pageMapOverflows, 1) + 1;
+  if (n <= 4 || (n & (n - 1)) == 0) {
+    char line[200]; snprintf(line, sizeof line, "Page map at 0x%llx has room for %u pages but the resource has %u; the extra entries are kept aside (%llu so far).",
+                             (unsigned long long)map, reserved, pages, (unsigned long long)n);
+    pg_log(line);
+  }
+  return pages;
+}
+u32 pg_page_map_store(w2c_game *instance, u64 map, u64 index, u64 entry, u32 reserved) {
+  (void)instance;
+  if (!reserved || index < reserved) return 0;
+  pthread_mutex_lock(&pageMapLock);
+  int i = pg_page_map_slot(map, true);
+  if (i >= 0 && index - reserved < 8) {
+    pageMaps[i].reserved = reserved;
+    pageMaps[i].entry[index - reserved] = entry;
+    if (pageMaps[i].count < index - reserved + 1) pageMaps[i].count = (uint32_t)(index - reserved + 1);
+  }
+  pthread_mutex_unlock(&pageMapLock);
+  return 1; // never written in place, even if the table is full
+}
+// pgBase::RegenerateMap(base): the extra entries go in place for the call and the bytes they cover
+// come back afterwards.
+void pg_page_map_swap(w2c_game *instance, u64 base, u32 in) {
+  (void)instance;
+  uint64_t map = *(uint64_t *)pg_pointer(&env, base + 8, 8);
+  if (!map) return;
+  pthread_mutex_lock(&pageMapLock);
+  int i = pg_page_map_slot(map, false);
+  if (i >= 0) {
+    for (uint32_t k = 0; k < pageMaps[i].count; k++) {
+      uint64_t *at = pg_pointer(&env, map + 16 + 8ull * (pageMaps[i].reserved + k), 8);
+      if (in) { pageMaps[i].saved[k] = *at; *at = pageMaps[i].entry[k]; } else *at = pageMaps[i].saved[k];
     }
+  }
+  pthread_mutex_unlock(&pageMapLock);
+}
+// Texture dictionary placement (Scripts/prepare_fixup_guard.py, f5710): the array is {data, count
+// (u16 at +8)}; entries before `index` already hold their placed addresses.
+u32 pg_texture_already_placed(w2c_game *instance, u64 array, u64 index, u64 address) {
+  uint64_t data = *(uint64_t *)pg_pointer(&env, array, 8);
+#if TARGET_OS_SIMULATOR
+  if (getenv("PG_TRACE_TEXTURE_PLACE")) {
+    static _Atomic int traced;
+    const uint8_t *t = pg_pointer(&env, address, 128);
+    bool odd = false; for (int k = 0; k < 16; k++) { uint64_t v; memcpy(&v, t + 8 * k, 8); odd |= (v >> 48) == 0xffff; }
+    if (odd && atomic_fetch_add(&traced, 1) < 6) {
+      char line[512]; int n = snprintf(line, sizeof line, "TRACE texture entry %llu at 0x%llx (array 0x%llx, %u entries):", (unsigned long long)index,
+                                       (unsigned long long)address, (unsigned long long)data, *(uint16_t *)pg_pointer(&env, array + 8, 2));
+      for (int k = 0; k < 16 && n < (int)sizeof line - 20; k++) { uint64_t v; memcpy(&v, t + 8 * k, 8); n += snprintf(line + n, sizeof line - n, " %016llx", (unsigned long long)v); }
+      pg_log(line);
+    }
+  }
+#endif
+  // A texture record never lives in the physical (GPU data) segment. The resource being placed is
+  // *g19 (the datResource f5710 passes to GetFixup); its map's physical entries have file 0x6....
+  bool physical = false;
+  uint64_t map = *(uint64_t *)pg_pointer(&env, instance->w2c_g19, 8);
+  if (map) {
+    uint64_t table = *(uint64_t *)pg_pointer(&env, map, 8);
+    unsigned count = *(uint8_t *)pg_pointer(&env, map + 4120, 1);
+    for (unsigned k = 0; k < count && !physical; k++) {
+      const uint64_t *e = pg_pointer(&env, map + 24 + 16ull * k, 16);
+      uint64_t size = e[1] & 0x00FFFFFFFFFFFFFFull, dest = *(uint64_t *)pg_pointer(&env, table + 24 * (e[1] >> 56) + 24, 8);
+      physical = (e[0] >> 28) == 6 && address >= dest && address - dest < size;
+    }
+  }
+  uint64_t raw = *(uint64_t *)pg_pointer(&env, data + 8 * index, 8);
+  if (physical) {
+#if TARGET_OS_SIMULATOR
+    pg_fence_dump(map, "tex");
+#endif
+    static _Atomic int skipped;
+    if (atomic_fetch_add(&skipped, 1) < 8) {
+      char line[160]; snprintf(line, sizeof line, "Texture dictionary entry %llu points at GPU data (0x%llx), not a texture; left it out.",
+                               (unsigned long long)index, (unsigned long long)raw);
+      pg_log(line);
+    }
+    return 2;
+  }
+  for (uint64_t k = 0; k < index; k++) {
+    if (*(uint64_t *)pg_pointer(&env, data + 8 * k, 8) != address) continue;
+    static _Atomic int logged;
+    if (atomic_fetch_add(&logged, 1) < 8) {
+      char line[128]; snprintf(line, sizeof line, "Texture dictionary lists one texture twice (entries %llu and %llu); placed it once.",
+                               (unsigned long long)k, (unsigned long long)index);
+      pg_log(line);
+    }
+    return 1;
   }
   return 0;
 }
@@ -874,6 +1214,13 @@ void PGFillAudio(float *left, float *right, uint32_t count) {
 }
 
 static char *configuredQuality[32];static unsigned configuredQualityCount;
+// The frame limiter reads the frame interval (in 60 Hz refreshes: 0 none, 1 = 60 FPS, 2 = 30 FPS)
+// from 19447080 every frame (CSystem frame limit, set from -frameLimit), so it can change in play.
+void PGSetFrameLimit(int frameLimit){
+  if(!atomic_load(&inputBlock)||frameLimit<0||frameLimit>4||env.memory.size<19447084)return;
+  atomic_store_explicit((_Atomic int32_t *)(void *)((uint8_t *)(void *)env.memory.data+19447080),frameLimit,memory_order_relaxed);
+  char line[96];snprintf(line,sizeof line,"Frame limit now %s.",frameLimit==0?"off":frameLimit==1?"60 FPS":frameLimit==2?"30 FPS":"lower");pg_log(line);
+}
 void PGConfigureEngine(const char *const *quality,unsigned count,int width,int height,int frameLimit){
   if(atomic_load(&started))return;
   for(unsigned i=0;i<configuredQualityCount;i++)free(configuredQuality[i]);
@@ -908,14 +1255,15 @@ static void *boot(void *ignored) {
   char coresOption[32];snprintf(coresOption,sizeof coresOption,"-numCores=%u",nativeEngineCores);
   char coresLog[96];snprintf(coresLog,sizeof coresLog,"Native engine worker configuration: %u logical cores.",nativeEngineCores);pg_log(coresLog);
   wasm_rt_init();
-  pg_log("Reserving 4095 MB virtual engine memory, starting with a 3328 MB shared heap.");
+  uint64_t engineMB=pg_engine_memory_mb();
+  char reserveLog[128];snprintf(reserveLog,sizeof reserveLog,"Reserving %llu MB virtual engine memory, starting with a 3328 MB shared heap.",(unsigned long long)engineMB);pg_log(reserveLog);
 #if defined(PG_HAS_ARM64_SHARED_VECTORS) && !defined(PG_SHARED_SIMD_BYTEWISE)
   pg_log("Shared vector memory uses native ARM64 instructions with bounds checks.");
 #else
   pg_log("Shared vector memory uses bytewise atomic copies with bounds checks.");
 #endif
   env.memory.pages = 3328ull*1024*1024/wasm2c_game_pagesize_env_memory;
-  env.memory.max_pages = 4095ull*1024*1024/wasm2c_game_pagesize_env_memory;
+  env.memory.max_pages = engineMB*1024*1024/wasm2c_game_pagesize_env_memory;
   env.memory.page_size = wasm2c_game_pagesize_env_memory;
   env.memory.size = env.memory.pages * env.memory.page_size;
   env.memory.is64 = true;
@@ -926,9 +1274,17 @@ static void *boot(void *ignored) {
   // Small enough for apps without the extended-address-space entitlement.
   const uint64_t guardBytes=64ull<<20;
   void *allocation=mmap(NULL,capacity+guardBytes,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANON,-1,0);
+  if (allocation==MAP_FAILED&&engineMB>4095) {
+    pg_log("iOS could not reserve that much; using 4095 MB.");
+    env.memory.max_pages=4095ull*1024*1024/wasm2c_game_pagesize_env_memory;capacity=env.memory.max_pages*env.memory.page_size;
+    allocation=mmap(NULL,capacity+guardBytes,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANON,-1,0);
+  }
   if (allocation==MAP_FAILED) { pg_log("iOS could not reserve the engine memory."); return NULL; }
   if (mprotect((uint8_t *)allocation+capacity,guardBytes,PROT_NONE)) pg_log("Engine memory guard region could not be protected.");
   env.memory.data=(_Atomic volatile uint8_t *)allocation;
+#if TARGET_OS_SIMULATOR
+  {char line[96];snprintf(line,sizeof line,"Engine memory at %p (simulator, for debugger watchpoints).",allocation);pg_log(line);}
+#endif
   env.memory.data_end = env.memory.data + capacity;
   pthread_mutex_init(&env.memory.mem_lock, NULL);
   wasm_rt_trap_t trap = wasm_rt_impl_try();
@@ -947,12 +1303,18 @@ static void *boot(void *ignored) {
   pg_log(message);
   if (actual != 0x3412) { pg_log("Native execution produced an incorrect result."); return NULL; }
   pg_log("Running the real engine's static constructors.");
+  // Test hook: move the heap's top before the allocator starts, so the game's allocations land above 4 GB.
+  const char *ballast=getenv("PG_TEST_HEAP_BALLAST_MB");
+  if(ballast&&atoi(ballast)>0){extern u64 w2c_game_f91008(w2c_game *,u64);u64 bytes=(u64)atoi(ballast)<<20;
+    snprintf(message,sizeof message,"Test: heap ballast of %d MB, previous top 0x%llx.",atoi(ballast),(unsigned long long)w2c_game_f91008(&env.game,bytes));pg_log(message);}
   w2c_game_0x5F_wasm_call_ctors(&env.game);
   pg_log("Constructors completed; calling the game entry point.");
   char widthOption[32],heightOption[32],frameOption[32];
   snprintf(widthOption,sizeof widthOption,"-width=%d",configuredWidth);
   snprintf(heightOption,sizeof heightOption,"-height=%d",configuredHeight);
-  snprintf(frameOption,sizeof frameOption,"-frameLimit=%d",benchmarkEnabled()?0:configuredFrameLimit);
+  // PG_BENCHMARK_FRAME_LIMIT pins a benchmark's frame rate, so builds compare at equal work per second.
+  const char *benchLimit=getenv("PG_BENCHMARK_FRAME_LIMIT");
+  snprintf(frameOption,sizeof frameOption,"-frameLimit=%d",benchmarkEnabled()?(benchLimit?atoi(benchLimit):0):configuredFrameLimit);
   const char *base[]={"playgta5","-rootdir=/game/","-wgpu","-nodisplaycalibration","-noSocialClub","-pc:nosocialclub","-nonetwork","-output",widthOption,heightOption,"-forceResolution","-fastscriptcore","-Script_all=warning","-replay_all=warning",frameOption,coresOption};
   const char *defaultQuality[]={"-shaderQuality=1","-textureQuality=0","-pedVariety=0","-vehicleVariety=0","-shadowQuality=-1","-reflectionQuality=0","-particleQuality=0","-grassQuality=0","-cityDensity=0","-lodScale=0","-pedLodBias=0","-vehicleLodBias=0"};
   const char *options[64];unsigned optionCount=0;

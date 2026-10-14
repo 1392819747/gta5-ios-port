@@ -19,6 +19,10 @@ typedef struct {
 // Before PGStartEngine: engine quality options (e.g. "-shadowQuality=0"),
 // back-buffer size and frame limit (0 none, 1 = 60, 2 = 30 FPS).
 void PGConfigureEngine(const char *const *quality, unsigned count, int width, int height, int frameLimit);
+// Changes the frame limit while the game runs (0 off, 1 60 FPS, 2 30 FPS).
+void PGSetFrameLimit(int frameLimit);
+// Settings › Memory cap in MB (0 automatic); call before the engine starts.
+void PGSetMemoryCap(int mb);
 // Before PGStartEngine: 1 Story Mode (the release startup: continues the
 // newest save in /userdata/Documents, else a new game from the Prologue),
 // 2 Sandbox Mode (free roam on the GTA V map; its files go to
@@ -49,8 +53,12 @@ typedef struct {
   bool helpContext;    // ...and it asks for the context input (D-pad right)
   bool radioWheelOpen; // the radio wheel is up
   uint32_t vehicleModel; // model name hash (joaat) of the vehicle the player is in, 0 on foot
+  bool passenger;        // in a vehicle, not in the driver's seat (taxi rides)
+  bool taxiMenu;         // the taxi ride script (taxiservice) is running
 } PGControlHints;
 PGControlHints PGReadControlHints(uint32_t touchContext);
+// The next weapon of the aircraft the player flies (applied on the game thread).
+void PGNextAircraftWeapon(void);
 // Keyboard and mouse, through the game's own PC input (the block the browser build wrote): key
 // state bytes indexed by Windows virtual-key code, and mouse words after them.
 void PGSetKey(uint8_t virtualKey, bool down);

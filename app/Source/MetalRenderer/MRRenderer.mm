@@ -215,6 +215,8 @@ struct Renderer {
 	uint64_t draws = 0, skipped = 0, pendingSkips = 0, clamped = 0, presents = 0, commits = 0;
 	double pipeWaitMs = 0;		// time spent this frame waiting for pipelines to finish compiling
 	double statT = 0, busyMs = 0, lastCommitMs = 0, lastPresentMs = 0;
+	// stutter: presents more than 50 ms apart since the last report, and the longest gap
+	double statPresentAt = 0, worstFrameMs = 0; uint64_t longFrames = 0;
 	FrameWork work;
 	uint64_t statDraws = 0, statPresents = 0, statSkips = 0, statPending = 0, statCommits = 0;
 	PGFrameRateWindow fpsWindow;
@@ -1559,6 +1561,10 @@ static void copyRegion(const uint32_t *p) {
 		              destinationLevel:dMip destinationOrigin:MTLOriginMake(dx, dy, d->dim == 3 ? dz : 0)];
 	} else if (!s->bcNative && !d->bcNative && bytesPerTexel(s->format) == bytesPerTexel(d->format) && !s->isDepth && !d->isDepth && s->samples == 1 && d->samples == 1) {
 		uint32_t bpp = bytesPerTexel(s->format), bpr = w * bpp;
+		// Different formats of one size are copied as raw bytes; if their channel layouts differ
+		// the colours come out wrong (suspected for short-lived magenta terrain patches).
+		logOnce("copyraw" + std::to_string(s->format) + "-" + std::to_string(d->format), "Metal renderer: raw copy between formats %lu and %lu (%ux%u, mip %u to %u)",
+		        (unsigned long)s->format, (unsigned long)d->format, w, h, sMip, dMip);
 		Alloc a = frameAlloc((size_t)bpr * h, 16);
 		id<MTLBlitCommandEncoder> e = blitEncoder();
 		[e copyFromTexture:s->tex sourceSlice:three ? 0 : sLayer sourceLevel:sMip sourceOrigin:MTLOriginMake(sx, sy, three ? sz : 0) sourceSize:MTLSizeMake(w, h, 1)
@@ -1843,6 +1849,8 @@ static void present(uint32_t texId) {
 	f.lastSerial = R->serial - 1;
 	R->presents++;
 	double now = CACurrentMediaTime();
+	if (R->statPresentAt) { double gap = (now - R->statPresentAt) * 1000; if (gap > 50) R->longFrames++; if (gap > R->worstFrameMs) R->worstFrameMs = gap; }
+	R->statPresentAt = now;
 	R->lastPresent.store(now);
 	if (R->fpsWindow.record(now)) R->fps.store(R->fpsWindow.rate);
 	// loading progress for the app: first frame, then the world once 1.5 s went by without draws waiting for pipelines
@@ -2112,6 +2120,8 @@ static void report() {
 	std::string skips;
 	for (int i = 0; i < 5; i++) if (R->skipReasons[i]) { char b[64]; snprintf(b, sizeof b, "%s%s %llu", skips.empty() ? "" : ", ", skipNames[i], (unsigned long long)R->skipReasons[i]); skips += b; }
 	logf("[metal] command buffers per frame: %s; skipped draws: %s", reasons.c_str(), skips.empty() ? "none" : skips.c_str());
+	logf("[metal] stutter: %llu frames over 50 ms, longest %.0f ms", (unsigned long long)R->longFrames, R->worstFrameMs);
+	R->longFrames = 0; R->worstFrameMs = 0;
 	const double MB = 1048576.0;
 	logf("[metal] textures: GPU %.0f MB (BC: game counts %.0f MB, GPU holds %.0f MB), CPU block copies %.0f MB; BC readbacks %llu, BC copies %llu; create failures %llu, decode failures %llu",
 	     gTextureStats.gpuBytes / MB, gTextureStats.bcGameBytes / MB, gTextureStats.bcGpuBytes / MB, gTextureStats.shadowBytes / MB,
