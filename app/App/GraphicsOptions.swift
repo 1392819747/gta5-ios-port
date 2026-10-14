@@ -48,6 +48,13 @@ struct DeviceTier {
     let model: String
     let supportsBCTextures: Bool
 
+    /// BC textures sampled as they are; the property exists from iOS 16.4 (before that: decoded).
+    static func readsBC(_ device: MTLDevice?) -> Bool {
+        guard let device else { return false }
+        if #available(iOS 16.4, *) { return device.supportsBCTextureCompression }
+        return false
+    }
+
     static func probe() -> DeviceTier {
         var info = utsname(); uname(&info)
         let model = withUnsafeBytes(of: &info.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
@@ -55,7 +62,7 @@ struct DeviceTier {
         return DeviceTier(memoryLimitMB: Self.processMemoryLimitMB(),
                           physicalMemoryMB: Int(ProcessInfo.processInfo.physicalMemory / 1_048_576),
                           model: model,
-                          supportsBCTextures: device?.supportsBCTextureCompression ?? false)
+                          supportsBCTextures: Self.readsBC(device))
     }
 
     /// Jetsam limit = memory still available + what the app already uses.

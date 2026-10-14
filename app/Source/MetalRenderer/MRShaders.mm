@@ -207,7 +207,7 @@ FormatInfo mapFormat(uint32_t f, uint32_t bind) {
 	}
 	if (m.bc && gNativeBC) {		// the GPU samples the blocks directly
 		m.bcNative = true;
-		switch (m.bc) {
+		if (@available(iOS 16.4, *)) switch (m.bc) {		// gNativeBC is only set on 16.4+
 		case 1: m.format = m.srgb ? MTLPixelFormatBC1_RGBA_sRGB : MTLPixelFormatBC1_RGBA; m.alt = m.srgb ? MTLPixelFormatBC1_RGBA : MTLPixelFormatBC1_RGBA_sRGB; break;
 		case 2: m.format = m.srgb ? MTLPixelFormatBC2_RGBA_sRGB : MTLPixelFormatBC2_RGBA; m.alt = m.srgb ? MTLPixelFormatBC2_RGBA : MTLPixelFormatBC2_RGBA_sRGB; break;
 		case 3: m.format = m.srgb ? MTLPixelFormatBC3_RGBA_sRGB : MTLPixelFormatBC3_RGBA; m.alt = m.srgb ? MTLPixelFormatBC3_RGBA : MTLPixelFormatBC3_RGBA_sRGB; break;
@@ -235,6 +235,8 @@ MTLPixelFormat viewFormat(uint32_t dxgi, MTLPixelFormat tf) {
 	if (!dxgi) return tf;
 	FormatInfo m = mapFormat(dxgi, 0);
 	if (m.format == tf) return tf;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunguarded-availability-new"	// a BC texture only exists on 16.4+ (gNativeBC)
 	switch (tf) {
 	case MTLPixelFormatRGBA8Unorm: return m.srgb ? MTLPixelFormatRGBA8Unorm_sRGB : tf;
 	case MTLPixelFormatRGBA8Unorm_sRGB: return m.srgb ? tf : MTLPixelFormatRGBA8Unorm;
@@ -250,6 +252,7 @@ MTLPixelFormat viewFormat(uint32_t dxgi, MTLPixelFormat tf) {
 	case MTLPixelFormatBC7_RGBAUnorm_sRGB: return m.srgb ? tf : MTLPixelFormatBC7_RGBAUnorm;
 	default: return tf;
 	}
+#pragma clang diagnostic pop
 }
 
 bool isDepthFormat(MTLPixelFormat f) {

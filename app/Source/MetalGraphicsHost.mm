@@ -16,6 +16,6 @@ void PGStartGraphics(void *memory, uint64_t memorySize, uint64_t ring, uint64_t 
 
 int PGGPUReadsBC(void) {
 	static int answer = -1;
-	if (answer < 0) { id<MTLDevice> device = MTLCreateSystemDefaultDevice(); answer = device && device.supportsBCTextureCompression && !getenv("PG_FORCE_BC_DECODE"); }
+	if (answer < 0) { id<MTLDevice> device = MTLCreateSystemDefaultDevice(); answer = 0; if (@available(iOS 16.4, *)) answer = device && device.supportsBCTextureCompression && !getenv("PG_FORCE_BC_DECODE"); }
 	return answer;
 }

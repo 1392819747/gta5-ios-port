@@ -15,7 +15,7 @@ A fan project that runs the WebAssembly build of GTA V natively on iPhone: the e
 | | |
 |---|---|
 | **Your own game files** | Web build `8b0b5899ed`: the folder that contains `data/` and `b/8b0b5899ed/`, about 21 GB. |
-| **An iPhone with 6 GB of memory** | iPhone 12 Pro, 13 Pro, any iPhone 14 or newer, on iOS 17 or later, with about 30 GB free. Older 4 GB iPhones will most likely run out of memory. |
+| **An iPhone with 6 GB of memory** | iPhone 12 Pro, 13 Pro, any iPhone 14 or newer, on iOS 16 or later, with about 30 GB free. Older 4 GB iPhones will most likely run out of memory. |
 | **A GitHub account** (free) | It builds the app for you. No card needed. |
 | **SideStore or AltStore** (free) | Installs the app with your normal Apple ID. Setting it up needs a computer once (an Apple rule). [SideStore](https://sidestore.io) · [AltStore](https://altstore.io) |
 

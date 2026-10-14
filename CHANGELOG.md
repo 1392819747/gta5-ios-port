@@ -1,6 +1,7 @@
 # Changelog
 
 ## v1.3.3
+- **Runs on iOS 16.** The app now installs on iOS 16 as well as iOS 17 and later.
 - **No more crash at the end of Marriage Counseling** (the Vinewood Hills fences). The engine wrote the list of where a model's pieces are in memory one entry past the space the model reserved for it, which broke the fence model. That same overflow hit other models too, so it may fix other rare glitches as well.
 - **The game's intro plays when you press Play.** The original Rockstar intro runs while the game loads behind it, instead of the blue loading log. Tap to skip.
 - **Runs cooler and stutters less.**

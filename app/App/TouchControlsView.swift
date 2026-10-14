@@ -38,7 +38,7 @@ enum ControlStyle {
         "tow_hook": "car.side.rear.tow.hitch.fill", "tow_arm_up": "arrow.up.to.line", "tow_arm_down": "arrow.down.to.line", "roof": "convertible.side.arrowtriangle.up.arrowtriangle.down.fill",
         "steer_left": "arrowtriangle.left.fill", "steer_right": "arrowtriangle.right.fill",
         "phone_option": "circle.grid.3x3.fill", "taxi_hurry": "hare.fill", "taxi_stop": "stop.fill"]
-    /// iOS 17 has no tow hitch or convertible symbols (they came in iOS 18).
+    /// iOS 16 and 17 have no tow hitch or convertible symbols (they came in iOS 18).
     static let olderSymbol: [String: String] = [
         "tow_hook": "truck.pickup.side.fill", "roof": "car.side.arrowtriangle.up.arrowtriangle.down.fill"]
     /// Model name hashes (joaat) from the game's vehicles.meta: tow trucks, whose hook releases

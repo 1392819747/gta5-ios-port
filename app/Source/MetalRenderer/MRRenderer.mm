@@ -2205,7 +2205,8 @@ static bool setup() {
 	R->completion = dispatch_semaphore_create(0);
 	R->float32Filtering = R->device.supports32BitFloatFiltering;
 	// PG_FORCE_BC_DECODE=1 keeps the CPU decode path on BC-capable GPUs (simulator checks of the iPhone path).
-	gNativeBC = R->device.supportsBCTextureCompression && !getenv("PG_FORCE_BC_DECODE");
+	gNativeBC = false;
+	if (@available(iOS 16.4, *)) gNativeBC = R->device.supportsBCTextureCompression && !getenv("PG_FORCE_BC_DECODE"); // iOS 16.0-16.3: decoded
 	// Packed 16-bit formats exist on every Apple GPU, but not on the simulator's (which aborts on them).
 #if !TARGET_OS_SIMULATOR
 	gPackedBC1 = !gNativeBC && !getenv("PG_NO_PACKED_BC1") && [R->device supportsFamily:MTLGPUFamilyApple3];
