@@ -59,6 +59,8 @@ run('xcrun', 'clang++', '-std=c++20', '-O1', '-I', str(wabt / 'include'),
     str(wabt / 'lib/libwabt.a'), '-o', 'Tools/wasm2c-native')
 run('Tools/wasm2c-native', '--enable-threads', '--no-debug-names', '--module-name=game',
     '--num-outputs=64', str(engine), '-o', 'Generated/game.c')
+# Function names from the engine's name section: the patchers below find their functions by name.
+run('python3', 'Scripts/engine_names.py', '--wasm', str(engine))
 runtime = wabt / 'share/wabt/wasm2c/wasm-rt-impl.c'
 text = runtime.read_text()
 if 'pg_record_trap' not in text:
@@ -81,6 +83,9 @@ run('python3', 'Scripts/prepare_format_strings.py')
 run('python3', 'Scripts/prepare_video_memory.py')
 run('python3', 'Scripts/prepare_plain_dsp.py')
 run('python3', 'Scripts/prepare_plain_shared.py')
+run('python3', 'Scripts/prepare_cash_stats.py')
+run('python3', 'Scripts/prepare_native_opus.py')
+run('python3', 'Scripts/prepare_render_list_guard.py')
 # The BC texture decoder header (MIT): phones without BC texture support get decoded textures.
 bcdec = root / 'Tools/bcdec'
 if not bcdec.exists():
@@ -99,5 +104,6 @@ sdk_args = []
 for sdk in options.sdk or ['iphoneos']:
     sdk_args += ['--sdk', sdk]
 run('python3', 'Scripts/build_metal_shaders.py', str(shaders), *sdk_args)
+run('python3', 'Scripts/build_opus.py', *sdk_args)
 run('xcodegen', 'generate', '--spec', 'project.yml')
 print('Prepared the native boot project. Open PlayGTA5Native.xcodeproj in Xcode.')

@@ -330,6 +330,8 @@ final class TouchControlsView: UIView {
 
     private var sprintSince: CFTimeInterval?
     private var aimToggled = false
+    /// Sprint button: a tap keeps sprinting while the move stick is held; letting go of it ends it.
+    private var sprintLatched = false { didSet { sprint.active = sprintLatched } }
     private var lastFireTime: CFTimeInterval = 0
     private var fireStartedAt: CFTimeInterval?
     /// Buttons sent for a set time (special ability, radio taps), so the game sees every tap.
@@ -360,6 +362,7 @@ final class TouchControlsView: UIView {
     private let aim = ControlButton("aim", icon: "aim", label: AppLanguage.choose("Aim"))
     private let leftFire = ControlButton("leftFire", icon: "fire", label: AppLanguage.choose("Fire, left hand"))
     private let jump = ControlButton("jump", icon: "jump", label: AppLanguage.choose("Jump"))
+    private let sprint = ControlButton("sprint", icon: "sprint", label: AppLanguage.choose("Sprint"))
     private let enter = ControlButton("enter", icon: "enter_exit", label: AppLanguage.choose("Enter vehicle"))
     private let weapons = ControlButton("weapons", icon: "weapons", label: AppLanguage.choose("Weapon wheel"))
     private let reload = ControlButton("reload", icon: "reload", label: AppLanguage.choose("Reload"))
@@ -420,7 +423,7 @@ final class TouchControlsView: UIView {
     private let tabRight = ControlButton("tabRight", icon: "tab_right", label: AppLanguage.choose("Next tab"))
 
     private var allButtons: [ControlButton] {
-        [fire, aim, leftFire, jump, enter, weapons, reload, cover, crouch, switcher, special, interact, detonate, zoomIn, zoomOut,
+        [fire, aim, leftFire, jump, sprint, enter, weapons, reload, cover, crouch, switcher, special, interact, detonate, zoomIn, zoomOut,
          weaponPrev, weaponNext, gas, brake, handbrake, steerLeft, steerRight, driveBy, horn, lookBack,
          vehicleWeapon, towHook, towArmUp, towArmDown, roof, dive, surface, airFire, gear, throttleUp, throttleDown, yawLeft, yawRight, camera, phone, pause, settings, lights, radio,
          up, down, left, right, accept, back, phoneOption, taxiHurry, taxiStop, tabLeft, tabRight]
@@ -432,6 +435,7 @@ final class TouchControlsView: UIView {
             "aim": AppLanguage.choose("Aim"),
             "leftFire": AppLanguage.choose("Fire, left hand"),
             "jump": AppLanguage.choose("Jump"),
+            "sprint": AppLanguage.choose("Sprint"),
             "enter": AppLanguage.choose("Enter vehicle"),
             "weapons": AppLanguage.choose("Weapon wheel"),
             "reload": AppLanguage.choose("Reload"),
@@ -569,7 +573,7 @@ final class TouchControlsView: UIView {
         switch context {
         case .onFoot:
             return aimActive ? utility + [fire, aim, enter, weapons, reload, cover, leftFire]
-                             : utility + [fire, aim, jump, enter, weapons, reload, cover, crouch]
+                             : utility + [fire, aim, jump, enter, weapons, reload, cover, crouch] + (GameSettings.shared.sprintButton ? [sprint] : [])
         case .car, .boat:
             return utility + [gas, brake, handbrake, enter, driveBy, horn, lookBack, vehicleWeapon] + steering
         case .bike:
@@ -682,6 +686,7 @@ final class TouchControlsView: UIView {
         place(fire, 0.885, 0.70, 78)
         place(aim, 0.735, 0.76, 62)
         place(jump, 0.80, 0.43, 56)
+        place(sprint, 0.70, 0.30, 50)
         place(enter, 0.955, 0.42, 54)
         place(weapons, 0.955, 0.17, 50)
         place(reload, 0.69, 0.50, 50)
@@ -865,6 +870,8 @@ final class TouchControlsView: UIView {
         case leftFire:
             roles[id] = .fireLook(button)
             lastFireTime = now
+        case sprint:
+            sprintLatched.toggle()
         case aim:
             // Aim is a toggle, so the same thumb is free for Fire. Keeping
             // the thumb down and dragging aims, like dragging from Fire.
@@ -952,7 +959,7 @@ final class TouchControlsView: UIView {
             guard let role = roles.removeValue(forKey: ObjectIdentifier(touch)) else { continue }
             dragOrigins[ObjectIdentifier(touch)] = nil
             switch role {
-            case .moveStick, .steer: moveStick.end(); sprintSince = nil
+            case .moveStick, .steer: moveStick.end(); sprintSince = nil; sprintLatched = false
             case .planeStick: rightStick.end()
             case .look: lookStick.end()
             case .weaponWheel: weapons.setPressed(false); updateVisibility()
@@ -1000,7 +1007,7 @@ final class TouchControlsView: UIView {
         aimToggled = false; aim.active = false
         fireStartedAt = nil; exitHoldStart = nil
         enter.setProgress(0)
-        sprintSince = nil; moveStick.sprinting = false
+        sprintSince = nil; moveStick.sprinting = false; sprintLatched = false
         dragOrigins.removeAll()
         if publish { self.publish() }
     }
@@ -1038,8 +1045,12 @@ final class TouchControlsView: UIView {
         switch context {
         case .onFoot:
             state.leftX = Float(moveStick.value.x); state.leftY = Float(moveStick.value.y)
-            // Sprint: hold the stick at its edge.
-            if hypot(moveStick.value.x, moveStick.value.y) > 0.92 {
+            // The Sprint button presses A while held (also opens the parachute and swims faster).
+            if sprint.pressed { held.insert(.a) }
+            // Sprint: the Sprint button while moving, or the stick held at its edge.
+            if sprintLatched && hypot(moveStick.value.x, moveStick.value.y) > 0.2 {
+                held.insert(.a); moveStick.sprinting = true
+            } else if hypot(moveStick.value.x, moveStick.value.y) > 0.92 {
                 if sprintSince == nil { sprintSince = now }
                 if now - (sprintSince ?? now) > 0.25 { held.insert(.a); moveStick.sprinting = true }
             } else { sprintSince = nil; moveStick.sprinting = false }

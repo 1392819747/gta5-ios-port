@@ -14,15 +14,19 @@ final class SettingsViewController: UITableViewController {
     var targetingChanged: (() -> Void)?
     var gameModeChanged: (() -> Void)?
     var cheatSelected: ((StoryCheat) -> Void)?
+    /// Story cheats › Set money: the amount the player typed.
+    var moneyEntered: ((Int32) -> Void)?
 
-    private enum Section: Int, CaseIterable { case language, mode, graphics, controls, cheats, gyro, files, device }
+    enum Section: Int, CaseIterable { case language, mode, graphics, controls, cheats, gyro, files, device }
+    /// The sections this page shows (SettingsHomeViewController opens one page per category).
+    private let sections: Set<Section>
     // The switch controls both the visible settings group and the active
     // camera input. It does NOT spoof the engine's last-input-device flag:
     // that flag is shared by the game's own aim-assist logic.
     private enum ControlsTab: Int { case stick = 0, swipe = 1 }
     private enum ControlsRow {
         case tab, swipeLook, swipeAim, stickLook, stickAim
-        case targeting, fireAlsoAims, steeringButtons, airplaneRightStick, buttonSize, buttonOpacity, editLayout
+        case targeting, fireAlsoAims, sprintButton, steeringButtons, airplaneRightStick, buttonSize, buttonOpacity, editLayout
         case hideTouchWithController, keyboardMouse, inputState
     }
     private var controlsTab: ControlsTab {
@@ -31,7 +35,7 @@ final class SettingsViewController: UITableViewController {
     /// The camera choice only swaps its two speed rows; every other control setting is always there.
     private var controlsRows: [ControlsRow] {
         let camera: [ControlsRow] = controlsTab == .stick ? [.stickLook, .stickAim] : [.swipeLook, .swipeAim]
-        return [.tab] + camera + [.targeting, .fireAlsoAims, .steeringButtons, .airplaneRightStick, .buttonSize, .buttonOpacity,
+        return [.tab] + camera + [.targeting, .fireAlsoAims, .sprintButton, .steeringButtons, .airplaneRightStick, .buttonSize, .buttonOpacity,
                                   .editLayout, .hideTouchWithController, .keyboardMouse]
     }
 
@@ -43,7 +47,7 @@ final class SettingsViewController: UITableViewController {
         }
         controlsChanged?()
         UIView.performWithoutAnimation {
-            tableView.reloadSections(IndexSet(integer: Section.controls.rawValue), with: .none)
+            reload(.controls)
         }
     }
 
@@ -54,12 +58,13 @@ final class SettingsViewController: UITableViewController {
     private var fileStateKey = ""
     private var fileMessage: String?
 
-    init(engineRunning: Bool, runningMode: GameMode? = nil) {
+    init(engineRunning: Bool, runningMode: GameMode? = nil, title pageTitle: String? = nil, sections: Set<Section> = Set(Section.allCases)) {
+        self.sections = sections
         self.engineRunning = engineRunning
         self.runningMode = engineRunning ? runningMode : nil
         self.bootPreset = GameSettings.shared.graphicsPreset
         super.init(style: .insetGrouped)
-        title = AppLanguage.choose("Settings")
+        title = pageTitle ?? AppLanguage.choose("Settings")
         modalPresentationStyle = .formSheet
         overrideUserInterfaceStyle = .dark
     }
@@ -77,15 +82,22 @@ final class SettingsViewController: UITableViewController {
         preloader.refresh()
         let arguments = ProcessInfo.processInfo.arguments
         if let i = arguments.firstIndex(of: "--settings-section"), i + 1 < arguments.count,
-           let section = ["files": Section.files, "graphics": Section.graphics, "resolution": Section.graphics, "device": Section.device][arguments[i + 1]] {
+           let section = ["files": Section.files, "graphics": Section.graphics, "resolution": Section.graphics, "device": Section.device][arguments[i + 1]], sections.contains(section) {
             let row = arguments[i + 1] == "resolution" ? (engineRunning ? 0 : settings.tier.allowed.count) : arguments[i + 1] == "device" ? 3 : 0
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                self.tableView.scrollToRow(at: IndexPath(row: row, section: section.rawValue), at: .middle, animated: false)
+                self.tableView.scrollToRow(at: IndexPath(row: row, section: self.indexOf(section)), at: .middle, animated: false)
             }
         }
     }
 
-    override func numberOfSections(in tableView: UITableView) -> Int { Section.allCases.count }
+    override func numberOfSections(in tableView: UITableView) -> Int { shown.count }
+    /// Only this page's sections are in the table; these translate between table positions and sections.
+    private lazy var shown: [Section] = Section.allCases.filter { sections.contains($0) }
+    private func sectionKind(_ index: Int) -> Section { shown[index] }
+    private func indexOf(_ section: Section) -> Int { shown.firstIndex(of: section) ?? 0 }
+    private func reload(_ section: Section) {
+        if let index = shown.firstIndex(of: section) { tableView.reloadSections([index], with: .none) }
+    }
 
     // The app's look: rows as glass on the darkened art, headers in the display font.
     override func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
@@ -108,12 +120,12 @@ final class SettingsViewController: UITableViewController {
     }
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        switch Section(rawValue: section)! {
+        switch sectionKind(section) {
         // While the game runs, settings that only take effect at the next start are hidden.
         case .mode: return engineRunning ? 0 : GameMode.allCases.count + (settings.gameModeChoice == .sandbox ? 1 : 0)
         case .graphics: return engineRunning ? Self.liveGraphicsRows.count : settings.tier.allowed.count + 6
         case .controls: return controlsRows.count
-        case .cheats: return engineRunning ? StoryCheats.all.count : 0
+        case .cheats: return engineRunning ? StoryCheats.all.count + 1 : 0   // row 0: Set money
         case .gyro: return (settings.gyroAim == .off ? 1 : 3) + (settings.tiltSteer == .off ? 1 : 2)
         case .files: return engineRunning ? 0 : fileRows.count
         case .device: return 4
@@ -123,15 +135,15 @@ final class SettingsViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         // The full-width segmented control needs more space than a standard row.
-        if indexPath.section == Section.controls.rawValue,
+        if sectionKind(indexPath.section) == .controls,
            controlsRows[indexPath.row] == .tab { return 58 }
         return UITableView.automaticDimension
     }
 
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        if Section(rawValue: section) == .cheats, !engineRunning { return nil }
-        if engineRunning, [.mode, .files].contains(Section(rawValue: section)) { return nil }
-        return [AppLanguage.choose("Language"), AppLanguage.choose("Game mode"), AppLanguage.choose("Graphics"), AppLanguage.choose("Touch controls"), AppLanguage.choose("Story cheats"), AppLanguage.choose("Gyro"), AppLanguage.choose("Game files"), AppLanguage.choose("This device")][section]
+        if sectionKind(section) == .cheats, !engineRunning { return nil }
+        if engineRunning, [.mode, .files].contains(sectionKind(section)) { return nil }
+        return [AppLanguage.choose("Language"), AppLanguage.choose("Game mode"), AppLanguage.choose("Graphics"), AppLanguage.choose("Touch controls"), AppLanguage.choose("Story cheats"), AppLanguage.choose("Gyro"), AppLanguage.choose("Game files"), AppLanguage.choose("This device")][sectionKind(section).rawValue]
     }
 
     /// Graphics rows that act during play: resolution, fill the screen, FPS counter, steady when hot
@@ -139,8 +151,8 @@ final class SettingsViewController: UITableViewController {
     private static let liveGraphicsRows = [0, 1, 3, 4]
 
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        if engineRunning, [.mode, .files].contains(Section(rawValue: section)) { return nil }
-        switch Section(rawValue: section)! {
+        if engineRunning, [.mode, .files].contains(sectionKind(section)) { return nil }
+        switch sectionKind(section) {
         case .mode:
             var text = AppLanguage.choose("Story mode saves stay on this phone between launches. Sandbox keeps its own separate files.")
             if let runningMode {
@@ -175,7 +187,7 @@ final class SettingsViewController: UITableViewController {
         var content = cell.defaultContentConfiguration()
         content.secondaryTextProperties.color = .secondaryLabel
         let presets = settings.tier.allowed
-        switch Section(rawValue: indexPath.section)! {
+        switch sectionKind(indexPath.section) {
         case .mode where indexPath.row == GameMode.allCases.count:
             // Sandbox only: which map.
             content.text = AppLanguage.choose("Sandbox map")
@@ -187,7 +199,7 @@ final class SettingsViewController: UITableViewController {
                          state: index == settings.sandboxMap ? .on : .off) { [weak self] _ in
                     self?.settings.sandboxMap = index
                     self?.gameModeChanged?()
-                    UIView.performWithoutAnimation { self?.tableView.reloadSections([Section.mode.rawValue], with: .none) }
+                    UIView.performWithoutAnimation { self?.reload(.mode) }
                 }
             })
             button.showsMenuAsPrimaryAction = true
@@ -342,7 +354,7 @@ final class SettingsViewController: UITableViewController {
                     UIAction(title: title, state: index == settings.targetingMode ? .on : .off) { [weak self] _ in
                         self?.settings.targetingMode = index
                         self?.targetingChanged?()
-                        UIView.performWithoutAnimation { self?.tableView.reloadSections(IndexSet(integer: Section.controls.rawValue), with: .none) }
+                        UIView.performWithoutAnimation { self?.reload(.controls) }
                     }
                 })
                 button.showsMenuAsPrimaryAction = true
@@ -352,6 +364,12 @@ final class SettingsViewController: UITableViewController {
                 content.text = AppLanguage.choose("Fire also aims")
                 content.secondaryText = AppLanguage.choose("Fire locks on first, like the classic mobile GTA games")
                 cell.accessoryView = toggle(settings.fireAlsoAims, label: AppLanguage.choose("Fire also aims")) { [weak self] in self?.settings.fireAlsoAims = $0 }
+            case .sprintButton:
+                content.text = AppLanguage.choose("Sprint button")
+                content.secondaryText = AppLanguage.choose("Tap it while moving to sprint until you let go of the stick; hold it to open a parachute. Holding the stick at its edge sprints too.")
+                cell.accessoryView = toggle(settings.sprintButton, label: AppLanguage.choose("Sprint button")) { [weak self] in
+                    self?.settings.sprintButton = $0; self?.controlsChanged?()
+                }
             case .steeringButtons:
                 content.text = AppLanguage.choose("Steering buttons")
                 content.secondaryText = AppLanguage.choose("Left and right buttons instead of the steering stick in cars, bikes and boats")
@@ -399,8 +417,11 @@ final class SettingsViewController: UITableViewController {
                 let kind = device == -4 ? AppLanguage.choose("Mouse/keyboard") : (0...3).contains(device) ? AppLanguage.choose("Controller") : AppLanguage.choose("Unknown")
                 content.secondaryText = AppLanguage.interpolate(AppLanguage.choose("{arg0} [{arg1}] · Aim mode: {arg2}"), [kind, String(device), String(PGTargetingMode())])
             }
+        case .cheats where indexPath.row == 0:
+            content.text = AppLanguage.choose("Set money")
+            content.secondaryText = AppLanguage.choose("Type an amount for the character you're playing. Handy if the old $0 bug took yours.")
         case .cheats:
-            let cheat = StoryCheats.all[indexPath.row]
+            let cheat = StoryCheats.all[indexPath.row - 1]
             content.text = AppLanguage.choose(cheat.title)
             content.secondaryText = AppLanguage.choose(cheat.detail)
         case .gyro:
@@ -411,7 +432,7 @@ final class SettingsViewController: UITableViewController {
                 button.configuration?.title = settings.tiltSteer.title
                 button.menu = UIMenu(children: TiltSteerMode.allCases.map { mode in
                     UIAction(title: mode.title, state: mode == settings.tiltSteer ? .on : .off) { [weak self] _ in
-                        self?.settings.tiltSteer = mode; UIView.performWithoutAnimation { self?.tableView.reloadSections([Section.gyro.rawValue], with: .none) }
+                        self?.settings.tiltSteer = mode; UIView.performWithoutAnimation { self?.reload(.gyro) }
                     }
                 })
                 button.showsMenuAsPrimaryAction = true
@@ -427,7 +448,7 @@ final class SettingsViewController: UITableViewController {
                 content.secondaryText = settings.gyroAim.title
                 let menu = UIMenu(children: GyroAimMode.allCases.map { mode in
                     UIAction(title: mode.title, state: mode == settings.gyroAim ? .on : .off) { [weak self] _ in
-                        self?.settings.gyroAim = mode; UIView.performWithoutAnimation { self?.tableView.reloadSections([Section.gyro.rawValue], with: .none) }
+                        self?.settings.gyroAim = mode; UIView.performWithoutAnimation { self?.reload(.gyro) }
                     }
                 })
                 let button = UIButton(configuration: .gray())
@@ -503,37 +524,57 @@ final class SettingsViewController: UITableViewController {
         // The tab row uses its own full-width UISegmentedControl.  Assigning
         // UIListContentConfiguration here creates a managed content view on top
         // of the custom subview, hiding it and swallowing touches.
-        if indexPath.section == Section.controls.rawValue,
+        if sectionKind(indexPath.section) == .controls,
            controlsRows[indexPath.row] == .tab { return cell }
         cell.contentConfiguration = content
         return cell
     }
 
+    /// Set money: a number field; the money changes once Settings closes and the game runs a frame.
+    private func askForMoney() {
+        let alert = UIAlertController(title: AppLanguage.choose("Set money"),
+                                      message: AppLanguage.choose("The money of the character you're playing (Michael, Franklin or Trevor) becomes this amount. Save the game to keep it."),
+                                      preferredStyle: .alert)
+        alert.addTextField { field in
+            field.keyboardType = .numberPad
+            field.placeholder = "1000000"
+        }
+        alert.addAction(UIAlertAction(title: AppLanguage.choose("Cancel"), style: .cancel))
+        alert.addAction(UIAlertAction(title: AppLanguage.choose("Set"), style: .default) { [weak self, weak alert] _ in
+            let digits = (alert?.textFields?.first?.text ?? "").filter(\.isNumber)
+            guard let self, let value = Int64(digits.prefix(10)) else { return }
+            let amount = Int32(min(value, Int64(Int32.max)))
+            self.dismiss(animated: true) { self.moneyEntered?(amount) }
+        })
+        present(alert, animated: true)
+    }
+
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        if indexPath.section == Section.device.rawValue, indexPath.row == 1 { sendLog(); return }
-        if indexPath.section == Section.device.rawValue, indexPath.row == 2 { shareLogs(from: tableView.cellForRow(at: indexPath)); return }
-        if indexPath.section == Section.device.rawValue, indexPath.row == 3 { UIApplication.shared.open(Theme.telegramURL); return }
-        if indexPath.section == Section.controls.rawValue,
+        if sectionKind(indexPath.section) == .device, indexPath.row == 1 { sendLog(); return }
+        if sectionKind(indexPath.section) == .device, indexPath.row == 2 { shareLogs(from: tableView.cellForRow(at: indexPath)); return }
+        if sectionKind(indexPath.section) == .device, indexPath.row == 3 { UIApplication.shared.open(Theme.telegramURL); return }
+        if sectionKind(indexPath.section) == .controls,
            controlsRows[indexPath.row] == .editLayout { editLayout?(); return }
-        if indexPath.section == Section.cheats.rawValue {
-            let cheat = StoryCheats.all[indexPath.row]
+        if sectionKind(indexPath.section) == .cheats, indexPath.row == 0 { askForMoney(); return }
+        if sectionKind(indexPath.section) == .cheats {
+            let cheat = StoryCheats.all[indexPath.row - 1]
             dismiss(animated: true) { self.cheatSelected?(cheat) }
             return
         }
-        if indexPath.section == Section.mode.rawValue {
+        if sectionKind(indexPath.section) == .mode {
             guard indexPath.row < GameMode.allCases.count else { return }
             settings.gameMode = GameMode.allCases[indexPath.row]
             gameModeChanged?()
-            UIView.performWithoutAnimation { tableView.reloadSections([Section.mode.rawValue], with: .none) }
+            UIView.performWithoutAnimation { reload(.mode) }
             return
         }
-        if indexPath.section == Section.files.rawValue { selectFileRow(fileRows[indexPath.row]); return }
+        if sectionKind(indexPath.section) == .files { selectFileRow(fileRows[indexPath.row]); return }
         let presets = settings.tier.allowed
-        guard indexPath.section == Section.graphics.rawValue, !engineRunning, indexPath.row < presets.count else { return }
+        guard sectionKind(indexPath.section) == .graphics, !engineRunning, indexPath.row < presets.count else { return }
         settings.graphicsPreset = presets[indexPath.row]
         resolutionChanged?()
-        UIView.performWithoutAnimation { tableView.reloadSections([Section.graphics.rawValue], with: .none) }
+        UIView.performWithoutAnimation { reload(.graphics) }
     }
 
     // MARK: Game files
@@ -552,7 +593,8 @@ final class SettingsViewController: UITableViewController {
 
     @objc private func preloadChanged() {
         let rows = makeFileRows()
-        let section = Section.files.rawValue
+        guard shown.contains(.files) else { fileRows = rows; return }
+        let section = indexOf(.files)
         // Footer text depends on these; a footer only resizes on a reload.
         let key = "\(rows)|\(preloader.phase)|\(preloader.removing)|\(preloader.lastError ?? "")|\(fileMessage ?? "")|\(preloader.measured)|\(preloader.cachedBytes > 0)"
         if rows != fileRows || key != fileStateKey {
@@ -738,7 +780,7 @@ final class SettingsViewController: UITableViewController {
         return height == GraphicsConfiguration.nativeHeight ? AppLanguage.interpolate(AppLanguage.choose("Native ({arg0}p)"), [String(describing: height)]) : "\(height)p"
     }
     private func reloadFooters() {
-        UIView.performWithoutAnimation { tableView.reloadSections([Section.graphics.rawValue], with: .none) }
+        UIView.performWithoutAnimation { reload(.graphics) }
     }
     /// Compact slider plus a live numeric readout; unlike a secondaryText
     /// snapshot the displayed value follows the finger without reloading rows.

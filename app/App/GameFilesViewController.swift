@@ -381,6 +381,8 @@ final class GameFilesViewController: UIViewController, UIDocumentPickerDelegate,
         while server.hasSuffix("/") { server.removeLast() }
         var request = URLRequest(url: URL(string: server + "/data/manifest.json")!, timeoutInterval: 10)
         request.setValue("bytes=0-65535", forHTTPHeaderField: "Range")
+        DownloadBrowserViewController.loadUserAgent { userAgent in
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         URLSession.shared.dataTask(with: request) { [weak self] data, response, _ in
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             let head = data.flatMap { String(data: $0.prefix(4096), encoding: .utf8) } ?? ""
@@ -396,26 +398,40 @@ final class GameFilesViewController: UIViewController, UIDocumentPickerDelegate,
                 }
             }
         }.resume()
+        }
     }
 
     /// A direct file link is installed; a web page (a download portal) opens in the download
     /// browser, which hands over the file when the page starts it.
     private func openOrInstall(_ url: URL) {
-        var request = URLRequest(url: url, timeoutInterval: 15)
-        request.setValue("bytes=0-1023", forHTTPHeaderField: "Range")
-        URLSession.shared.dataTask(with: request) { [weak self] _, response, _ in
-            let type = response?.mimeType?.lowercased() ?? ""
-            DispatchQueue.main.async {
-                guard let self else { return }
-                if type.contains("html") { self.openBrowser(url) } else { self.startInstall(.url(url)) }
+        // Asked the way Safari opens a typed link (no range), and dropped once the headers arrive.
+        DownloadBrowserViewController.loadUserAgent { userAgent in
+            var request = URLRequest(url: url, timeoutInterval: 15)
+            for (name, value) in DownloadBrowserViewController.safariHeaders(for: url, page: nil, userAgent: userAgent, method: "GET", body: nil) {
+                request.setValue(value, forHTTPHeaderField: name)
             }
-        }.resume()
+            Task { [weak self] in
+                var type = "", status = 0
+                if let (bytes, response) = try? await URLSession.shared.bytes(for: request) {
+                    type = response.mimeType?.lowercased() ?? ""
+                    status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                    bytes.task.cancel()
+                }
+                // A web page, or a refusal (a bot check answers 403 or 503): the browser handles it like Safari.
+                let browser = type.contains("html") || [401, 403, 429, 503].contains(status)
+                GameFolder.log("Link check (\(url.host ?? "?")): HTTP \(status), \(type.isEmpty ? "no type" : type); \(browser ? "opening the browser" : "installing from the link").")
+                await MainActor.run {
+                    guard let self else { return }
+                    if browser { self.openBrowser(url) } else { self.startInstall(.url(url)) }
+                }
+            }
+        }
     }
 
     private func openBrowser(_ url: URL) {
         setStatus(nil, title: AppLanguage.choose("That link is a web page"), detail: AppLanguage.choose("Use the page's download button in the browser; the app takes over the download."))
         let browser = DownloadBrowserViewController(url: url)
-        browser.onDownload = { [weak self] file, headers in self?.startInstall(.url(file, headers: headers)) }
+        browser.onDownload = { [weak self] file, request in self?.startInstall(.browser(file, request)) }
         let navigation = UINavigationController(rootViewController: browser)
         Theme.styleNavigation(navigation)
         navigation.modalPresentationStyle = .fullScreen

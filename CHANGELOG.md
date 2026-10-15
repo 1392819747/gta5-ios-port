@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.3.4
+- **Story money no longer resets to $0.** Right after a save loaded, a game script set every character's cash to $0, so each save after that kept $0. The app now ignores that one write while a save loads (#10). Saves made after the bug already hold $0, so money lost before this update doesn't come back.
+- **Downloading the game in the app works with more file hosts.** The app asks for the file exactly the way Safari does, in one request. If a host shows a bot check (such as Cloudflare's), the link opens in the app's browser, which passes it and hands the download back. If a site refuses the download because of the ad blocking, the browser turns it off for that site; a shield button does the same by hand.
+- **Fewer crashes after long jumps** (character switches, mission skips, respawns): the game could try to draw part of the map it had just unloaded, and crash.
+- **Update notice.** When a newer version is out, the app says so once and links to the Releases topic in the Telegram group.
+- **Settings are grouped:** Graphics, Controls, Story cheats, Game mode and language, Game files and This device each have their own page.
+- **The game pauses when you leave it.** Control Center, a notification, a call, another app or the app's own Settings now open the game's pause menu, and it stays paused until you resume (#11). A story cheat picked from Settings leaves the pause menu by itself.
+- **Set money** (Settings › Story cheats): type an amount and the character you're playing gets it. Save the game to keep it.
+- **Sprint button** (Settings › Controls, off by default): tap it while moving to sprint until you let go of the stick; hold it to open a parachute.
+- **Airplane right stick** (Settings › Controls, off by default): a second stick for planes; drag up or down to set the throttle (it stays where you leave it), left or right for rudder. Helicopters keep their buttons. Thanks to GitHub user @m1337v (#12).
+- **Game files that fail to read are named in the log**, and a read the system interrupted is retried instead of failing. Thanks to GitHub user @m1337v (#13).
+- **Less texture memory on iPhones.** The most common texture type is now stored in a format the iPhone's GPU reads directly, at half the memory of before.
+- **Audio uses a little less CPU:** the game's music and speech are decoded natively.
+- **Extra memory is asked for by default** in the Mac script, the GitHub workflow and the builder site; use `--free` (or untick the box) for a free Apple ID.
+- **Builder site:** coming back after a new version is out now offers to build it, instead of downloading your previous build again (#14).
+
 ## v1.3.3
 - **Runs on iOS 16.** The app now installs on iOS 16 as well as iOS 17 and later.
 - **No more crash at the end of Marriage Counseling** (the Vinewood Hills fences). The engine wrote the list of where a model's pieces are in memory one entry past the space the model reserved for it, which broke the fence model. That same overflow hit other models too, so it may fix other rare glitches as well.

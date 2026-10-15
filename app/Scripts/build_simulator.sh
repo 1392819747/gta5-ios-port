@@ -15,6 +15,10 @@ python3 Scripts/prepare_format_strings.py
 python3 Scripts/prepare_video_memory.py
 python3 Scripts/prepare_plain_dsp.py
 python3 Scripts/prepare_plain_shared.py
+python3 Scripts/prepare_cash_stats.py
+python3 Scripts/prepare_native_opus.py
+python3 Scripts/prepare_render_list_guard.py
+python3 Scripts/build_opus.py --sdk iphonesimulator
 python3 Scripts/build_metal_shaders.py "${PG_SHADER_DIR:-Build/Inputs/shaders}" --sdk iphonesimulator
 xcodegen generate --spec project.yml
 xcodebuild -project PlayGTA5Native.xcodeproj -scheme PlayGTA5Native \

@@ -4,12 +4,22 @@ import Foundation
 enum GameInstallSource {
     /// A direct link to an archive: downloaded, unpacked as it arrives, and never stored whole.
     case url(URL, headers: [String: String] = [:])
+    /// A file a download page started in the app's browser: fetched the way Safari asked for it.
+    case browser(URL, BrowserDownload)
     /// An archive in Files (other parts of a multi-part set are found by name). When the app owns
     /// it (it's in the app's folder), the part already unpacked is freed as it goes, so the
     /// archive and the game don't both need room.
     case file(URL, ownedByApp: Bool)
     /// Every part of a multi-part archive, in order.
     case parts([URL])
+}
+
+/// How Safari asked for a file: method, form data, headers and the browser's cookies.
+struct BrowserDownload {
+    var method: String
+    var body: Data?
+    var headers: [String: String] = [:]
+    var cookies: [HTTPCookie]
 }
 
 /// One progress report for the screen.
@@ -45,10 +55,24 @@ final class GameInstallRun {
         var options = GameInstaller.Options()
         options.log = { GameFolder.log("Install: " + $0) }
         options.toleratedSizeMismatches = tolerated
+        #if targetEnvironment(simulator)
+        // Simulator tests: PG_FAKE_FREE_GB pretends there is room, so a link install starts its download.
+        if let gigabytes = ProcessInfo.processInfo.environment["PG_FAKE_FREE_GB"].flatMap(Int64.init) { options.freeSpaceOverride = gigabytes << 30 }
+        #endif
         let installerSource: GameInstaller.Source
         switch source {
         case let .url(url, headers):
-            options.httpHeaders = headers
+            // A pasted link is fetched as if typed into Safari, in one request like Safari.
+            options.httpHeaders = DownloadBrowserViewController.safariHeaders(for: url, page: nil, userAgent: DownloadBrowserViewController.userAgent, method: "GET", body: nil)
+                .merging(headers) { $1 }
+            options.singleRequest = true
+            installerSource = .url(url)
+        case let .browser(url, request):
+            options.httpHeaders = request.headers
+            options.httpMethod = request.method
+            options.httpBody = request.body
+            options.httpCookies = request.cookies
+            options.singleRequest = true
             installerSource = .url(url)
         case let .file(url, owned):
             run.access(url)
@@ -77,6 +101,16 @@ final class GameInstallRun {
                         completion(.webPage(url))
                         return
                     }
+                    // Refused the very first request (a bot check such as Cloudflare's, or a host that only
+                    // serves browsers): open the link in the browser, which passes the check like Safari and
+                    // hands the file back with its cookies.
+                    if error.kind == .httpError, let detail = error.detail, detail.hasSuffix("first request"),
+                       ["HTTP 401", "HTTP 403", "HTTP 429", "HTTP 503"].contains(where: detail.contains),
+                       case let .url(url, headers) = source, headers.isEmpty {
+                        GameFolder.log("The link refused the app's request (\(detail)); opening it in the browser.")
+                        completion(.webPage(url))
+                        return
+                    }
                     var message = error.message
                     if error.kind == .cancelled { message = AppLanguage.choose("Cancelled. Files already unpacked are kept; starting again replaces them.") }
                     completion(.failure(message))
@@ -94,6 +128,7 @@ final class GameInstallRun {
     private static func describe(_ source: GameInstallSource) -> String {
         switch source {
         case let .url(url, _): return "a link (\(url.host ?? "?"))"
+        case let .browser(url, _): return "a download page's file (\(url.host ?? "?"))"
         case let .file(url, owned): return "\(url.lastPathComponent)\(owned ? " (freed as it unpacks)" : "")"
         case let .parts(urls): return "\(urls.count) parts"
         }

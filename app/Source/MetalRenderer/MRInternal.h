@@ -78,6 +78,7 @@ struct Texture : Object {
 	bool alphaView = false;		// A8 render target: stored as R8, sampled through a (0,0,0,R) swizzled view
 	int bcKind = 0;			// 1..7: block-compressed source (decoded on the CPU unless bcNative)
 	bool bcNative = false;		// stored as a Metal BC format: uploads, copies and readbacks use the blocks as they are
+	bool astc = false;		// BC1 rewritten as ASTC 4x4 on upload (gASTCBC1); readbacks use the original blocks
 	bool bcSrgb = false;
 	uint64_t lastUse = 0;		// command buffer serial that last referenced it
 	std::unordered_map<uint64_t, id<MTLTexture>> views;
@@ -151,6 +152,7 @@ struct FormatInfo {
 	int bc = 0;			// BC1..7 source
 	bool srgb = false, a8 = false;
 	bool bcNative = false;		// kept compressed on the GPU (gNativeBC), not decoded on the CPU
+	bool astc = false;		// BC1 stored as ASTC 4x4 (gASTCBC1)
 };
 // The GPU samples BC1-7 itself (Apple silicon iPads and Macs; not iPhones): BC textures stay
 // compressed, 2 to 8 times smaller than decoded. Set once by the renderer before any texture.
@@ -158,6 +160,9 @@ extern bool gNativeBC;
 // Decoded BC1 (non-sRGB) stored as 16-bit A1BGR5 instead of RGBA8: BC1 has only 1-bit alpha and
 // 5:6:5 colours, so this halves the largest share of decoded texture memory on iPhones.
 extern bool gPackedBC1;
+// BC1 rewritten block by block as ASTC 4x4 (Source/BC1ToASTC.c): 8 bits per texel, half of A1BGR5 and a
+// quarter of RGBA8, for sRGB BC1 too. Every Apple GPU reads ASTC; takes precedence over gPackedBC1.
+extern bool gASTCBC1;
 FormatInfo mapFormat(uint32_t dxgi, uint32_t bind);
 MTLPixelFormat viewFormat(uint32_t dxgi, MTLPixelFormat textureFormat);
 bool isDepthFormat(MTLPixelFormat f);

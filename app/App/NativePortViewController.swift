@@ -309,6 +309,11 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
                               (UIApplication.willEnterForegroundNotification, "back in the foreground"), (UIApplication.didBecomeActiveNotification, "active")] {
             NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in self?.appendLog("App \(label).") }
         }
+        // A newer release on GitHub: say so once per version, pointing to the Telegram group.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self else { return }
+            UpdateCheck.run(from: self) { [weak self] line in DispatchQueue.main.async { self?.appendLog(line) } }
+        }
         if let recovery = GameSettings.shared.recoverFromFailedBoot() {
             appendLog("Previous launch on \(recovery.failed.title) did not finish; lowered to \(recovery.fallback.title)\(recovery.resetHeight.map { ", resolution \($0)p back to Auto" } ?? "").")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { self.explainRecovery(recovery) }
@@ -615,7 +620,14 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
     }
 
     /// Presses one of the game's own controller cheat sequences, then gives the pad back.
-    private func playStoryCheat(_ cheat: StoryCheat) {
+    private func playStoryCheat(_ cheat: StoryCheat, resumed: Bool = false) {
+        // Settings paused the game; cheats are typed in play, so leave the pause menu first (Start).
+        if PGPauseMenuActive() && !resumed {
+            appendLog("Story cheat \(cheat.title): leaving the pause menu first.")
+            PGRequestPauseMenu()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in self?.playStoryCheat(cheat, resumed: true) }
+            return
+        }
         let status = PGGameStatus()
         if PGPauseMenuActive() || (status & (1 | 4 | 8 | 16)) != 0 {
             appendLog("Story cheat skipped (\(cheat.title)): pause menu, cutscene, or no player.")
@@ -923,13 +935,18 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
     private func showSettings() {
         guard presentedViewController == nil else { return }
         touchControls.reset()
-        let controller = SettingsViewController(engineRunning: engineStarted, runningMode: bootedMode)
+        pauseGame(reason: "Settings opened during play")
+        let controller = SettingsHomeViewController(engineRunning: engineStarted, runningMode: bootedMode)
         controller.gameModeChanged = { [weak self] in self?.refreshModeChoice() }
         controller.resolutionChanged = { [weak self] in self?.applyLiveResolution() }
         controller.controlsChanged = { [weak self] in self?.touchControls.updateVisibility() }
         controller.editLayout = { [weak self] in self?.showLayoutEditor() }
         controller.targetingChanged = { PGSetTargetingMode(Int32(GameSettings.shared.targetingMode)) }
         controller.cheatSelected = { [weak self] cheat in self?.playStoryCheat(cheat) }
+        controller.moneyEntered = { [weak self] amount in
+            self?.appendLog("Story cheat: set money to \(amount)")
+            PGSetPlayerCash(amount)
+        }
         let navigation = UINavigationController(rootViewController: controller)
         Theme.styleNavigation(navigation)
         present(navigation, animated: true)
@@ -951,6 +968,17 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         #endif
         KeyboardMouse.shared.releaseAll()
         PGUpdateVirtualPad(PGPadState())
+        pauseGame(reason: "App inactive during play")
+    }
+    /// Control Center, a notification, a call or another app: the game opens its own pause menu, so
+    /// nothing happens while the player is away and it stays paused until they resume (GitHub #11).
+    /// Only during normal play: not in a cutscene, the pause menu, with the phone out or during a cheat.
+    /// Also when the player opens Settings during play.
+    private func pauseGame(reason: String) {
+        guard engineStarted, padProof == nil, !PGPauseMenuActive(), PGGameStatus() & (1 | 2 | 4 | 8 | 16) == 0 else { return }
+        appendLog("\(reason): opening the pause menu.")
+        // Held by the engine itself for its next frames: the engine may not run a frame until the app is back.
+        PGRequestPauseMenu()
     }
     private var injectedKey = false, releasedKey = false, injectedMouse = false
     private func injectTestInput(sinceWorld: Double) {

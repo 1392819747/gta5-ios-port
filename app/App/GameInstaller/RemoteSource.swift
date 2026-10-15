@@ -70,10 +70,17 @@ final class RemoteSource: NSObject, ArchiveByteSource, URLSessionDataDelegate, @
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = options.requestTimeout
         config.timeoutIntervalForResource = 7 * 24 * 3600
-        config.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        // Not ...AndRemote...: that adds "Cache-Control: no-cache", which browsers don't send.
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
         config.urlCache = nil
         config.httpMaximumConnectionsPerHost = 1
         config.waitsForConnectivity = false
+        if !options.httpCookies.isEmpty {
+            config.httpShouldSetCookies = true
+            config.httpCookieAcceptPolicy = .always
+            for cookie in options.httpCookies { config.httpCookieStorage?.setCookie(cookie) }
+        }
+        streamingFallback = options.singleRequest
         session = URLSession(configuration: config, delegate: self, delegateQueue: queue)
     }
 
@@ -172,7 +179,16 @@ final class RemoteSource: NSObject, ArchiveByteSource, URLSessionDataDelegate, @
         guard !isStopped else { return }
         var request = URLRequest(url: urls[partIndex])
         for (k, v) in options.httpHeaders { request.setValue(v, forHTTPHeaderField: k) }
-        request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
+        let first = partIndex == 0 && partOffset == 0
+        if first && options.httpMethod != "GET" {
+            request.httpMethod = options.httpMethod
+            request.httpBody = options.httpBody
+        } else {
+            request.setValue(nil, forHTTPHeaderField: "Content-Type")
+            request.setValue(nil, forHTTPHeaderField: "Origin")
+        }
+        // A browser's first request asks for compression like Safari; resumes need the exact bytes.
+        if !(options.singleRequest && first) { request.setValue("identity", forHTTPHeaderField: "Accept-Encoding") }
         if streamingFallback {
             requestedEnd = nil
             if partOffset > 0 { request.setValue("bytes=\(partOffset)-", forHTTPHeaderField: "Range") }
@@ -229,7 +245,9 @@ final class RemoteSource: NSObject, ArchiveByteSource, URLSessionDataDelegate, @
                 discardBytes = partOffset
                 log("Server ignored the resume request; skipping \(partOffset) bytes already received.")
             }
-            noteLength(http.expectedContentLength > 0 ? http.expectedContentLength : nil)
+            let encoding = (http.value(forHTTPHeaderField: "Content-Encoding") ?? "identity").lowercased()
+            if encoding == "identity" { noteLength(http.expectedContentLength > 0 ? http.expectedContentLength : nil) }
+            else { log("The server compresses the download (\(encoding)); its size is known once it ends.") }
         case 206:
             let range = http.value(forHTTPHeaderField: "Content-Range") ?? ""
             // "bytes start-end/total"
@@ -248,7 +266,14 @@ final class RemoteSource: NSObject, ArchiveByteSource, URLSessionDataDelegate, @
                 completionHandler(.cancel); return
             }
         default:
+            let server = ["Server", "CF-RAY", "CF-Mitigated", "Content-Type", "Content-Length"].compactMap { name in
+                http.value(forHTTPHeaderField: name).map { "\(name): \($0)" } }.joined(separator: ", ")
+            log("The server answered HTTP \(status) (\(server)) for \(http.url?.host ?? "?")\(partOffset == 0 ? ", before any data" : " at byte \(partOffset)").")
             responseFailure = httpError(status, retryAfter: http.value(forHTTPHeaderField: "Retry-After"))
+            if partIndex == 0 && partOffset == 0, var detail = responseFailure?.detail {
+                detail += ", first request"   // GameInstallRun may hand such a link to the browser
+                responseFailure = InstallError(.httpError, responseFailure!.message, detail: detail)
+            }
             completionHandler(.cancel); return
         }
         if validator == nil || partOffset == 0 {

@@ -69,7 +69,7 @@ Everything plays from your phone: no server, no internet needed while playing.
 
 - **Graphics.** Settings has six presets, from Battery to Max, and a separate resolution choice that changes while you play. Presets above the recommended one show a warning. If a setting needs more memory than your iPhone gives the app, the game closes; on the next launch the app tells you and goes back to a setting that works. Settings that already ran fine on your phone are never lowered.
 - **Something went wrong?** Settings › **Send log to the developer** sends this run's log and the previous one (the one from a crash) in one tap. **Share log** lets you save or send it yourself.
-- **Controls.** Move, resize or hide every touch button with **Edit controls layout** (start screen or Settings). Assisted aim, gyro aiming and tilt steering are in Settings. Bluetooth controllers work too; the touch controls hide while one is connected. Settings › **Airplane right stick** optionally replaces the airplane throttle and rudder buttons with a visible second stick: drag vertically to set throttle (it stays set when released), and horizontally for rudder (it recentres). Helicopters keep their buttons.
+- **Controls.** Move, resize or hide every touch button with **Edit controls layout** (start screen or Settings). Assisted aim, gyro aiming and tilt steering are in Settings. Bluetooth controllers work too; the touch controls hide while one is connected. Settings › Controls › **Airplane right stick** optionally replaces the airplane throttle and rudder buttons with a visible second stick: drag vertically to set throttle (it stays set when released), and horizontally for rudder (it recentres). Helicopters keep their buttons.
 - **Updating.** When a new version comes out, open the builder again and tap **Build again**. Your game folder and saves stay where they are.
 
 ## Get the most performance
@@ -80,7 +80,7 @@ The biggest upgrade is **more memory**: iOS normally gives the app about half of
 
 Players report this works great and makes the game far more playable.
 
-1. On [fivestarport.vercel.app](https://fivestarport.vercel.app), tick **Enable increased memory entitlements** before tapping Upload and build (already built? tick it and tap **Build again**).
+1. Build with **Enable increased memory entitlements** ticked on [fivestarport.vercel.app](https://fivestarport.vercel.app). It's on by default; if you built with it off, tick it and tap **Build again**.
 2. Install the new `GTA5Port.ipa` with **SideStore** as usual.
 3. Install **[GetMoreRam](https://github.com/hugeBlack/GetMoreRam)**, sign in with the **same Apple ID** you use in SideStore, pick **GTA V Port** and add **Increased Memory Limit**.
 4. In SideStore, **refresh** GTA V Port so it picks up the change.
@@ -118,8 +118,8 @@ The builder above is the easiest route. These older routes still work.
 Needs an Apple Silicon Mac with Xcode (free) and `brew install xcodegen`. Point the script at your game folder:
 
 ```sh
-./build_ipa.sh --mirror /path/to/your/game-folder          # free Apple ID
-./build_ipa.sh --mirror /path/to/your/game-folder --paid   # paid developer account
+./build_ipa.sh --mirror /path/to/your/game-folder          # asks for extra memory (works with any account)
+./build_ipa.sh --mirror /path/to/your/game-folder --free   # only if your installer refuses the app
 ```
 
 This makes `GTA5Port.ipa` next to the script (about 30 to 60 minutes); install it with SideStore or AltStore. To install straight from Xcode instead, open `app/PlayGTA5Native.xcodeproj` (created by the script), choose your iPhone as the destination, pick your Apple ID under **Signing & Capabilities** (free accounts appear as *Personal Team*; change the bundle identifier to something unique if Xcode asks), and press **Run**.
@@ -147,7 +147,7 @@ Only devices on your own tailnet can reach it. To stop sharing: `tailscale serve
 1. On this repository's page, press **Use this template** › **Create a new repository**, and choose **Private**. The build refuses to run in a public copy, because the finished app contains the game engine from your files.
 2. In the Tailscale admin console: **Settings › Keys › Generate auth key**. Turn on **Reusable** and **Ephemeral**, pick a short expiry such as 7 days, and copy the key.
 3. In your new repository: **Settings › Secrets and variables › Actions › New repository secret**. Add `TS_AUTHKEY` (the key) and `GAME_SERVER_URL` (your server address, e.g. `https://my-pc.tailnet-name.ts.net`).
-4. **Actions › Build my IPA › Run workflow**, with game files set to **my server (Tailscale)**. Tick *paid account* only if you have one.
+4. **Actions › Build my IPA › Run workflow**, with game files set to **my server (Tailscale)**. Leave *Ask for extra memory* ticked.
 5. After about 25 minutes, download `GTA5Port.ipa` from your repository's **Releases** (or the run's artifacts).
 
 A Mac works for this route too: `./build_ipa.sh https://my-pc.tailnet-name.ts.net`.
@@ -169,7 +169,7 @@ Private repositories get free GitHub Actions minutes every month (2,000 on the f
 
 Settings shows the memory limit iOS gave the app at the bottom.
 
-**Using a paid account:** tick *Enable increased memory entitlements* in the builder or use `--paid` on a Mac, then sign with your paid team. On a Mac (most reliable): open `app/PlayGTA5Native.xcodeproj`, pick your paid team under **Signing & Capabilities**, change the bundle identifier to something unique (e.g. `com.yourname.gta5port`), check that **Increased Memory Limit** and **Extended Virtual Addressing** are listed, choose your iPhone and press **Run**. If an IPA signed by SideStore or AltStore with a paid Apple ID shows the free limit, the tool dropped the entitlements; use the Mac route.
+**Using a paid account:** the builder, the workflow and the Mac script all ask for the memory entitlements by default, so just sign with your paid team. On a Mac (most reliable): open `app/PlayGTA5Native.xcodeproj`, pick your paid team under **Signing & Capabilities**, change the bundle identifier to something unique (e.g. `com.yourname.gta5port`), check that **Increased Memory Limit** and **Extended Virtual Addressing** are listed, choose your iPhone and press **Run**. If an IPA signed by SideStore or AltStore with a paid Apple ID shows the free limit, the tool dropped the entitlements; use the Mac route.
 
 ## How it works
 
@@ -181,7 +181,7 @@ Settings shows the memory limit iOS gave the app at the bottom.
 
 ## License
 
-The code written for this project is MIT licensed (see `LICENSE`). It does not cover the game, its data, or the third-party files fetched at build time.
+The code written for this project is MIT licensed (see `LICENSE`). It does not cover the game, its data, or the third-party files fetched at build time. Those keep their own licenses: WABT and SIMDe (Apache-2.0, MIT), bcdec (MIT), libarchive (`app/Vendor/LICENSE-libarchive.txt`) and libopus (`app/Vendor/LICENSE-libopus.txt`), both BSD.
 
 ## Thanks
 

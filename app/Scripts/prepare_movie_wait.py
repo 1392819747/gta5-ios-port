@@ -7,21 +7,23 @@ show. Each of those sleeps goes through pg_movie_wait instead, which marks the v
 after a short wait.
 """
 from pathlib import Path
+from engine_names import fn
 import re
 root = Path(__file__).resolve().parents[1]
-FUNCTIONS = {
-    '80969': 'CMovieMgr::UpdateFrame',
-    '81493': 'CMovie::Play',
-    '80987': 'CMovieMgr::Delete',
-    '81494': 'CMovieMgr::Stop',
-    '81507': 'CMovieMgr::GetTime',
-}
+FUNCTIONS = {str(fn(name)): name for name in [
+    'CMovieMgr::UpdateFrame()',
+    'CMovieMgr::CMovie::Play()',
+    'CMovieMgr::Delete(unsigned int)',
+    'CMovieMgr::Stop(unsigned int)',
+    'CMovieMgr::GetTime(unsigned int)',
+]}
+SLEEP = str(fn('rage::sysIpcSleep(unsigned int)'))
 # The failure-flag test followed by sysIpcSleep(1), as WABT writes it.
 loop = re.compile(
     r'(?P<i>[ ]+)var_j0 = (?P<movie>var_[lp]\d+);\n'
     r'(?P=i)var_i0 = i32_load8_u_shared\(wasm_rt_local_memory_base, wasm_rt_local_memory_size, instance->w2c_env_memory, \(u64\)checked_add_u64\(var_j0, 96u\)\);\n'
     r'(?P=i)var_i1 = 32u;\n(?P=i)var_i0 &= var_i1;\n(?P=i)if \(var_i0\) \{goto var_B\d+;\}\n'
-    r'(?P=i)(?:var_i0 = 1u;\n(?P=i)w2c_game_f135\(instance, var_i0\);|pg_movie_wait\(instance, (?P=movie)\);)\n')
+    r'(?P=i)(?:var_i0 = 1u;\n(?P=i)w2c_game_f' + SLEEP + r'\(instance, var_i0\);|pg_movie_wait\(instance, (?P=movie)\);)\n')
 def patch(match):
     i, movie = match['i'], match['movie']
     if 'pg_movie_wait' in match.group(0): return match.group(0)

@@ -182,6 +182,11 @@ final class GameSettings {
         get { defaults.integer(forKey: "memoryCapMB") }
         set { defaults.set(max(0, newValue), forKey: "memoryCapMB") }
     }
+    /// A Sprint button on foot (sprinting also works by holding the move stick at its edge). Off by default.
+    var sprintButton: Bool {
+        get { defaults.bool(forKey: "sprintButton") }
+        set { defaults.set(newValue, forKey: "sprintButton") }
+    }
     /// Left/right buttons instead of the steering stick in vehicles. Off by default.
     var steeringButtons: Bool {
         get { defaults.bool(forKey: "steeringButtons") }

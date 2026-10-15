@@ -51,6 +51,14 @@ public enum GameInstaller {
         public var requestTimeout: TimeInterval = 30
         /// URL only: extra HTTP headers (e.g. a cookie or token for the file host).
         public var httpHeaders: [String: String] = [:]
+        /// URL only: method and body of the first request (a download page's form); resumes use GET.
+        public var httpMethod = "GET"
+        public var httpBody: Data?
+        /// URL only: cookies the session starts with (a browser's); it keeps ones set on redirects too.
+        public var httpCookies: [HTTPCookie] = []
+        /// URL only: fetch like a browser, one request for the whole file, and use ranges only to
+        /// resume after a drop (some file hosts refuse a download asked for in pieces).
+        public var singleRequest = false
         /// Queue for the progress and completion callbacks.
         public var callbackQueue: DispatchQueue = .main
         /// How often progress is reported.

@@ -14,9 +14,9 @@ on:
           - uploaded with the website builder
         default: my server (Tailscale)
       paid_account:
-        description: "I have a paid Apple developer account (request extra memory)"
+        description: "Ask for extra memory (on by default; untick only if your installer refuses the app)"
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: write
@@ -82,9 +82,9 @@ jobs:
         run: |
           if [ "$FROM_UPLOAD" = "true" ]; then
             /usr/bin/python3 app/Scripts/assemble_inputs.py --inputs uploaded-inputs --out "$RUNNER_TEMP/game-files"
-            ./build_ipa.sh --mirror "$RUNNER_TEMP/game-files" ${{ inputs.paid_account && '--paid' || '' }}
+            ./build_ipa.sh --mirror "$RUNNER_TEMP/game-files" ${{ !inputs.paid_account && '--free' || '' }}
           else
-            ./build_ipa.sh "$SERVER" ${{ inputs.paid_account && '--paid' || '' }}
+            ./build_ipa.sh "$SERVER" ${{ !inputs.paid_account && '--free' || '' }}
           fi
 
       - uses: actions/upload-artifact@v4

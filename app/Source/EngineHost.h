@@ -59,6 +59,10 @@ typedef struct {
 PGControlHints PGReadControlHints(uint32_t touchContext);
 // The next weapon of the aircraft the player flies (applied on the game thread).
 void PGNextAircraftWeapon(void);
+/// Story cheat "Set money": the playing character's cash becomes `amount` at the next engine frame.
+void PGSetPlayerCash(int32_t amount);
+/// Presses Start (opens the pause menu, or closes it when open): held for the next three engine frames.
+void PGRequestPauseMenu(void);
 // Keyboard and mouse, through the game's own PC input (the block the browser build wrote): key
 // state bytes indexed by Windows virtual-key code, and mouse words after them.
 void PGSetKey(uint8_t virtualKey, bool down);

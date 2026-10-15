@@ -286,7 +286,11 @@ static int64_t readLocalAsset(uint32_t id,uint64_t offset,uint8_t *destination,u
   while(done<length){
     ssize_t n=pread(descriptor,destination+done,length-done,(off_t)(offset+done));
     if(n<0&&errno==EINTR)continue;
-    if(n<0){close(descriptor);return -1;}
+    if(n<0){
+      int error=errno;close(descriptor);
+      NSString *message=[NSString stringWithFormat:@"Game file could not be read: %@ (error %d, %s)",entry[0],error,strerror(error)];
+      pg_log(message.UTF8String);return -1;
+    }
     if(n==0)break;
     done+=(uint64_t)n;
   }

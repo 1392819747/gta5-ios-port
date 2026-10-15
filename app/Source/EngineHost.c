@@ -1,5 +1,6 @@
 #include "HostInternal.h"
 #include "wasm-rt-impl.h"
+#include "engine-functions.h" // PG_FN_*: engine functions by name (Scripts/engine_names.py)
 #include <pthread.h>
 #include "NativeEngineConfiguration.h"
 #include "NativeControllerLook.h"
@@ -193,7 +194,12 @@ u64 pg_video_memory(u64 reported){
 static u32 nativeEngineCores=2;
 u32 w2c_env_emscripten_num_logical_cores(struct w2c_env *host) { return nativeEngineCores; }
 void w2c_env_emscripten_check_blocking_allowed(struct w2c_env *host) {}
-void w2c_env_wasm_print_line_js(struct w2c_env *host, u64 address) { pg_log(pg_string(host, address)); }
+static _Atomic double saveLoadedAt = -1e9;		// when the engine last read a save's script data (cash guard below)
+void w2c_env_wasm_print_line_js(struct w2c_env *host, u64 address) {
+  const char *line = pg_string(host, address);
+  if (line[0] == '[' && strstr(line, "ReadScriptTreesFromLoadedPso")) atomic_store(&saveLoadedAt, timeMS(CLOCK_MONOTONIC));
+  pg_log(line);
+}
 void w2c_env_wasm_hang_line_js(struct w2c_env *host, u64 address) { pg_log(pg_string(host, address)); }
 u32 w2c_env_wasm_has_page_js(struct w2c_env *host) { return 1; }
 u32 w2c_env_wasm_userdata_page_js(struct w2c_env *host) { return 0; }
@@ -621,6 +627,10 @@ static float pg_camera_swipe_axis(float delta, double elapsed) {
 // bits 0-15 buttons, then LX LY RX RY L2 R2 bytes (0x80 = centred stick).
 static _Atomic uint64_t virtualPad = 0x0000808080800000ull;
 static _Atomic bool virtualPadActive;
+// Pause menu request (app going inactive): Start is held for the next few frames the engine actually
+// runs. A timed press could fall entirely into the time the engine waits while the app is inactive.
+static _Atomic int pauseFrames;
+void PGRequestPauseMenu(void) { atomic_store(&pauseFrames, 3); atomic_store(&virtualPadActive, true); }
 static uint8_t pg_pad_axis(float value, bool up) {
   if (!isfinite(value)) return 0x80;
   value = fmaxf(-1, fminf(1, value));
@@ -641,26 +651,26 @@ void PGUpdateVirtualPad(PGPadState state) {
 // SET_PLAYER_TARGETING_MODE (f58997): store menu preference 3, then apply it
 // to the local player. Requested by the host, run here on the engine's own
 // control-update thread.
-void w2c_game_f36170(w2c_game*, u32, u32);
-void w2c_game_f36175(w2c_game*, u64, u32, u32);
-void w2c_game_f135(w2c_game*, u32); // rage::sysIpcSleep
+void PG_FN_SET_MENU_PREFERENCE(w2c_game*, u32, u32);
+void PG_FN_PROFILE_SETTINGS_SET(w2c_game*, u64, u32, u32);
+void PG_FN_SYS_IPC_SLEEP(w2c_game*, u32); // rage::sysIpcSleep
 static _Atomic int32_t pendingTargetingMode = -1;
 void PGSetTargetingMode(int32_t mode) { if (mode >= 0 && mode <= 3) atomic_store(&pendingTargetingMode, mode); }
 // `instance` is the calling engine thread's own (its wasm stack pointer).
 static void pg_apply_targeting_mode(w2c_game *instance) {
   int32_t mode = atomic_exchange(&pendingTargetingMode, -1);
   if (mode < 0) return;
-  w2c_game_f36170(instance, 3, (u32)mode);
+  PG_FN_SET_MENU_PREFERENCE(instance, 3, (u32)mode);
   uint64_t listeners = *(uint64_t *)pg_pointer(&env, 19571440, 8);
-  if (listeners) w2c_game_f36175(instance, listeners, 0, (u32)mode);
+  if (listeners) PG_FN_PROFILE_SETTINGS_SET(instance, listeners, 0, (u32)mode);
   char line[96]; snprintf(line, sizeof line, "Targeting mode set to %d.", mode); pg_log(line);
 }
-u64 w2c_game_f100(w2c_game*, u64); // operator new
-u32 w2c_game_f58715(w2c_game*); // player_commands::CommandPlayerPedId
-void w2c_game_f50133(w2c_game*, u32, u64, u32, u32, u32); // entity_commands::CommandSetEntityCoordsNoOffset
+u64 PG_FN_OPERATOR_NEW(w2c_game*, u64); // operator new
+u32 PG_FN_PLAYER_PED_ID(w2c_game*); // player_commands::CommandPlayerPedId
+void PG_FN_SET_ENTITY_COORDS_NO_OFFSET(w2c_game*, u32, u64, u32, u32, u32); // entity_commands::CommandSetEntityCoordsNoOffset
 #if TARGET_OS_SIMULATOR
-u32 w2c_game_f81498(w2c_game*, u64, u64); // CMovieMgr::PreloadMovie
-void w2c_game_f81499(w2c_game*, u32); // CMovieMgr::Play
+u32 PG_FN_PRELOAD_MOVIE(w2c_game*, u64, u64); // CMovieMgr::PreloadMovie
+void PG_FN_PLAY_MOVIE(w2c_game*, u32); // CMovieMgr::Play
 // Test (PG_TEST_TELEPORT="x,y,z"): about 30 s in, moves the player there (a script vector is 3
 // floats 8 bytes apart).
 // Test (PG_TEST_TELEPORT="x,y,z"): moves the player there about 15 s in. With
@@ -677,12 +687,43 @@ static void pg_test_teleport(w2c_game *instance) {
   if (++frames < 900 || (frames - 900) % (period ? period : 1)) return;
   if (!period) frames = -1;
   const float *t = p[jumps++ & 1];
-  uint64_t vector = w2c_game_f100(instance, 32);
+  uint64_t vector = PG_FN_OPERATOR_NEW(instance, 32);
   float *v = pg_pointer(&env, vector, 24); v[0] = t[0]; v[2] = t[1]; v[4] = t[2];
-  w2c_game_f50133(instance, w2c_game_f58715(instance), vector, 0, 0, 0);
+  PG_FN_SET_ENTITY_COORDS_NO_OFFSET(instance, PG_FN_PLAYER_PED_ID(instance), vector, 0, 0, 0);
   char line[96]; snprintf(line, sizeof line, "TEST: player moved to %.1f, %.1f, %.1f (jump %d).", t[0], t[1], t[2], jumps); pg_log(line);
 }
-void w2c_game_f50825(w2c_game*, u32); // graphics_commands::CommandSetTVChannel
+u32 PG_FN_STAT_GET_INT(w2c_game*, u32, u64, u32); // stats_commands::CommandStatGetInt
+static uint32_t pg_joaat(const char *text);
+u32 PG_FN_STAT_SET_INT(w2c_game*, u32, u32, u32); // stats_commands::CommandStatSetInt
+void PG_FN_DO_AUTO_SAVE(w2c_game*); // misc_commands::CommandDoAutoSave
+// Test (PG_TEST_CASH=1): every 30 s from about 30 s in, logs each character's cash stat (the save-load
+// cash guard above). PG_TEST_CASH=set first gives them 1111, 2222 and 3333 and autosaves, so a later
+// run can load a save with known amounts.
+static void pg_test_cash(w2c_game *instance) {
+  static int frames;
+  const char *mode = getenv("PG_TEST_CASH");
+  if (!mode) return;
+  ++frames;
+  if (!strcmp(mode, "set") && frames == 600) {
+    for (int k = 0; k < 3; k++) { char name[16]; snprintf(name, sizeof name, "SP%d_TOTAL_CASH", k); PG_FN_STAT_SET_INT(instance, pg_joaat(name), 1111u * (k + 1), 1); }
+    PG_FN_DO_AUTO_SAVE(instance);
+    pg_log("TEST: cash set to 1111/2222/3333, autosave requested.");
+  }
+  if (atomic_load(&saveLoadedAt) < 0 || frames % 3) return;		// from the save load on (stats exist then), 10 times a second; logged on change
+  static uint64_t out; static int32_t last[3] = {-2, -2, -2};
+  if (!out) out = PG_FN_OPERATOR_NEW(instance, 16);
+  int32_t now[3]; bool changed = false;
+  for (int k = 0; k < 3; k++) {
+    char name[16]; snprintf(name, sizeof name, "SP%d_TOTAL_CASH", k);
+    int32_t *value = pg_pointer(&env, out, 4); *value = -1;
+    now[k] = PG_FN_STAT_GET_INT(instance, pg_joaat(name), out, (u32)-1) ? *value : -1;
+    changed |= now[k] != last[k]; last[k] = now[k];
+  }
+  if (!changed) return;
+  char line[120]; snprintf(line, sizeof line, "TEST: cash SP0 %d SP1 %d SP2 %d (frame %d)", now[0], now[1], now[2], frames);
+  pg_log(line);
+}
+void PG_FN_SET_TV_CHANNEL(w2c_game*, u32); // graphics_commands::CommandSetTVChannel
 // Test (PG_TEST_TV=1): from about 45 s in, switches the TV on as a script does (SET_TV_CHANNEL),
 // then to the next channel every 30 s, so new shows load without waiting for the playlist.
 static void pg_test_tv(w2c_game *instance) {
@@ -690,7 +731,7 @@ static void pg_test_tv(w2c_game *instance) {
   if (!getenv("PG_TEST_TV") || ++frames < 1350 || (frames - 1350) % 900) return;
   int channel = (frames - 1350) / 900 % 3;
   char line[64]; snprintf(line, sizeof line, "TEST: TV on channel %d.", channel); pg_log(line);
-  w2c_game_f50825(instance, (u32)channel);
+  PG_FN_SET_TV_CHANNEL(instance, (u32)channel);
 }
 // Test (PG_TEST_VIDEO=1): about a minute in, loads and plays a video that doesn't exist, the way a
 // TV switching on does, and logs how long the engine was held up.
@@ -698,18 +739,18 @@ static void pg_test_video(w2c_game *instance) {
   static int frames;
   if (frames < 0 || !getenv("PG_TEST_VIDEO") || ++frames < 1800) return;
   frames = -1;
-  uint64_t name = w2c_game_f100(instance, 32);
+  uint64_t name = PG_FN_OPERATOR_NEW(instance, 32);
   memcpy(pg_pointer(&env, name, 32), "pg_test_video", 14);
   pg_log("TEST: loading a video that doesn't exist.");
   double start = timeMS(CLOCK_MONOTONIC);
-  uint32_t handle = w2c_game_f81498(instance, 28366608, name);
-  w2c_game_f81499(instance, handle);
+  uint32_t handle = PG_FN_PRELOAD_MOVIE(instance, 28366608, name);
+  PG_FN_PLAY_MOVIE(instance, handle);
   char line[120]; snprintf(line, sizeof line, "TEST: video handle %u, the engine was held up %.0f ms.", handle, timeMS(CLOCK_MONOTONIC) - start); pg_log(line);
 }
-void w2c_game_f60322(w2c_game*, u32); // streaming_commands::CommandRequestModel
-u32 w2c_game_f60324(w2c_game*, u32); // streaming_commands::HasModelLoaded
-u32 w2c_game_f61266(w2c_game*, u32, u64, f32, u32, u32, u32); // vehicle_commands::CommandCreateVehicle
-void w2c_game_f57201(w2c_game*, u32, u32, u32); // ped_commands::CommandSetPedIntoVehicle
+void PG_FN_REQUEST_MODEL(w2c_game*, u32); // streaming_commands::CommandRequestModel
+u32 PG_FN_HAS_MODEL_LOADED(w2c_game*, u32); // streaming_commands::HasModelLoaded
+u32 PG_FN_CREATE_VEHICLE(w2c_game*, u32, u64, f32, u32, u32, u32); // vehicle_commands::CommandCreateVehicle
+void PG_FN_SET_PED_INTO_VEHICLE(w2c_game*, u32, u32, u32); // ped_commands::CommandSetPedIntoVehicle
 // Script commands that create entities need a running script: lends them the "main" script's
 // thread (the active thread is per engine thread, at g1 + 3088). Returns the previous one.
 static uint64_t pg_test_enter_script(w2c_game *instance) {
@@ -742,13 +783,13 @@ static void pg_test_car(w2c_game *instance) {
   const char *name = getenv("PG_TEST_CAR_MODEL");
   if (name && *name) { uint32_t h = 0; for (const char *c = name; *c; c++) { h += (uint8_t)(*c >= 'A' && *c <= 'Z' ? *c + 32 : *c); h += h << 10; h ^= h >> 6; } h += h << 3; h ^= h >> 11; h += h << 15; model = h; }
   uint64_t previous = pg_test_enter_script(instance);
-  w2c_game_f60322(instance, model);
-  if (!w2c_game_f60324(instance, model) && frames < 1650) { pg_test_leave_script(instance, previous); return; }
+  PG_FN_REQUEST_MODEL(instance, model);
+  if (!PG_FN_HAS_MODEL_LOADED(instance, model) && frames < 1650) { pg_test_leave_script(instance, previous); return; }
   frames = -1;
-  uint64_t vector = w2c_game_f100(instance, 32);
+  uint64_t vector = PG_FN_OPERATOR_NEW(instance, 32);
   float *v = pg_pointer(&env, vector, 24); v[0] = x; v[2] = y; v[4] = z;
-  uint32_t vehicle = w2c_game_f61266(instance, model, vector, heading, 0, 0, 1);
-  if (vehicle) w2c_game_f57201(instance, w2c_game_f58715(instance), vehicle, (uint32_t)-1);
+  uint32_t vehicle = PG_FN_CREATE_VEHICLE(instance, model, vector, heading, 0, 0, 1);
+  if (vehicle) PG_FN_SET_PED_INTO_VEHICLE(instance, PG_FN_PLAYER_PED_ID(instance), vehicle, (uint32_t)-1);
   pg_test_leave_script(instance, previous);
   if (getenv("PG_TEST_DRIVE")) driving = atoi(getenv("PG_TEST_DRIVE")) + 1;
   char line[96]; snprintf(line, sizeof line, "TEST: player put in car %u at %.1f, %.1f, %.1f.", vehicle, x, y, z); pg_log(line);
@@ -764,9 +805,9 @@ static void pg_test_request_models(w2c_game *instance) {
   for (char *name = strtok(names, ","); name && index < 8; name = strtok(NULL, ","), index++) {
     uint32_t h = 0; for (const char *c = name; *c; c++) { h += (uint8_t)(*c >= 'A' && *c <= 'Z' ? *c + 32 : *c); h += h << 10; h ^= h >> 6; } h += h << 3; h ^= h >> 11; h += h << 15;
     uint64_t previous = pg_test_enter_script(instance);
-    if (!requested) { w2c_game_f60322(instance, h); char line[128]; snprintf(line, sizeof line, "TEST: requested model %s (0x%08x).", name, h); pg_log(line); }
+    if (!requested) { PG_FN_REQUEST_MODEL(instance, h); char line[128]; snprintf(line, sizeof line, "TEST: requested model %s (0x%08x).", name, h); pg_log(line); }
     else if (!done[index]) {
-      if (w2c_game_f60324(instance, h)) { done[index] = 1; char line[128]; snprintf(line, sizeof line, "TEST: model %s loaded.", name); pg_log(line); }
+      if (PG_FN_HAS_MODEL_LOADED(instance, h)) { done[index] = 1; char line[128]; snprintf(line, sizeof line, "TEST: model %s loaded.", name); pg_log(line); }
       else pending++;
     }
     pg_test_leave_script(instance, previous);
@@ -775,9 +816,9 @@ static void pg_test_request_models(w2c_game *instance) {
   requested = true;
   if (frames > 1200 + 30 * 120) { pg_log("TEST: requested models still not loaded after 120 s."); frames = -1; }
 }
-void w2c_game_f47028(w2c_game*, u64, u64, f32, u32, u32, u32); // CLoadScene::StartFromScript
-u32 w2c_game_f47030(w2c_game*); // CLoadScene::IsLoaded
-u64 w2c_game_f684(w2c_game*, u32, u32); // atHashStringNamespaceSupport::TryGetString
+void PG_FN_LOAD_SCENE_START(w2c_game*, u64, u64, f32, u32, u32, u32); // CLoadScene::StartFromScript
+u32 PG_FN_LOAD_SCENE_IS_LOADED(w2c_game*); // CLoadScene::IsLoaded
+u64 PG_FN_HASH_STRING_TRY_GET(w2c_game*, u32, u32); // atHashStringNamespaceSupport::TryGetString
 // Test (PG_TEST_LOADSCENE=start): about 50 s in, starts the frustum load scene Los Santos Customs
 // (carmod_shop) asks for, NEW_LOAD_SCENE_START at (-326.94, -131.75, 38.85).
 static void pg_test_loadscene(w2c_game *instance) {
@@ -785,12 +826,12 @@ static void pg_test_loadscene(w2c_game *instance) {
   const char *mode = getenv("PG_TEST_LOADSCENE");
   if (frames < 0 || !mode || strcmp(mode, "start") || ++frames < 1500) return;
   frames = -1;
-  uint64_t vectors = w2c_game_f100(instance, 64);
+  uint64_t vectors = PG_FN_OPERATOR_NEW(instance, 64);
   float *v = pg_pointer(&env, vectors, 32);
   v[0] = -326.94f; v[1] = -131.75f; v[2] = 38.85f; v[3] = 0;
   v[4] = -0.91f; v[5] = -0.40f; v[6] = 0; v[7] = 0;
   pg_log("TEST: starting the Los Santos Customs load scene.");
-  w2c_game_f47028(instance, vectors, vectors + 16, 5.0f, 0, 1, 0);
+  PG_FN_LOAD_SCENE_START(instance, vectors, vectors + 16, 5.0f, 0, 1, 0);
 }
 // PG_TEST_LOADSCENE (any value): logs the load scene's state whenever it changes, and every 5 s.
 static void pg_test_loadscene_monitor(w2c_game *instance) {
@@ -806,13 +847,13 @@ static void pg_test_loadscene_monitor(w2c_game *instance) {
   if (proxy) {
     const uint8_t *p = pg_pointer(&env, proxy, 208);
     proxyRequested = p[28]; proxyState = p[30]; proxyFlags = *(const uint16_t *)(p + 20);
-    uint64_t text = w2c_game_f684(instance, 0, *(const uint32_t *)(p + 196));
+    uint64_t text = PG_FN_HASH_STRING_TRY_GET(instance, 0, *(const uint32_t *)(p + 196));
     if (text) snprintf(name, sizeof name, "%s", pg_string(&env, text));
   }
   char line[200];
   snprintf(line, sizeof line, "LOADSCENE state %u proxy %s (%llx) state %d requested %d flags %x volume %x entities %u bounds %u loaded %u",
     state, name, (unsigned long long)proxy, proxyState, proxyRequested, proxyFlags, m[23417824],
-    *(const uint16_t *)(m + 23417896), *(const uint16_t *)(m + 23417912), w2c_game_f47030(instance));
+    *(const uint16_t *)(m + 23417896), *(const uint16_t *)(m + 23417912), PG_FN_LOAD_SCENE_IS_LOADED(instance));
   double now = timeMS(CLOCK_MONOTONIC);
   if (!strcmp(line, last) && now - lastTime < 5000) return;
   snprintf(last, sizeof last, "%s", line); lastTime = now;
@@ -838,9 +879,9 @@ static void pg_keep_on_test_map(w2c_game *instance) {
   const bool jumped = placed && (x - lastX) * (x - lastX) + (y - lastY) * (y - lastY) > 300.f * 300.f;
   lastX = x; lastY = y;
   if (placed && !jumped && !(z < -40.f)) return;
-  if (!vector) vector = w2c_game_f100(instance, 32);
+  if (!vector) vector = PG_FN_OPERATOR_NEW(instance, 32);
   float *v = pg_pointer(&env, vector, 24); v[0] = -234.f; v[2] = 838.f; v[4] = 38.f;
-  w2c_game_f50133(instance, w2c_game_f58715(instance), vector, 0, 0, 0);
+  PG_FN_SET_ENTITY_COORDS_NO_OFFSET(instance, PG_FN_PLAYER_PED_ID(instance), vector, 0, 0, 0);
   lastX = v[0]; lastY = v[2];
   char line[128]; snprintf(line, sizeof line, "GTA VI test map: moved the player from %.0f, %.0f, %.0f to the map's start point.", x, y, z); pg_log(line);
   placed = true;
@@ -849,9 +890,32 @@ static void pg_keep_on_test_map(w2c_game *instance) {
 // changes the station, so the touch button asks for the next weapon the way a script does:
 // GET_CURRENT_PED_VEHICLE_WEAPON (f63032), then SET_CURRENT_PED_VEHICLE_WEAPON (f63031) on the next
 // known aircraft weapon until one is accepted (it refuses weapons the vehicle doesn't have).
-void w2c_game_f63031(w2c_game*, u64);
-void w2c_game_f63032(w2c_game*, u64);
-u32 w2c_game_f58715(w2c_game*); // PLAYER_PED_ID
+u32 PG_FN_GET_ENTITY_MODEL(w2c_game*, u32); // entity_commands::CommandGetEntityModel
+u32 PG_FN_STAT_SET_INT(w2c_game*, u32, u32, u32); // stats_commands::CommandStatSetInt
+// Story cheat "Set money" (Settings): writes SPn_TOTAL_CASH of the character being played, the
+// stat the game's money display and shops read. Michael is player_zero, Franklin player_one,
+// Trevor player_two; any other model (Sandbox's) has no story cash.
+static _Atomic int64_t cashRequest = -1;
+void PGSetPlayerCash(int32_t amount) { atomic_store(&cashRequest, amount < 0 ? 0 : amount); }
+static uint32_t pg_joaat(const char *text);
+static void pg_apply_cash_request(w2c_game *instance) {
+  const int64_t amount = atomic_exchange(&cashRequest, -1);
+  if (amount < 0) return;
+  const uint32_t model = PG_FN_GET_ENTITY_MODEL(instance, PG_FN_PLAYER_PED_ID(instance));
+  int character = model == pg_joaat("player_zero") ? 0 : model == pg_joaat("player_one") ? 1 : model == pg_joaat("player_two") ? 2 : -1;
+  char line[120];
+  if (character < 0) {
+    snprintf(line, sizeof line, "Set money: the player isn't Michael, Franklin or Trevor (model 0x%x); nothing changed.", model);
+    pg_log(line); return;
+  }
+  char stat[16]; snprintf(stat, sizeof stat, "SP%d_TOTAL_CASH", character);
+  PG_FN_STAT_SET_INT(instance, pg_joaat(stat), (u32)amount, 1);
+  snprintf(line, sizeof line, "Set money: %s set to %lld.", stat, (long long)amount);
+  pg_log(line);
+}
+void PG_FN_SET_CURRENT_PED_VEHICLE_WEAPON(w2c_game*, u64);
+void PG_FN_GET_CURRENT_PED_VEHICLE_WEAPON(w2c_game*, u64);
+u32 PG_FN_PLAYER_PED_ID(w2c_game*); // PLAYER_PED_ID
 static _Atomic bool aircraftWeaponRequested;
 void PGNextAircraftWeapon(void) { atomic_store(&aircraftWeaponRequested, true); }
 static uint32_t pg_joaat(const char *text) {
@@ -865,13 +929,13 @@ static void pg_next_aircraft_weapon(w2c_game *instance) {
                                 "VEHICLE_WEAPON_PLAYER_SAVAGE", "VEHICLE_WEAPON_PLAYER_BULLET", "VEHICLE_WEAPON_PLANE_ROCKET"};
   enum { COUNT = sizeof names / sizeof *names };
   static uint64_t call; // native call info: +0 result pointer, +16 arguments; then result and arguments
-  if (!call) call = w2c_game_f100(instance, 64);
+  if (!call) call = PG_FN_OPERATOR_NEW(instance, 64);
   uint64_t *info = pg_pointer(&env, call, 64);
   memset(info, 0, 64);
   info[0] = call + 24; info[2] = call + 32;
-  const uint32_t ped = w2c_game_f58715(instance);
+  const uint32_t ped = PG_FN_PLAYER_PED_ID(instance);
   info[4] = ped; info[5] = call + 48; // ped, pointer to the hash
-  w2c_game_f63032(instance, call);
+  PG_FN_GET_CURRENT_PED_VEHICLE_WEAPON(instance, call);
   const uint32_t current = *(uint32_t *)pg_pointer(&env, call + 48, 4), found = *(uint32_t *)pg_pointer(&env, call + 24, 4);
   int at = -1;
   for (int i = 0; i < COUNT; i++) if (pg_joaat(names[i]) == current) at = i;
@@ -881,7 +945,7 @@ static void pg_next_aircraft_weapon(w2c_game *instance) {
     if (next == at) break;
     memset(info, 0, 64); info[0] = call + 24; info[2] = call + 32;
     info[4] = ped; info[5] = pg_joaat(names[next]);
-    w2c_game_f63031(instance, call);
+    PG_FN_SET_CURRENT_PED_VEHICLE_WEAPON(instance, call);
     if (*(uint32_t *)pg_pointer(&env, call + 24, 4)) {
       snprintf(line, sizeof line, "Aircraft weapon: %s (was 0x%x%s).", names[next], current, found ? "" : ", none");
       pg_log(line); return;
@@ -892,10 +956,11 @@ static void pg_next_aircraft_weapon(w2c_game *instance) {
 }
 void pg_virtual_pad_apply(w2c_game *instance, uint64_t pad) {
   if (pad == 12840656) pg_next_aircraft_weapon(instance);
+  if (pad == 12840656) pg_apply_cash_request(instance);
   if (pad == 12840656) pg_apply_targeting_mode(instance);
   if (pad == 12840656) pg_keep_on_test_map(instance);
 #if TARGET_OS_SIMULATOR
-  if (pad == 12840656) { pg_test_teleport(instance); pg_test_tv(instance); pg_test_video(instance); pg_test_car(instance); pg_test_request_models(instance); pg_test_loadscene(instance); pg_test_loadscene_monitor(instance); }
+  if (pad == 12840656) { pg_test_teleport(instance); pg_test_cash(instance); pg_test_tv(instance); pg_test_video(instance); pg_test_car(instance); pg_test_request_models(instance); pg_test_loadscene(instance); pg_test_loadscene_monitor(instance); }
 #endif
   if (pad != 12840656 || !atomic_load(&virtualPadActive)) return;
   uint64_t packed = atomic_load(&virtualPad);
@@ -920,6 +985,10 @@ void pg_virtual_pad_apply(w2c_game *instance, uint64_t pad) {
   uint8_t *base = pg_pointer(&env, pad, 136);
   _Atomic uint32_t *buttons = (_Atomic uint32_t *)(base + 12);
   uint32_t bits = (uint32_t)(packed & 0xffff);
+  if (atomic_load(&pauseFrames) > 0 && atomic_fetch_sub(&pauseFrames, 1) > 0) {
+    bits |= 1u << 11;   // Start
+    if (atomic_load(&pauseFrames) == 0) pg_log("Pause menu: Start pressed for the app going inactive.");
+  }
   uint8_t l2 = packed >> 48, r2 = packed >> 56;
   // Analog triggers also count as pressed buttons past a small threshold.
   if (l2 > 30) bits |= 1; if (r2 > 30) bits |= 2;
@@ -949,7 +1018,7 @@ void pg_movie_wait(w2c_game *instance, uint64_t movie) {
     waitingFor = 0;
     return;
   }
-  w2c_game_f135(instance, 1);
+  PG_FN_SYS_IPC_SLEEP(instance, 1);
 }
 // GET_INDEX_OF_CURRENT_LEVEL for scripts (Scripts/prepare_level_index.py). PG_LEVEL_INDEX_OVERRIDE
 // answers a fixed index instead (test hook). Each new index the game reports is logged once.
@@ -1023,6 +1092,24 @@ static void pg_fence_dump(uint64_t map, const char *tag) {
   }
 }
 #endif
+// Cash stats (Scripts/prepare_cash_stats.py, stats_commands::CommandStatSetInt). Loading a Story save,
+// a script sets all three characters' SP?_TOTAL_CASH to 0 a few seconds after the save's data is read,
+// so every load lost the money. Writes of 0 to those stats within a minute of a save being read (the
+// engine logs "ReadScriptTreesFromLoadedPso" for each) are dropped; every cash write is logged.
+// PG_CASH_GUARD=0 lets them through (comparisons).
+u32 pg_stat_set_int(w2c_game *instance, u32 stat, u32 value) {
+  (void)instance;
+  static uint32_t cash[3];
+  if (!cash[0]) { cash[0] = pg_joaat("SP0_TOTAL_CASH"); cash[1] = pg_joaat("SP1_TOTAL_CASH"); cash[2] = pg_joaat("SP2_TOTAL_CASH"); }
+  for (int k = 0; k < 3; k++) if (stat == cash[k]) {
+    const char *guard = getenv("PG_CASH_GUARD");
+    bool drop = value == 0 && timeMS(CLOCK_MONOTONIC) - atomic_load(&saveLoadedAt) < 60000 && !(guard && !strcmp(guard, "0"));
+    char line[120]; snprintf(line, sizeof line, "Stat SP%d_TOTAL_CASH set to %d%s.", k, (int32_t)value, drop ? ": kept the saved amount (still loading)" : "");
+    pg_log(line);
+    return drop;
+  }
+  return 0;
+}
 u32 pg_fixup_miss(w2c_game *instance, u64 map, u64 address, u64 *delta) {
   (void)instance;
   static _Atomic int logged;
@@ -1305,8 +1392,8 @@ static void *boot(void *ignored) {
   pg_log("Running the real engine's static constructors.");
   // Test hook: move the heap's top before the allocator starts, so the game's allocations land above 4 GB.
   const char *ballast=getenv("PG_TEST_HEAP_BALLAST_MB");
-  if(ballast&&atoi(ballast)>0){extern u64 w2c_game_f91008(w2c_game *,u64);u64 bytes=(u64)atoi(ballast)<<20;
-    snprintf(message,sizeof message,"Test: heap ballast of %d MB, previous top 0x%llx.",atoi(ballast),(unsigned long long)w2c_game_f91008(&env.game,bytes));pg_log(message);}
+  if(ballast&&atoi(ballast)>0){extern u64 PG_FN_SBRK(w2c_game *,u64);u64 bytes=(u64)atoi(ballast)<<20;
+    snprintf(message,sizeof message,"Test: heap ballast of %d MB, previous top 0x%llx.",atoi(ballast),(unsigned long long)PG_FN_SBRK(&env.game,bytes));pg_log(message);}
   w2c_game_0x5F_wasm_call_ctors(&env.game);
   pg_log("Constructors completed; calling the game entry point.");
   char widthOption[32],heightOption[32],frameOption[32];

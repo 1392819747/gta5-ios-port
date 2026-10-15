@@ -1,17 +1,18 @@
 #!/bin/bash
 # Build an unsigned IPA from YOUR OWN game files.
-# Usage: ./build_ipa.sh https://my-pc.tailnet-name.ts.net [--paid]   (files from your server)
-#        ./build_ipa.sh --mirror /path/to/game-folder [--paid]     (files already on this machine:
+# Usage: ./build_ipa.sh https://my-pc.tailnet-name.ts.net [--free]   (files from your server)
+#        ./build_ipa.sh --mirror /path/to/game-folder [--free]     (files already on this machine:
 #                                                                    the folder with data/manifest.json and b/)
-#   --paid  request the extra-memory entitlements (paid Apple developer account)
+#   The app asks for the extra-memory entitlements; sideloaders drop what an account can't grant.
+#   --free  leave them out, for an installer that refuses the app (--paid is still accepted)
 # Needs: an Apple Silicon Mac (or the GitHub Actions workflow), Xcode, xcodegen.
 set -euo pipefail
 SERVER=""
 MIRROR=""
-if [ "${1:-}" = "--mirror" ]; then MIRROR="$(cd "${2:?Usage: ./build_ipa.sh --mirror /path/to/game-folder [--paid]}" && pwd)"; shift 2
-else SERVER="${1:?Usage: ./build_ipa.sh https://your-server [--paid]  or  ./build_ipa.sh --mirror /path [--paid]}"; shift; fi
-ENTITLEMENTS=App/Free.entitlements
-[ "${1:-}" = "--paid" ] && ENTITLEMENTS=App/Full.entitlements
+if [ "${1:-}" = "--mirror" ]; then MIRROR="$(cd "${2:?Usage: ./build_ipa.sh --mirror /path/to/game-folder [--free]}" && pwd)"; shift 2
+else SERVER="${1:?Usage: ./build_ipa.sh https://your-server [--paid]  or  ./build_ipa.sh --mirror /path [--free]}"; shift; fi
+ENTITLEMENTS=App/Full.entitlements
+[ "${1:-}" = "--free" ] && ENTITLEMENTS=App/Free.entitlements
 cd "$(dirname "$0")/app"
 JOBS="${JOBS:-$(sysctl -n hw.ncpu)}"
 # The system Python runs natively on Apple Silicon (a Rosetta Python would

@@ -28,6 +28,7 @@ enum AppLanguage { static func choose(_ s: String) -> String { s } }
 final class GameSettings {
   static let shared = GameSettings()
   var airplaneRightStick = false
+  var sprintButton = false
   var steeringButtons = false
   var controlOpacity = 0.8
   var controlScale = 1.0

@@ -11,6 +11,7 @@
 #include "MetalRenderer.h"
 #include "MRFrameReports.h"
 #include "BCTextureDecoder.h"
+#include "BC1ToASTC.h"
 #include "NativeFrameRate.h"
 #import <UIKit/UIKit.h>
 #include <TargetConditionals.h>
@@ -424,7 +425,7 @@ static void createTexture(const uint32_t *p) {
 	t->format = m.format; t->dxgi = dxgi; t->bind = bind; t->dim = dim; t->width = w; t->height = dim == 1 ? 1 : h;
 	t->depthOrLayers = dim == 3 ? d : arraySize; t->mips = mips; t->samples = samples;
 	t->isDepth = isDepthFormat(m.format); t->hasStencil = hasStencil(m.format);
-	t->bcKind = m.bc; t->bcSrgb = m.srgb; t->bcNative = m.bcNative;
+	t->bcKind = m.bc; t->bcSrgb = m.srgb; t->bcNative = m.bcNative; t->astc = m.astc;
 	t->floatNoFilter = isFloat32(m.format) && !R->float32Filtering;
 	MTLTextureDescriptor *desc = [MTLTextureDescriptor new];
 	desc.pixelFormat = m.format;
@@ -463,6 +464,7 @@ static void createTexture(const uint32_t *p) {
 		}
 		if (!t->gpuBytes) {		// the simulator reports no allocation sizes: estimate
 			if (t->bcNative) t->gpuBytes = t->bcGameBytes;
+			else if (t->astc) t->gpuBytes = t->bcGameBytes * 2;		// 16-byte blocks for BC1's 8
 			else for (uint32_t mip = 0; mip < mips; mip++)
 				t->gpuBytes += (uint64_t)std::max(1u, w >> mip) * std::max(1u, t->height >> mip) * (dim == 3 ? std::max(1u, d >> mip) : arraySize) * samples * bytesPerTexel(m.format);
 		}
@@ -499,6 +501,24 @@ static void storeCompressed(Texture *t, uint32_t mip, uint32_t slice, uint32_t x
 			if (from + count > size || to + count > shadow.size()) break;
 			memcpy(shadow.data() + to, data + from, count);
 		}
+	}
+}
+
+// Block-compressed data to the GPU texture: bpr bytes per block row, imageBytes per 3D slice or array layer.
+static void uploadBlocks(Texture *t, uint32_t mip, uint32_t slice, uint32_t x, uint32_t y, uint32_t z, uint32_t w, uint32_t h, uint32_t d,
+                         uint32_t bpr, uint32_t imageBytes, const uint8_t *data) {
+	bool three = t->dim == 3;
+	MTLRegion region = MTLRegionMake3D(x, y, three ? z : 0, w, h, three ? d : 1);
+	if (t->shared && !inFlight(t->lastUse)) {
+		if (three || d == 1) [t->tex replaceRegion:region mipmapLevel:mip slice:three ? 0 : slice withBytes:data bytesPerRow:bpr bytesPerImage:three ? imageBytes : 0];
+		else for (uint32_t l = 0; l < d; l++) [t->tex replaceRegion:MTLRegionMake2D(x, y, w, h) mipmapLevel:mip slice:slice + l withBytes:data + (size_t)l * imageBytes bytesPerRow:bpr bytesPerImage:0];
+	} else {
+		Alloc a = frameAlloc((size_t)imageBytes * d, 16);
+		memcpy(a.ptr, data, (size_t)imageBytes * d);
+		id<MTLBlitCommandEncoder> b = blitEncoder();
+		if (three) [b copyFromBuffer:a.buf sourceOffset:a.off sourceBytesPerRow:bpr sourceBytesPerImage:imageBytes sourceSize:MTLSizeMake(w, h, d) toTexture:t->tex destinationSlice:0 destinationLevel:mip destinationOrigin:MTLOriginMake(x, y, z)];
+		else for (uint32_t l = 0; l < d; l++) [b copyFromBuffer:a.buf sourceOffset:a.off + (NSUInteger)l * imageBytes sourceBytesPerRow:bpr sourceBytesPerImage:imageBytes sourceSize:MTLSizeMake(w, h, 1) toTexture:t->tex destinationSlice:slice + l destinationLevel:mip destinationOrigin:MTLOriginMake(x, y, 0)];
+		t->lastUse = R->serial;
 	}
 }
 
@@ -549,6 +569,15 @@ static void uploadTextureInner(const uint32_t *p) {
 		if (!w || !h) return;
 		storeCompressed(t, mip, slice, x, y, z, w, h, d, bpr, rpi, data, size);
 		size_t outSize = 0;
+		if (t->astc) {		// rewritten block by block, then uploaded as blocks (rows count block rows)
+			uint32_t astcBpr = 0, astcRpi = 0;
+			void *blocks = PGTranscodeBC1ToASTC(w, h, d, bpr, rpi, data, size, &outSize, &astcBpr, &astcRpi);
+			if (!blocks) { gTextureStats.decodeFailures++; logOnce("astcfail", "Metal renderer: BC1 upload smaller than its region"); return; }
+			uploadBlocks(t, mip, slice, x, y, z, w, h, d, astcBpr, astcBpr * astcRpi, (const uint8_t *)blocks);
+			free(blocks);
+			t->proxyDirty = true;
+			return;
+		}
 		decoded = PGDecodeBC(t->bcKind, w, h, d, bpr, rpi, data, size, &outSize);
 		if (!decoded) { gTextureStats.decodeFailures++; logOnce("bcfail", "Metal renderer: BC decode failed"); return; }
 		if (t->format == MTLPixelFormatA1BGR5Unorm) {		// RGBA8 to A1BGR5 in place: Metal names components from the lowest bit (A bit 0, B 1-5, G 6-10, R 11-15)
@@ -1559,7 +1588,13 @@ static void copyRegion(const uint32_t *p) {
 		[blitEncoder() copyFromTexture:s->tex sourceSlice:three ? 0 : sLayer sourceLevel:sMip sourceOrigin:MTLOriginMake(sx, sy, three ? sz : 0)
 		                    sourceSize:MTLSizeMake(w, h, three ? std::max(1u, dep) : 1) toTexture:target destinationSlice:d->dim == 3 ? 0 : dLayer
 		              destinationLevel:dMip destinationOrigin:MTLOriginMake(dx, dy, d->dim == 3 ? dz : 0)];
-	} else if (!s->bcNative && !d->bcNative && bytesPerTexel(s->format) == bytesPerTexel(d->format) && !s->isDepth && !d->isDepth && s->samples == 1 && d->samples == 1) {
+	} else if (s->astc && d->astc) {		// sRGB and linear ASTC twins: through a view, as for BC above
+		id<MTLTexture> target = [d->tex newTextureViewWithPixelFormat:s->format];
+		if (!target) { logOnce("copyastcview", "Metal renderer: copy between ASTC formats not supported"); return; }
+		[blitEncoder() copyFromTexture:s->tex sourceSlice:three ? 0 : sLayer sourceLevel:sMip sourceOrigin:MTLOriginMake(sx, sy, three ? sz : 0)
+		                    sourceSize:MTLSizeMake(w, h, three ? std::max(1u, dep) : 1) toTexture:target destinationSlice:d->dim == 3 ? 0 : dLayer
+		              destinationLevel:dMip destinationOrigin:MTLOriginMake(dx, dy, d->dim == 3 ? dz : 0)];
+	} else if (!s->bcNative && !d->bcNative && !s->astc && !d->astc && bytesPerTexel(s->format) == bytesPerTexel(d->format) && !s->isDepth && !d->isDepth && s->samples == 1 && d->samples == 1) {
 		uint32_t bpp = bytesPerTexel(s->format), bpr = w * bpp;
 		// Different formats of one size are copied as raw bytes; if their channel layouts differ
 		// the colours come out wrong (suspected for short-lived magenta terrain patches).
@@ -2136,6 +2171,15 @@ static void report() {
 	R->statT = now; R->statDraws = R->draws; R->statPresents = R->presents; R->statSkips = R->skipped; R->statPending = R->pendingSkips; R->statCommits = R->commits; R->busyMs = 0;
 }
 
+// A packet that doesn't fit the ring (or runs past what the engine published) means the ring is corrupt:
+// executing it would read engine memory as commands. Say so once and stop rendering.
+[[noreturn]] static void ringFault(uint32_t op, uint32_t words, uint32_t tail, uint32_t head) {
+	char line[160];
+	snprintf(line, sizeof line, "Metal renderer: bad ring packet (op %u, %u words, tail %u, head %u, ring %u bytes); rendering stopped", op, words, tail, head, R->ringSize);
+	pg_log(line);
+	for (;;) sleep(60);
+}
+
 static void loop() {
 	auto *hdr = (std::atomic<uint32_t> *)(R->mem + R->ring);
 	uint32_t tail = RING_DATA;
@@ -2160,9 +2204,11 @@ static void loop() {
 			}
 			double t0 = nowMs();
 			while (tail != head) {
+				if (tail > R->ringSize - 8 || (tail < head && head - tail < 8)) ringFault(0, 0, tail, head);
 				const uint32_t *base = (const uint32_t *)(R->mem + R->ring + tail);
 				uint32_t op = base[0], n = base[1];
 				if (op == WRAP) { tail = RING_DATA; continue; }
+				if (n > (R->ringSize - tail - 8) / 4 || (tail < head && tail + 8 + n * 4 > head)) ringFault(op, n, tail, head);
 				execute(op, base + 2, n);
 				tail += n * 4 + 8;
 				executed++;
@@ -2211,6 +2257,8 @@ static bool setup() {
 #if !TARGET_OS_SIMULATOR
 	gPackedBC1 = !gNativeBC && !getenv("PG_NO_PACKED_BC1") && [R->device supportsFamily:MTLGPUFamilyApple3];
 #endif
+	// PG_NO_ASTC_BC1=1 keeps the decoded BC1 path (A1BGR5 or RGBA8), for comparisons.
+	gASTCBC1 = !gNativeBC && !getenv("PG_NO_ASTC_BC1") && [R->device supportsFamily:MTLGPUFamilyApple2];
 	R->borderColors = [R->device supportsFamily:MTLGPUFamilyApple7];
 	if (!loadShaderLibrary(R->device)) return false;
 	R->zeroBuffer = [R->device newBufferWithLength:65536 options:MTLResourceStorageModeShared];
@@ -2249,7 +2297,7 @@ static bool setup() {
 	if (!R->blitPipe) { logf("Metal renderer: present pipeline failed: %s", error.localizedDescription.UTF8String); return false; }
 	frameReportsInstall(R->device);
 	logf("Metal renderer: %s, 32-bit float filtering %s, border colours %s, BC textures %s.", R->device.name.UTF8String, R->float32Filtering ? "yes" : "no (nearest fallback)",
-	     R->borderColors ? "yes" : "no", gNativeBC ? "native" : gPackedBC1 ? "decoded on the CPU (BC1 as 16-bit)" : "decoded on the CPU");
+	     R->borderColors ? "yes" : "no", gNativeBC ? "native" : gASTCBC1 ? "decoded on the CPU (BC1 as ASTC)" : gPackedBC1 ? "decoded on the CPU (BC1 as 16-bit)" : "decoded on the CPU");
 	return true;
 }
 
