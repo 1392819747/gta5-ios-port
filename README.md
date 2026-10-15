@@ -69,7 +69,7 @@ Everything plays from your phone: no server, no internet needed while playing.
 
 - **Graphics.** Settings has six presets, from Battery to Max, and a separate resolution choice that changes while you play. Presets above the recommended one show a warning. If a setting needs more memory than your iPhone gives the app, the game closes; on the next launch the app tells you and goes back to a setting that works. Settings that already ran fine on your phone are never lowered.
 - **Something went wrong?** Settings › **Send log to the developer** sends this run's log and the previous one (the one from a crash) in one tap. **Share log** lets you save or send it yourself.
-- **Controls.** Move, resize or hide every touch button with **Edit controls layout** (start screen or Settings). Assisted aim, gyro aiming and tilt steering are in Settings. Bluetooth controllers work too; the touch controls hide while one is connected.
+- **Controls.** Move, resize or hide every touch button with **Edit controls layout** (start screen or Settings). Assisted aim, gyro aiming and tilt steering are in Settings. Bluetooth controllers work too; the touch controls hide while one is connected. Settings › **Airplane right stick** optionally replaces the airplane throttle and rudder buttons with a visible second stick: drag vertically to set throttle (it stays set when released), and horizontally for rudder (it recentres). Helicopters keep their buttons.
 - **Updating.** When a new version comes out, open the builder again and tap **Build again**. Your game folder and saves stay where they are.
 
 ## Get the most performance

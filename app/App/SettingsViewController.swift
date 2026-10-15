@@ -22,7 +22,7 @@ final class SettingsViewController: UITableViewController {
     private enum ControlsTab: Int { case stick = 0, swipe = 1 }
     private enum ControlsRow {
         case tab, swipeLook, swipeAim, stickLook, stickAim
-        case targeting, fireAlsoAims, steeringButtons, buttonSize, buttonOpacity, editLayout
+        case targeting, fireAlsoAims, steeringButtons, airplaneRightStick, buttonSize, buttonOpacity, editLayout
         case hideTouchWithController, keyboardMouse, inputState
     }
     private var controlsTab: ControlsTab {
@@ -31,7 +31,7 @@ final class SettingsViewController: UITableViewController {
     /// The camera choice only swaps its two speed rows; every other control setting is always there.
     private var controlsRows: [ControlsRow] {
         let camera: [ControlsRow] = controlsTab == .stick ? [.stickLook, .stickAim] : [.swipeLook, .swipeAim]
-        return [.tab] + camera + [.targeting, .fireAlsoAims, .steeringButtons, .buttonSize, .buttonOpacity,
+        return [.tab] + camera + [.targeting, .fireAlsoAims, .steeringButtons, .airplaneRightStick, .buttonSize, .buttonOpacity,
                                   .editLayout, .hideTouchWithController, .keyboardMouse]
     }
 
@@ -357,6 +357,12 @@ final class SettingsViewController: UITableViewController {
                 content.secondaryText = AppLanguage.choose("Left and right buttons instead of the steering stick in cars, bikes and boats")
                 cell.accessoryView = toggle(settings.steeringButtons, label: AppLanguage.choose("Steering buttons")) { [weak self] in
                     self?.settings.steeringButtons = $0; self?.controlsChanged?()
+                }
+            case .airplaneRightStick:
+                content.text = AppLanguage.choose("Airplane right stick")
+                content.secondaryText = AppLanguage.choose("Drag up or down to set throttle, left or right for rudder. Helicopters keep their buttons.")
+                cell.accessoryView = toggle(settings.airplaneRightStick, label: AppLanguage.choose("Airplane right stick")) { [weak self] in
+                    self?.settings.airplaneRightStick = $0; self?.controlsChanged?()
                 }
             case .buttonSize:
                 content.text = AppLanguage.choose("Button size")

@@ -162,6 +162,12 @@ final class FloatingStick: UIView {
     var travel: CGFloat = 48
     private(set) var origin = CGPoint.zero
     private(set) var value = CGPoint.zero
+    private var engaged = false
+    var idleOrigin: CGPoint? { didSet { if !engaged { showIdle() } } }
+    private func showIdle() {
+        if let idleOrigin { origin = idleOrigin; layoutParts(); alpha = 0.55 }
+        else { alpha = 0 }
+    }
     var sprinting = false { didSet { if sprinting != oldValue { sprintHalo.alpha = sprinting ? 1 : 0 } } }
 
     override init(frame: CGRect) {
@@ -183,6 +189,7 @@ final class FloatingStick: UIView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func begin(at point: CGPoint) {
+        engaged = true
         origin = point
         value = .zero
         layoutParts()
@@ -197,9 +204,10 @@ final class FloatingStick: UIView {
         layoutParts()
     }
     func end() {
+        engaged = false
         value = .zero
         sprinting = false
-        UIView.animate(withDuration: 0.15) { self.alpha = 0 }
+        UIView.animate(withDuration: 0.15) { self.showIdle() }
     }
     private func layoutParts() {
         base.bounds.size = CGSize(width: baseDiameter, height: baseDiameter)
@@ -233,7 +241,7 @@ final class TouchControlsView: UIView {
 
     private enum Role {
         case button(ControlButton)
-        case moveStick, look, steer
+        case moveStick, look, steer, planeStick
         /// Radio: a tap is the next station; held, the wheel opens and the same finger picks one.
         case radioWheel(start: CGPoint, current: CGPoint, since: CFTimeInterval)
         case weaponWheel(start: CGPoint, current: CGPoint)
@@ -244,6 +252,12 @@ final class TouchControlsView: UIView {
     private var roles: [ObjectIdentifier: Role] = [:]
 
     private let moveStick = FloatingStick()
+    private let rightStick = FloatingStick()
+    /// Airplanes retain throttle when the right thumb lifts; rudder recentres.
+    private var planeThrottle: CGFloat = 0
+    private var planeStickEnabled: Bool {
+        context == .plane && GameSettings.shared.airplaneRightStick && !phoneDock && !promptActive && !editing
+    }
     private let lookStick = FloatingStick()
     /// Where a finger pressed Aim/Fire; dragging from there works as a stick.
     private var dragOrigins: [ObjectIdentifier: (start: CGPoint, current: CGPoint)] = [:]
@@ -478,6 +492,7 @@ final class TouchControlsView: UIView {
         super.init(frame: frame)
         isMultipleTouchEnabled = true
         addSubview(moveStick)
+        addSubview(rightStick)
         addSubview(lookStick)
         for button in allButtons { button.alpha = 0; addSubview(button) }
         for pedal in [gas, brake, dive, surface, throttleUp, throttleDown] { pedal.isPedal = true }
@@ -563,10 +578,11 @@ final class TouchControlsView: UIView {
             return [camera, phone, pause, settings, radio, gas, brake, handbrake, enter, lookBack] + steering
         case .sub:
             return utility + [gas, brake, enter, dive, surface, lookBack] + steering
-        // Aircraft: next weapon is a D-pad left tap; the same input held is the radio wheel.
+        // Aircraft weapons are switched by PGNextAircraftWeapon, separately from the radio.
         case .heli:
             return utility + [airFire, vehicleWeapon, enter, throttleUp, throttleDown, yawLeft, yawRight]
         case .plane:
+            if planeStickEnabled { return utility + [airFire, vehicleWeapon, gear, enter] }
             return utility + [airFire, vehicleWeapon, gear, enter, throttleUp, throttleDown, yawLeft, yawRight]
         case .menu:
             return []
@@ -604,6 +620,11 @@ final class TouchControlsView: UIView {
     }
 
     func updateVisibility() {
+        if !planeStickEnabled {
+            rightStick.end()
+            planeThrottle = 0
+            roles = roles.filter { if case .planeStick = $0.value { return false }; return true }
+        }
         visible = computeVisible().filter { editing || !hiddenByPlayer($0) }
         let shown = Set(visible.map(ObjectIdentifier.init))
         let opacity = CGFloat(GameSettings.shared.controlOpacity)
@@ -642,9 +663,12 @@ final class TouchControlsView: UIView {
             button.center = point(fx, fy)
         }
         moveStick.frame = bounds
+        rightStick.frame = bounds
         lookStick.frame = bounds
         lookStick.baseDiameter = 120 * scale; lookStick.travel = 48 * scale
         moveStick.baseDiameter = 120 * scale; moveStick.travel = 48 * scale
+        rightStick.baseDiameter = 128 * scale; rightStick.travel = 52 * scale
+        rightStick.idleOrigin = planeStickEnabled ? point(0.80, 0.60) : nil
 
         // Utility bar, top centre: rare actions in the hard-to-reach zone.
         let order = [radio, lights, camera, phone, pause, settings]
@@ -775,6 +799,7 @@ final class TouchControlsView: UIView {
     private func isStick(_ role: Role) -> Bool { if case .moveStick = role { return true }; if case .steer = role { return true }; return false }
     private func isWeaponWheel(_ role: Role) -> Bool { if case .weaponWheel = role { return true }; return false }
     private func isLook(_ role: Role) -> Bool { if case .look = role { return true }; return false }
+    private func isPlaneStick(_ role: Role) -> Bool { if case .planeStick = role { return true }; return false }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         if editing { return }
@@ -791,6 +816,8 @@ final class TouchControlsView: UIView {
                 if !has(isStick) { roles[id] = .moveStick; moveStick.begin(at: point) }
             } else if context == .menu || phoneDock {
                 if !has(isLook) { roles[id] = .look; lookStick.begin(at: point) }
+            } else if planeStickEnabled && !leftZone {
+                if !has(isPlaneStick) { roles[id] = .planeStick; rightStick.begin(at: point) }
             } else if context.flying, leftZone {
                 if !has(isStick) { roles[id] = .moveStick; moveStick.begin(at: point) }
             } else if leftZone, context.driving, GameSettings.shared.steeringButtons {
@@ -887,6 +914,9 @@ final class TouchControlsView: UIView {
                 moveStick.move(to: point)
             case .radioWheel(let start, _, let since):
                 roles[id] = .radioWheel(start: start, current: point, since: since)
+            case .planeStick:
+                rightStick.move(to: point)
+                planeThrottle = max(-1, min(1, planeThrottle - (point.y - previous.y) / (rightStick.travel * 2)))
             case .look:
                 if swipeCameraEnabled {
                     trackCameraSwipe(from: previous, to: point)
@@ -923,6 +953,7 @@ final class TouchControlsView: UIView {
             dragOrigins[ObjectIdentifier(touch)] = nil
             switch role {
             case .moveStick, .steer: moveStick.end(); sprintSince = nil
+            case .planeStick: rightStick.end()
             case .look: lookStick.end()
             case .weaponWheel: weapons.setPressed(false); updateVisibility()
             case .radioWheel(_, _, let since):
@@ -950,11 +981,14 @@ final class TouchControlsView: UIView {
 
     func reset(publish: Bool = true, keepStickFinger: Bool = false) {
         clearCameraTravel()
+        rightStick.end()
+        planeThrottle = 0
         for (id, role) in roles {
             switch role {
             case .moveStick, .steer:
                 if keepStickFinger { roles[id] = context.driving ? .moveStick : .steer; continue }
                 moveStick.end()
+            case .planeStick: rightStick.end()
             case .button(let button), .fireLook(let button): button.setPressed(false)
             case .radioWheel: radio.setPressed(false)
             case .weaponWheel: weapons.setPressed(false)
@@ -975,8 +1009,8 @@ final class TouchControlsView: UIView {
 
     /// Whether the player is aiming; gyro aim runs only then by default.
     var aiming: Bool { aimActive || fire.pressed || leftFire.pressed || driveBy.pressed }
-    /// Aircraft are flown with the left stick and buttons now; kept for the gyro check.
-    var flyingWithRightStick: Bool { false }
+    /// The plane's right thumb controls throttle/rudder rather than gyro aiming.
+    var flyingWithRightStick: Bool { has(isPlaneStick) }
 
     /// The current controller state. `elapsed` turns finger travel into a
     /// stick deflection, so the camera turns about as far as the finger moves.
@@ -1100,6 +1134,13 @@ final class TouchControlsView: UIView {
             if throttleDown.pressed { state.leftTrigger = 1 }
             if yawLeft.pressed { held.insert(.l1) }
             if yawRight.pressed { held.insert(.r1) }
+            if planeStickEnabled {
+                state.rightTrigger = Float(max(0, planeThrottle))
+                state.leftTrigger = Float(max(0, -planeThrottle))
+                if rightStick.value.x < -0.35 { held.insert(.l1) }
+                if rightStick.value.x > 0.35 { held.insert(.r1) }
+                state.rightX = 0; state.rightY = 0
+            }
             if airFire.pressed { held.insert(.a) }
             if gear.pressed { held.insert(.l3) }
             if let start = exitHoldStart {
