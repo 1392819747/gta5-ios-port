@@ -7,6 +7,7 @@
 #include <limits.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <errno.h>
 #include "NativePackedAssetCache.h"
 #include "NativeAssetPreload.h"
 
@@ -282,7 +283,13 @@ static int64_t readLocalAsset(uint32_t id,uint64_t offset,uint8_t *destination,u
   int descriptor=open(file.fileSystemRepresentation,O_RDONLY);
   if(descriptor<0){NSString *message=[@"Game file missing from your folder: " stringByAppendingString:entry[0]];pg_log(message.UTF8String);return -1;}
   uint64_t done=0;
-  while(done<length){ssize_t n=pread(descriptor,destination+done,length-done,(off_t)(offset+done));if(n<=0)break;done+=(uint64_t)n;}
+  while(done<length){
+    ssize_t n=pread(descriptor,destination+done,length-done,(off_t)(offset+done));
+    if(n<0&&errno==EINTR)continue;
+    if(n<0){close(descriptor);return -1;}
+    if(n==0)break;
+    done+=(uint64_t)n;
+  }
   close(descriptor);assetReadSource=4;
   return (int64_t)done;
 }
