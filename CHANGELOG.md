@@ -16,6 +16,8 @@
 - **Extra memory is asked for by default** in the Mac script, the GitHub workflow and the builder site; use `--free` (or untick the box) for a free Apple ID.
 - **Builder site:** coming back after a new version is out now offers to build it, instead of downloading your previous build again (#14).
 
+Thanks to @m1337v for the airplane right stick and the file read fix (#12, #13), and to @aliiscoding2122, @k49kg9xmsd-prog and @phakamaec for the issues behind the money fix, the pause and the builder fix (#10, #11, #14).
+
 ## v1.3.3
 - **Runs on iOS 16.** The app now installs on iOS 16 as well as iOS 17 and later.
 - **No more crash at the end of Marriage Counseling** (the Vinewood Hills fences). The engine wrote the list of where a model's pieces are in memory one entry past the space the model reserved for it, which broke the fence model. That same overflow hit other models too, so it may fix other rare glitches as well.
