@@ -187,6 +187,11 @@ final class GameSettings {
         get { defaults.bool(forKey: "steeringButtons") }
         set { defaults.set(newValue, forKey: "steeringButtons") }
     }
+    /// Optional airplane throttle/rudder stick. Helicopters keep their buttons.
+    var airplaneRightStick: Bool {
+        get { defaults.bool(forKey: "airplaneRightStick") }
+        set { defaults.set(newValue, forKey: "airplaneRightStick") }
+    }
     /// Lower the frame rate while the phone is hot (NativePortViewController.thermalChanged). Off by default.
     var steadyWhenHot: Bool {
         get { defaults.bool(forKey: "steadyWhenHot") }
