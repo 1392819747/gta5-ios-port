@@ -128,6 +128,7 @@ final class GameFilesViewController: UIViewController, UIDocumentPickerDelegate,
         return card(AppLanguage.choose("Already on this iPhone"), [
             note(AppLanguage.choose("Easiest: in the Files app, move your unpacked game folder into On My iPhone › GTA V Port. The app finds it there by itself, however deep it is.")),
             note(AppLanguage.choose("Somewhere else? Choose any folder above it, even On My iPhone itself, and the app searches everything inside.")),
+            note(AppLanguage.choose("In the picker, tap the folder so you see what's inside it, then tap Open at the top. If Open stays grey (it can on some sideloaded installs), use the easiest way above.")),
             buttons
         ])
     }

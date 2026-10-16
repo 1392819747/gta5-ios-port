@@ -37,7 +37,20 @@ enum ControlStyle {
         "throttle_down": "chevron.down.2", "yaw_left": "rotate.left.fill", "yaw_right": "rotate.right.fill",
         "tow_hook": "car.side.rear.tow.hitch.fill", "tow_arm_up": "arrow.up.to.line", "tow_arm_down": "arrow.down.to.line", "roof": "convertible.side.arrowtriangle.up.arrowtriangle.down.fill",
         "steer_left": "arrowtriangle.left.fill", "steer_right": "arrowtriangle.right.fill",
-        "phone_option": "circle.grid.3x3.fill", "taxi_hurry": "hare.fill", "taxi_stop": "stop.fill"]
+        "phone_option": "circle.grid.3x3.fill", "taxi_hurry": "hare.fill", "taxi_stop": "stop.fill",
+        "prompt_option": "forward.end.fill", "duck": "arrow.down.circle.fill",
+        "script_lb": "lb.button.roundedbottom.horizontal.fill", "script_rb": "rb.button.roundedbottom.horizontal.fill",
+        "script_lt": "lt.button.roundedtop.horizontal.fill", "script_rt": "rt.button.roundedtop.horizontal.fill",
+        "script_y": "y.circle.fill", "script_x": "x.circle.fill", "script_a": "a.circle.fill", "script_b": "b.circle.fill",
+        "script_ls": "l.joystick.press.down.fill", "script_rs": "r.joystick.press.down.fill"]
+    /// A short label drawn like a symbol, for buttons no SF Symbol fits ("LT+RT").
+    static func textIcon(_ text: String) -> UIImage {
+        let font = UIFont.systemFont(ofSize: 15, weight: .heavy)
+        let size = (text as NSString).size(withAttributes: [.font: font])
+        return UIGraphicsImageRenderer(size: size).image { _ in
+            (text as NSString).draw(at: .zero, withAttributes: [.font: font, .foregroundColor: UIColor.white])
+        }.withRenderingMode(.alwaysTemplate)
+    }
     /// iOS 16 and 17 have no tow hitch or convertible symbols (they came in iOS 18).
     static let olderSymbol: [String: String] = [
         "tow_hook": "truck.pickup.side.fill", "roof": "car.side.arrowtriangle.up.arrowtriangle.down.fill"]
@@ -93,7 +106,7 @@ final class ControlButton: UIView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func setIcon(_ iconName: String) {
-        let image = UIImage(named: "icon_" + iconName)
+        let image = iconName.hasPrefix("text:") ? ControlStyle.textIcon(String(iconName.dropFirst(5))) : UIImage(named: "icon_" + iconName)
             ?? UIImage(systemName: ControlStyle.fallbackSymbol[iconName] ?? "circle", withConfiguration: UIImage.SymbolConfiguration(weight: .bold))
             ?? UIImage(systemName: ControlStyle.olderSymbol[iconName] ?? "circle", withConfiguration: UIImage.SymbolConfiguration(weight: .bold))
         icon.image = image?.withRenderingMode(.alwaysTemplate)
@@ -162,6 +175,10 @@ final class FloatingStick: UIView {
     var travel: CGFloat = 48
     private(set) var origin = CGPoint.zero
     private(set) var value = CGPoint.zero
+    #if targetEnvironment(simulator)
+    /// Automation: a held stick without a finger (--test-touch-sprint).
+    func testHold(_ point: CGPoint?) { value = point ?? .zero }
+    #endif
     private var engaged = false
     var idleOrigin: CGPoint? { didSet { if !engaged { showIdle() } } }
     private func showIdle() {
@@ -350,11 +367,19 @@ final class TouchControlsView: UIView {
     /// Accept/Back (player control off outside cutscenes, e.g. Mission failed, or a warning screen).
     private var gamePhoneOut = false
     private var phoneRequestedAt: CFTimeInterval?
+    /// This press of Phone opened the dock for a call that came in while driving (it must not hang up).
+    private var phoneOpensDock = false
     private var promptSince: CFTimeInterval?
     private var promptActive = false
     /// Story mode only: the character switch button.
     var characterSwitchEnabled = false { didSet { if characterSwitchEnabled != oldValue { updateVisibility() } } }
     private var pedalClock: Double = 0
+    #if targetEnvironment(simulator)
+    /// Automation (--test-touch-sprint): the move stick held forward with Sprint latched, through the
+    /// same code a finger and a tap on Sprint use.
+    func testSprint(_ on: Bool) { moveStick.testHold(on ? CGPoint(x: 0, y: 1) : nil); sprintLatched = on }
+    #endif
+    private var sprintClock: Double = 0
     private let haptics = UIImpactFeedbackGenerator(style: .light)
 
     // On foot
@@ -384,6 +409,9 @@ final class TouchControlsView: UIView {
     private let steerLeft = ControlButton("steer_left", icon: "steer_left", label: AppLanguage.choose("Steer left"))
     private let steerRight = ControlButton("steer_right", icon: "steer_right", label: AppLanguage.choose("Steer right"))
     private let driveBy = ControlButton("driveBy", icon: "fire", label: AppLanguage.choose("Aim and shoot from vehicle"))
+    /// Aim out of the vehicle without shooting (LB), and duck down in the seat (A), GitHub #15.
+    private let driveAim = ControlButton("driveAim", icon: "aim", label: AppLanguage.choose("Aim from the vehicle"))
+    private let duck = ControlButton("duck", icon: "duck", label: AppLanguage.choose("Duck"))
     private let horn = ControlButton("horn", icon: "horn", label: AppLanguage.choose("Horn"))
     private let lookBack = ControlButton("lookBack", icon: "look_back", label: AppLanguage.choose("Look behind"))
     private let vehicleWeapon = ControlButton("vehicleWeapon", icon: "vehicle_weapon", label: AppLanguage.choose("Next vehicle weapon"))
@@ -419,14 +447,60 @@ final class TouchControlsView: UIView {
     // Taxi ride: X hurries the driver, B stops the taxi.
     private let taxiHurry = ControlButton("taxi_hurry", icon: "taxi_hurry", label: AppLanguage.choose("Hurry up"))
     private let taxiStop = ControlButton("taxi_stop", icon: "taxi_stop", label: AppLanguage.choose("Stop the taxi"))
+    /// X on full-screen prompts: Skip Mission after failing, and other screens' third option.
+    private let promptOption = ControlButton("prompt_option", icon: "prompt_option", label: AppLanguage.choose("Skip mission or other option (X)"))
+    /// Yoga: a tap holds LT and RT together until tapped again, so both thumbs stay on the sticks.
+    /// A mission that asks for LT and RT together (e.g. the yoga poses: both sticks plus both triggers,
+    /// four fingers): one button that a tap latches on and a second tap releases.
+    private let bothTriggers = ControlButton("script_ltrt", icon: "script_ltrt", label: AppLanguage.choose("LT and RT together (tap to hold, tap again to let go)"))
+    private var bothTriggersHeld = false, bothTriggersWasPressed = false
+    /// Mission buttons (GTA-51): a script asks for one of its own inputs (INPUT_SCRIPT_*, engine ids
+    /// 222-231) that no button on screen sends, e.g. "Press RT to flip the chair" in By the Book. The
+    /// button shows while the script keeps polling it (the engine reports polls, PGInputPolledWithin).
+    private struct MissionButton { let input: Int32; let button: ControlButton; let pad: PadButtons?; let trigger: Int; var menuInput: Int32? = nil }
+    private lazy var missionButtons: [MissionButton] = [
+        MissionButton(input: 226, button: ControlButton("script_lb", icon: "script_lb", label: AppLanguage.choose("LB")), pad: .l1, trigger: 0, menuInput: 205),
+        MissionButton(input: 228, button: ControlButton("script_lt", icon: "script_lt", label: AppLanguage.choose("LT")), pad: nil, trigger: 1, menuInput: 207),
+        MissionButton(input: 229, button: ControlButton("script_rt", icon: "script_rt", label: AppLanguage.choose("RT")), pad: nil, trigger: 2, menuInput: 208),
+        MissionButton(input: 227, button: ControlButton("script_rb", icon: "script_rb", label: AppLanguage.choose("RB")), pad: .r1, trigger: 0, menuInput: 206),
+        MissionButton(input: 224, button: ControlButton("script_x", icon: "script_x", label: AppLanguage.choose("X")), pad: .x, trigger: 0),
+        MissionButton(input: 222, button: ControlButton("script_y", icon: "script_y", label: AppLanguage.choose("Y")), pad: .y, trigger: 0, menuInput: 204),
+        MissionButton(input: 223, button: ControlButton("script_a", icon: "script_a", label: AppLanguage.choose("A")), pad: .a, trigger: 0),
+        MissionButton(input: 225, button: ControlButton("script_b", icon: "script_b", label: AppLanguage.choose("B")), pad: .b, trigger: 0),
+        MissionButton(input: 230, button: ControlButton("script_ls", icon: "script_ls", label: AppLanguage.choose("Left stick click")), pad: .l3, trigger: 0),
+        MissionButton(input: 231, button: ControlButton("script_rs", icon: "script_rs", label: AppLanguage.choose("Right stick click")), pad: .r3, trigger: 0)]
+    private var polledMission: Set<Int32> = []
+    /// A script polls the frontend D-pad (INPUT_FRONTEND_UP/DOWN/LEFT/RIGHT, 187-190): a shop or script menu is open.
+    private var scriptMenu: Bool { !polledMission.isDisjoint(with: [187, 188, 189, 190]) && context != .menu && !phoneDock }
+    private var lastMissionLog = ""
+    /// Called every frame with the engine's poll check (PGInputPolledWithin).
+    func updateMissionInputs(_ polled: (Int32) -> Bool) {
+        let next = Set((missionButtons.map(\.input) + missionButtons.compactMap(\.menuInput) + [218, 219, 187, 188, 189, 190]).filter(polled))
+        if next != polledMission { polledMission = next; updateVisibility(); setNeedsLayout() }
+    }
+    /// The mission buttons to show now: polled, and not already covered by a button on screen.
+    private func shownMissionButtons(besides list: [ControlButton]) -> [ControlButton] {
+        // Only while the game waits for the player: the prompt layout (control off outside cutscenes) or
+        // a help message on screen. Scripts also poll inputs they don't ask for, and those must not
+        // bring up buttons in normal play.
+        if context == .menu || phoneDock || !(promptActive || hints.helpShown || scriptMenu) { return [] }
+        var covered: Set<Int32> = []
+        if list.contains(where: { $0 === accept }) { covered.insert(223) }
+        if list.contains(where: { $0 === back }) { covered.insert(225) }
+        if list.contains(where: { $0 === promptOption }) { covered.insert(224) }
+        let both = polledMission.isSuperset(of: [228, 229]) || polledMission.isSuperset(of: [207, 208])
+        if both { covered.formUnion([228, 229]) }
+        let asked = { (m: MissionButton) in self.polledMission.contains(m.input) || (m.menuInput.map(self.polledMission.contains) ?? false) }
+        return (both ? [bothTriggers] : []) + missionButtons.filter { asked($0) && !covered.contains($0.input) }.map(\.button)
+    }
     private let tabLeft = ControlButton("tabLeft", icon: "tab_left", label: AppLanguage.choose("Previous tab"))
     private let tabRight = ControlButton("tabRight", icon: "tab_right", label: AppLanguage.choose("Next tab"))
 
     private var allButtons: [ControlButton] {
-        [fire, aim, leftFire, jump, sprint, enter, weapons, reload, cover, crouch, switcher, special, interact, detonate, zoomIn, zoomOut,
-         weaponPrev, weaponNext, gas, brake, handbrake, steerLeft, steerRight, driveBy, horn, lookBack,
+        missionButtons.map(\.button) + [fire, aim, leftFire, jump, sprint, enter, weapons, reload, cover, crouch, switcher, special, interact, detonate, zoomIn, zoomOut,
+         weaponPrev, weaponNext, gas, brake, handbrake, steerLeft, steerRight, driveBy, driveAim, duck, horn, lookBack,
          vehicleWeapon, towHook, towArmUp, towArmDown, roof, dive, surface, airFire, gear, throttleUp, throttleDown, yawLeft, yawRight, camera, phone, pause, settings, lights, radio,
-         up, down, left, right, accept, back, phoneOption, taxiHurry, taxiStop, tabLeft, tabRight]
+         up, down, left, right, accept, back, phoneOption, taxiHurry, taxiStop, tabLeft, tabRight, promptOption, bothTriggers]
     }
     /// Refresh accessibility names for the active language without recreating controls.
     func refreshLanguage() {
@@ -485,6 +559,10 @@ final class TouchControlsView: UIView {
             "phone_option": AppLanguage.choose("Phone options"),
             "taxi_hurry": AppLanguage.choose("Hurry up"),
             "taxi_stop": AppLanguage.choose("Stop the taxi"),
+            "prompt_option": AppLanguage.choose("Skip mission or other option (X)"),
+            "driveAim": AppLanguage.choose("Aim from the vehicle"),
+            "duck": AppLanguage.choose("Duck"),
+            "script_ltrt": AppLanguage.choose("LT and RT together (tap to hold, tap again to let go)"),
         ]
         for button in allButtons { if let label = labels[button.name] { button.accessibilityLabel = label } }
         updateVisibility()
@@ -522,8 +600,9 @@ final class TouchControlsView: UIView {
 
     private func computeVisible() -> [ControlButton] {
         var list = baseVisible()
+        if !editing { list += shownMissionButtons(besides: list) }
         let playing = !phoneDock && !promptActive && context != .menu
-        if characterSwitchEnabled, playing, [.onFoot, .car, .bike, .boat].contains(context) { list.append(switcher) }
+        if characterSwitchEnabled, playing, context != .menu { list.append(switcher) }
         // In the layout editor every situational button shows, so it can be placed.
         if editing && !context.flying {
             list += context == .onFoot ? [special, interact, detonate, zoomIn, zoomOut, weaponPrev, weaponNext] : [special, interact, detonate, towHook, towArmUp, towArmDown, roof]
@@ -546,7 +625,7 @@ final class TouchControlsView: UIView {
 
     /// Engine state for the situational buttons; called every frame.
     func updateHints(_ next: PGControlHints) {
-        let changed = next.specialShown != hints.specialShown || next.canDetonate != hints.canDetonate || next.helpContext != hints.helpContext
+        let changed = next.helpShown != hints.helpShown || next.specialShown != hints.specialShown || next.canDetonate != hints.canDetonate || next.helpContext != hints.helpContext
             || next.vehicleModel != hints.vehicleModel || next.passenger != hints.passenger || next.taxiMenu != hints.taxiMenu
         if changed || next.specialReady != hints.specialReady || next.specialActive != hints.specialActive || next.radioWheelOpen != hints.radioWheelOpen {
             hintsChanged?("Control hints: special \(next.specialShown ? (next.specialActive ? "active" : next.specialReady ? "ready" : "charging") : "none") \(Int(next.specialFill * 100))%, detonate \(next.canDetonate), help \(next.helpShown ? (next.helpContext ? "asks for interact" : "shown") : "none"), radio wheel \(next.radioWheelOpen ? "open" : "closed"), vehicle model 0x\(String(next.vehicleModel, radix: 16))")
@@ -565,7 +644,14 @@ final class TouchControlsView: UIView {
         if phoneDock { return [camera, phone, pause, settings, up, down, left, right, accept, back, phoneOption] }
         // A prompt (Mission failed, warning screens) waits for Accept/Back; play controls do nothing then.
         // Shop menus that lock player control also need the D-pad to move through the items.
-        if promptActive && !editing { return [camera, pause, settings, up, down, left, right, accept, back] }
+        // A prompt that reads the left stick (INPUT_SCRIPT_LEFT_AXIS_X/Y, e.g. the yoga poses) keeps the left
+        // side free for the stick: the D-pad sits where the thumb goes.
+        // A script menu (shops: barber, clothes, Ammu-Nation, Los Santos Customs) reads the frontend D-pad
+        // inputs while player control stays on: it gets the menu layout too, or it can't be used (GTA-43).
+        if (promptActive || scriptMenu) && !editing {
+            let stick = polledMission.contains(218) || polledMission.contains(219)
+            return [camera, pause, settings] + (stick ? [] : [up, down, left, right]) + [accept, back, promptOption]
+        }
         // A taxi ride: the destination menu takes D-pad left/right to change and A to choose.
         if taxiRide && !editing {
             return [camera, phone, pause, settings, radio, left, right, accept, taxiHurry, taxiStop, enter, lookBack]
@@ -575,9 +661,9 @@ final class TouchControlsView: UIView {
             return aimActive ? utility + [fire, aim, enter, weapons, reload, cover, leftFire]
                              : utility + [fire, aim, jump, enter, weapons, reload, cover, crouch] + (GameSettings.shared.sprintButton ? [sprint] : [])
         case .car, .boat:
-            return utility + [gas, brake, handbrake, enter, driveBy, horn, lookBack, vehicleWeapon] + steering
+            return utility + [gas, brake, handbrake, enter, driveBy, driveAim, duck, horn, lookBack, vehicleWeapon] + steering
         case .bike:
-            return utility + [gas, brake, handbrake, enter, driveBy, horn, lookBack] + steering
+            return utility + [gas, brake, handbrake, enter, driveBy, driveAim, duck, horn, lookBack] + steering
         case .bicycle:
             return [camera, phone, pause, settings, radio, gas, brake, handbrake, enter, lookBack] + steering
         case .sub:
@@ -599,9 +685,12 @@ final class TouchControlsView: UIView {
         let phoneOut = status & 2 != 0
         if phoneOut != gamePhoneOut {
             gamePhoneOut = phoneOut
-            if phoneOut { phoneDock = true; phoneRequestedAt = nil; lastDockInput = now }
+            // A phone the player didn't open (an incoming call) leaves the driving and flying controls
+            // in place, so the vehicle stays under control; the Phone button then opens the dock.
+            let dockWas = phoneDock
+            if phoneOut { if phoneDock || !(context.driving || context.flying) { phoneDock = true }; phoneRequestedAt = nil; lastDockInput = now }
             else if phoneDock { phoneDock = false }
-            if context != .menu { reset(publish: false) }
+            if context != .menu && phoneDock != dockWas { reset(publish: false) }
             updateVisibility()
         }
         // Accept/Back prompt: player control off outside cutscenes (Mission failed and similar
@@ -611,6 +700,7 @@ final class TouchControlsView: UIView {
         let show = wanted && now - (promptSince ?? now) > 0.6
         if show != promptActive {
             promptActive = show
+            hintsChanged?("Touch layout: " + (show ? "prompt (Accept/Back)" : "play"))
             reset(publish: false)
             updateVisibility()
         }
@@ -630,6 +720,8 @@ final class TouchControlsView: UIView {
             roles = roles.filter { if case .planeStick = $0.value { return false }; return true }
         }
         visible = computeVisible().filter { editing || !hiddenByPlayer($0) }
+        let mission = missionButtons.filter { b in visible.contains(where: { $0 === b.button }) }.map(\.button.name).joined(separator: ", ")
+        if mission != lastMissionLog { lastMissionLog = mission; hintsChanged?("Mission buttons: " + (mission.isEmpty ? "none" : mission)) }
         let shown = Set(visible.map(ObjectIdentifier.init))
         let opacity = CGFloat(GameSettings.shared.controlOpacity)
         for button in allButtons {
@@ -712,6 +804,8 @@ final class TouchControlsView: UIView {
         place(steerLeft, 0.08, 0.76, 80)
         place(steerRight, 0.215, 0.76, 80)
         place(driveBy, 0.655, 0.50, 58)
+        place(driveAim, 0.655, 0.71, 50)
+        place(duck, 0.555, 0.50, 46)
         place(horn, 0.06, 0.36, 46)
         place(lookBack, 0.155, 0.36, 44)
         place(vehicleWeapon, 0.955, 0.17, 48)
@@ -742,6 +836,13 @@ final class TouchControlsView: UIView {
         place(phoneOption, 0.765, 0.56, 56)
         place(taxiHurry, 0.765, 0.52, 58)
         place(taxiStop, 0.765, 0.84, 58)
+        place(promptOption, 0.765, 0.56, 56)
+        // Mission buttons: a row under the top bar, centred, in the order they are listed.
+        let mission = ([bothTriggers] + missionButtons.map(\.button)).filter { visible.contains($0) }
+        let missionStep = 60 * scale / safe.width
+        for (index, button) in mission.enumerated() {
+            place(button, 0.5 + (CGFloat(index) - CGFloat(mission.count - 1) / 2) * missionStep, 0.27, 52)
+        }
         place(tabLeft, 0.05, 0.12, 46)
         place(tabRight, 0.95, 0.12, 46)
 
@@ -882,12 +983,20 @@ final class TouchControlsView: UIView {
         case enter where context.flying:
             exitHoldStart = now
         case phone:
-            if gamePhoneOut {
+            if gamePhoneOut && !phoneDock {
+                // A call came in while driving: the dock (answer, hang up) opens on request.
+                phoneDock = true
+                phoneOpensDock = true
+            } else if gamePhoneOut {
                 // The phone is out: this button now puts it away (Back), the dock follows the game.
                 phoneRequestedAt = nil
             } else {
-                phoneDock.toggle()
-                phoneRequestedAt = phoneDock ? now : nil
+                // Every tap asks the game for the phone (D-pad up) until it comes out: missions often
+                // ignore the first press, and a second tap used to close the dock instead of asking again,
+                // so players had to spam the button at the bomb detonation step (GTA-54). Without a
+                // phone the dock closes by itself after a moment.
+                phoneDock = true
+                phoneRequestedAt = now
             }
             lastDockInput = now
             updateVisibility()
@@ -1048,12 +1157,16 @@ final class TouchControlsView: UIView {
             // The Sprint button presses A while held (also opens the parachute and swims faster).
             if sprint.pressed { held.insert(.a) }
             // Sprint: the Sprint button while moving, or the stick held at its edge.
+            // Sprinting is tapping A, as on a controller: holding it only jogs (simulator: holding A about
+            // 4 m/s, taps every 0.3 s 5.8 m/s; GTA-46).
+            let sprintTap = { () -> Bool in self.sprintClock += elapsed; return self.sprintClock.truncatingRemainder(dividingBy: 0.3) < 0.13 }
             if sprintLatched && hypot(moveStick.value.x, moveStick.value.y) > 0.2 {
-                held.insert(.a); moveStick.sprinting = true
+                if sprintTap() { held.insert(.a) }
+                moveStick.sprinting = true
             } else if hypot(moveStick.value.x, moveStick.value.y) > 0.92 {
-                if sprintSince == nil { sprintSince = now }
-                if now - (sprintSince ?? now) > 0.25 { held.insert(.a); moveStick.sprinting = true }
-            } else { sprintSince = nil; moveStick.sprinting = false }
+                if sprintSince == nil { sprintSince = now; sprintClock = 0 }
+                if now - (sprintSince ?? now) > 0.25 { if sprintTap() { held.insert(.a) }; moveStick.sprinting = true }
+            } else { sprintSince = nil; sprintClock = 0; moveStick.sprinting = false }
             let firing = fire.pressed || leftFire.pressed
             if firing { lastFireTime = now }
             if aimToggled && moveStick.sprinting {
@@ -1115,6 +1228,8 @@ final class TouchControlsView: UIView {
                 if now - (fireStartedAt ?? now) > 0.12 { held.insert(.r1) }
             }
             if enter.pressed { held.insert(.y) }
+            if driveAim.pressed { held.insert(.l1) }
+            if duck.pressed && context != .bicycle { held.insert(.a) }
             if interact.pressed { held.insert(.right) }
             if horn.pressed { held.insert(.l3) }
             if lookBack.pressed { held.insert(.r3) }
@@ -1175,7 +1290,8 @@ final class TouchControlsView: UIView {
         if camera.pressed { held.insert(.select) }
         if pause.pressed { held.insert(.start) }
         if phone.pressed && phoneDock && !gamePhoneOut { held.insert(.up) }
-        if phone.pressed && gamePhoneOut { held.insert(.b) }
+        if !phone.pressed { phoneOpensDock = false }
+        if phone.pressed && gamePhoneOut && !phoneOpensDock { held.insert(.b) }
         if up.pressed { held.insert(.up) }
         if down.pressed { held.insert(.down) }
         if taxiRide {
@@ -1193,6 +1309,17 @@ final class TouchControlsView: UIView {
         if taxiStop.pressed { held.insert(.b) }
         if tabLeft.pressed { held.insert(.l1) }
         if tabRight.pressed { held.insert(.r1) }
+        if promptOption.pressed { held.insert(.x) }
+        for mission in missionButtons where mission.button.pressed {
+            if let pad = mission.pad { held.insert(pad) }
+            if mission.trigger == 1 { state.leftTrigger = 1 } else if mission.trigger == 2 { state.rightTrigger = 1 }
+        }
+        // LT+RT: a tap (the press starts) latches both triggers, the next releases them; it lets go by
+        // itself once the mission stops asking.
+        if bothTriggers.pressed && !bothTriggersWasPressed { bothTriggersHeld.toggle(); bothTriggers.active = bothTriggersHeld }
+        bothTriggersWasPressed = bothTriggers.pressed
+        if !(polledMission.isSuperset(of: [228, 229]) || polledMission.isSuperset(of: [207, 208])) && bothTriggersHeld { bothTriggersHeld = false; bothTriggers.active = false }
+        if bothTriggersHeld { state.leftTrigger = 1; state.rightTrigger = 1 }
         // Without a phone on screen the dock closes itself: after a moment when the phone did not
         // come up, or after 20 s without input as before.
         if phoneDock && !gamePhoneOut {

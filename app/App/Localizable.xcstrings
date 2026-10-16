@@ -34573,6 +34573,1007 @@
           }
         }
       }
+    },
+    "For iPhones with little memory: lower detail and draw distance, so the world keeps loading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For iPhones with little memory: lower detail and draw distance, so the world keeps loading"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für iPhones mit wenig Speicher: weniger Details und Sichtweite, damit die Welt weiter lädt"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para iPhone con poca memoria: menos detalle y distancia de dibujado, para que el mundo siga cargando"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para iPhone con poca memoria: menos detalle y distancia de dibujado, para que el mundo siga cargando"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pour les iPhone avec peu de mémoire : moins de détails et de distance d’affichage, pour que le monde continue de se charger"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Per iPhone con poca memoria: meno dettagli e distanza visiva, così il mondo continua a caricarsi"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモリが少ないiPhone向け：詳細と描画距離を下げ、ワールドの読み込みを続けます"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "메모리가 적은 iPhone용: 디테일과 시야 거리를 낮춰 월드가 계속 로드됩니다"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dla iPhone’ów z małą ilością pamięci: mniej szczegółów i krótszy zasięg widzenia, by świat dalej się wczytywał"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para iPhones com pouca memória: menos detalhes e distância de visão, para o mundo continuar carregando"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Для iPhone с малым объёмом памяти: меньше деталей и дальности прорисовки, чтобы мир продолжал загружаться"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "适用于内存较小的 iPhone：降低细节和绘制距离，让世界持续加载"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "適用於記憶體較小的 iPhone：降低細節與繪製距離，讓世界持續載入"
+          }
+        }
+      }
+    },
+    "Skip mission or other option (X)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skip mission or other option (X)"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mission überspringen oder andere Option (X)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saltar misión u otra opción (X)"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saltar misión u otra opción (X)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passer la mission ou autre option (X)"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salta missione o altra opzione (X)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ミッションをスキップ、または別の選択肢 (X)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "미션 건너뛰기 또는 다른 옵션 (X)"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pomiń misję lub inna opcja (X)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pular missão ou outra opção (X)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пропустить миссию или другой вариант (X)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跳过任务或其他选项 (X)"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跳過任務或其他選項 (X)"
+          }
+        }
+      }
+    },
+    "Aim from the vehicle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aim from the vehicle"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus dem Fahrzeug zielen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apuntar desde el vehículo"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apuntar desde el vehículo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viser depuis le véhicule"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mira dal veicolo"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "車両から狙う"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "차량에서 조준"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Celuj z pojazdu"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mirar do veículo"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прицелиться из машины"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在载具中瞄准"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在載具中瞄準"
+          }
+        }
+      }
+    },
+    "Duck": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duck"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ducken"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agacharse"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agacharse"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se baisser"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abbassati"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "身をかがめる"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "몸 숙이기"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schyl się"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abaixar"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пригнуться"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "俯身"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "俯身"
+          }
+        }
+      }
+    },
+    "Ultra Performance": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ultra Performance"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ultra-Leistung"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ultrarrendimiento"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ultrarrendimiento"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ultra performance"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ultra prestazioni"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "超パフォーマンス"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "울트라 퍼포먼스"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ultra wydajność"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ultradesempenho"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сверхпроизводительность"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "极致性能"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "極致效能"
+          }
+        }
+      }
+    },
+    "Sharper upscaling": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sharper upscaling"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schärfere Hochskalierung"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escalado más nítido"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escalado más nítido"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mise à l’échelle plus nette"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Upscaling più nitido"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "より鮮明なアップスケーリング"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "더 선명한 업스케일링"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ostrzejsze skalowanie"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escala mais nítida"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Более чёткое масштабирование"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更清晰的放大"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更清晰的放大"
+          }
+        }
+      }
+    },
+    "MetalFX brings the picture to the screen's resolution with sharpening instead of stretching it. Uses a little more battery.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MetalFX brings the picture to the screen's resolution with sharpening instead of stretching it. Uses a little more battery."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MetalFX bringt das Bild mit Schärfung auf die Auflösung des Bildschirms, statt es zu strecken. Braucht etwas mehr Akku."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MetalFX lleva la imagen a la resolución de la pantalla con nitidez en lugar de estirarla. Usa un poco más de batería."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MetalFX lleva la imagen a la resolución de la pantalla con nitidez en lugar de estirarla. Usa un poco más de batería."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MetalFX amène l’image à la résolution de l’écran avec un renforcement de la netteté au lieu de l’étirer. Consomme un peu plus de batterie."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MetalFX porta l’immagine alla risoluzione dello schermo con nitidezza invece di allungarla. Usa un po’ più di batteria."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MetalFXが画像を引き伸ばす代わりに、シャープにして画面の解像度に合わせます。バッテリーを少し多く使います。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MetalFX가 화면을 늘리는 대신 선명하게 하여 화면 해상도로 맞춥니다. 배터리를 조금 더 사용합니다."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MetalFX doprowadza obraz do rozdzielczości ekranu z wyostrzaniem zamiast go rozciągać. Zużywa trochę więcej baterii."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O MetalFX leva a imagem à resolução da tela com nitidez em vez de esticá-la. Usa um pouco mais de bateria."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MetalFX доводит изображение до разрешения экрана с повышением резкости вместо растягивания. Расходует немного больше заряда."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MetalFX 会把画面锐化并提升到屏幕分辨率，而不是直接拉伸。会稍微多耗一点电。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MetalFX 會把畫面銳化並提升到螢幕解析度，而不是直接拉伸。會稍微多耗一點電。"
+          }
+        }
+      }
+    },
+    "Left stick click": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Left stick click"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linken Stick drücken"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulsar stick izquierdo"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulsar stick izquierdo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clic du stick gauche"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clic levetta sinistra"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左スティック押し込み"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "왼쪽 스틱 누르기"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wciśnięcie lewej gałki"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clique do analógico esquerdo"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нажатие левого стика"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按下左摇杆"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按下左搖桿"
+          }
+        }
+      }
+    },
+    "Right stick click": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Right stick click"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechten Stick drücken"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulsar stick derecho"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulsar stick derecho"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clic du stick droit"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clic levetta destra"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "右スティック押し込み"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오른쪽 스틱 누르기"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wciśnięcie prawej gałki"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clique do analógico direito"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нажатие правого стика"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按下右摇杆"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按下右搖桿"
+          }
+        }
+      }
+    },
+    "LB": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LB"
+          }
+        }
+      }
+    },
+    "RB": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RB"
+          }
+        }
+      }
+    },
+    "LT": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LT"
+          }
+        }
+      }
+    },
+    "RT": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RT"
+          }
+        }
+      }
+    },
+    "X": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "X"
+          }
+        }
+      }
+    },
+    "Y": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Y"
+          }
+        }
+      }
+    },
+    "A": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A"
+          }
+        }
+      }
+    },
+    "B": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "B"
+          }
+        }
+      }
+    },
+    "In the picker, tap the folder so you see what's inside it, then tap Open at the top. If Open stays grey (it can on some sideloaded installs), use the easiest way above.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In the picker, tap the folder so you see what's inside it, then tap Open at the top. If Open stays grey (it can on some sideloaded installs), use the easiest way above."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippe in der Auswahl auf den Ordner, sodass du seinen Inhalt siehst, und dann oben auf Öffnen. Bleibt Öffnen grau (das kann bei manchen sideloaded Installationen passieren), nimm den einfachsten Weg oben."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En el selector, toca la carpeta para ver lo que hay dentro y luego toca Abrir arriba. Si Abrir sigue en gris (puede pasar en algunas instalaciones por sideload), usa la forma más fácil de arriba."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En el selector, toca la carpeta para ver lo que hay dentro y luego toca Abrir arriba. Si Abrir sigue en gris (puede pasar en algunas instalaciones por sideload), usa la forma más fácil de arriba."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dans le sélecteur, touchez le dossier pour voir son contenu, puis touchez Ouvrir en haut. Si Ouvrir reste grisé (cela arrive sur certaines installations en sideload), utilisez la méthode la plus simple ci-dessus."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nel selettore, tocca la cartella per vederne il contenuto, poi tocca Apri in alto. Se Apri resta grigio (può succedere con alcune installazioni in sideload), usa il modo più semplice qui sopra."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択画面でフォルダをタップして中身を表示し、上の「開く」をタップします。「開く」がグレーのままの場合（サイドロードした一部の環境で起こります）、上の一番簡単な方法を使ってください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택 화면에서 폴더를 탭해 안의 내용이 보이게 한 다음, 위쪽의 열기를 탭하세요. 열기가 계속 회색이면(일부 사이드로드 설치에서 발생) 위의 가장 쉬운 방법을 사용하세요."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "W oknie wyboru stuknij folder, aby zobaczyć jego zawartość, a potem stuknij Otwórz u góry. Jeśli Otwórz pozostaje szare (zdarza się w niektórych instalacjach przez sideload), użyj najprostszego sposobu powyżej."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No seletor, toque na pasta para ver o que tem dentro e depois toque em Abrir no topo. Se Abrir continuar cinza (pode acontecer em algumas instalações por sideload), use o jeito mais fácil acima."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В окне выбора нажмите на папку, чтобы увидеть её содержимое, затем нажмите «Открыть» вверху. Если «Открыть» остаётся серым (так бывает в некоторых установках через sideload), используйте самый простой способ выше."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在选择器中点按文件夹以查看其中的内容，然后点按顶部的“打开”。如果“打开”一直是灰色的（某些侧载安装会这样），请使用上面最简单的方法。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在選擇器中點一下資料夾以查看其中的內容，然後點一下頂端的「打開」。如果「打開」一直是灰色的（某些側載安裝會這樣），請使用上面最簡單的方法。"
+          }
+        }
+      }
+    },
+    "LT and RT together (tap to hold, tap again to let go)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LT and RT together (tap to hold, tap again to let go)"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LT und RT zusammen (tippen zum Halten, erneut tippen zum Loslassen)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LT y RT a la vez (toca para mantener, toca otra vez para soltar)"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LT y RT a la vez (toca para mantener, toca otra vez para soltar)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LT et RT ensemble (touchez pour maintenir, touchez à nouveau pour relâcher)"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LT e RT insieme (tocca per tenere, tocca di nuovo per rilasciare)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LTとRTを同時に（タップで押し続け、もう一度タップで離す）"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LT와 RT 함께 (탭하면 유지, 다시 탭하면 해제)"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LT i RT razem (stuknij, aby trzymać, stuknij ponownie, aby puścić)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LT e RT juntos (toque para segurar, toque de novo para soltar)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LT и RT вместе (нажмите, чтобы удерживать, нажмите ещё раз, чтобы отпустить)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同时按 LT 和 RT（点按保持，再点按松开）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同時按 LT 和 RT（點按保持，再點按放開）"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

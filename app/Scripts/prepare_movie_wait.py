@@ -1,9 +1,10 @@
 """Give the pinned engine's video loading a time limit.
 
-CMovie::WaitTillLoaded is inlined in five CMovieMgr functions: it sleeps 1 ms at a time until the
-video is loaded or marked as failed (bit 32 of the flags at +96), with no limit. The game files have
-no .bik videos, and a load that never answered froze the game whenever a TV came on or changed
-show. Each of those sleeps goes through pg_movie_wait instead, which marks the video as failed
+CMovie::WaitTillLoaded is inlined in five CMovieMgr functions and in the pause menu's open and close:
+it sleeps 1 ms at a time until the video is loaded or marked as failed (bit 32 of the flags at +96),
+with no limit. The game files have no .bik videos, and a load that never answered froze the game
+whenever a TV came on or changed show, or when the pause menu opened while a TV had a video waiting
+(GTA-22). Each of those sleeps goes through pg_movie_wait instead, which marks the video as failed
 after a short wait.
 """
 from pathlib import Path
@@ -16,6 +17,9 @@ FUNCTIONS = {str(fn(name)): name for name in [
     'CMovieMgr::Delete(unsigned int)',
     'CMovieMgr::Stop(unsigned int)',
     'CMovieMgr::GetTime(unsigned int)',
+    # The pause menu waits the same way for every video before it pauses them (GTA-22).
+    'CPauseMenu::Open(unsigned int, bool, eMenuScreen, bool)',
+    'CPauseMenu::SetupCodeForUnPause()',
 ]}
 SLEEP = str(fn('rage::sysIpcSleep(unsigned int)'))
 # The failure-flag test followed by sysIpcSleep(1), as WABT writes it.

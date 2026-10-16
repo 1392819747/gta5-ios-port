@@ -53,6 +53,7 @@ final class HomeView: UIView {
         subtitle.text = AppLanguage.choose("Fan project · plays your own game files") + " · \(Theme.appVersion)"
         subtitle.font = Theme.body(14, .medium)
         subtitle.textColor = Theme.secondaryText
+        subtitle.numberOfLines = 2		// long translations keep the version visible
         let titles = UIStackView(arrangedSubviews: [title, subtitle])
         titles.axis = .vertical
         titles.spacing = 2
@@ -72,13 +73,18 @@ final class HomeView: UIView {
         modes.distribution = .fillEqually
         modeDetail.font = Theme.body(13)
         modeDetail.textColor = Theme.secondaryText
-        modeDetail.numberOfLines = 1
+        modeDetail.numberOfLines = 2
         modeDetail.adjustsFontSizeToFitWidth = true
         modeDetail.minimumScaleFactor = 0.8
 
         telegramButton.addAction(UIAction { _ in UIApplication.shared.open(Theme.telegramURL) }, for: .touchUpInside)
         telegramButton.accessibilityLabel = AppLanguage.choose("Five Star Port on Telegram")
-        let secondary = UIStackView(arrangedSubviews: [telegramButton, layoutButton, settingsButton])
+        let secondary = self.secondary
+        // Icons only, in every language; the names stay for VoiceOver.
+        settingsButton.accessibilityLabel = AppLanguage.choose("Settings")
+        layoutButton.accessibilityLabel = AppLanguage.choose("Controls layout")
+        for button in [telegramButton, layoutButton, settingsButton] { button.configuration?.title = nil }
+        secondary.addArrangedSubviews([telegramButton, layoutButton, settingsButton])
         secondary.spacing = 10
         secondary.translatesAutoresizingMaskIntoConstraints = false
         for label in [preloadLabel, controllerLabel] {
@@ -119,7 +125,7 @@ final class HomeView: UIView {
         column.setCustomSpacing(10, after: playButton)
         column.alignment = .fill
 
-        let scroll = UIScrollView()
+        let scroll = self.scroll
         scroll.showsVerticalScrollIndicator = false
         scroll.alwaysBounceVertical = false
         scroll.translatesAutoresizingMaskIntoConstraints = false
@@ -147,6 +153,8 @@ final class HomeView: UIView {
             column.widthAnchor.constraint(lessThanOrEqualToConstant: 440),
             column.widthAnchor.constraint(greaterThanOrEqualToConstant: 320),
             secondary.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -20),
+            // Long translations (Russian, German) must not run over the title column.
+            secondary.leadingAnchor.constraint(greaterThanOrEqualTo: scroll.trailingAnchor, constant: 12),
             secondary.topAnchor.constraint(equalTo: guide.topAnchor, constant: 14),
             log.leadingAnchor.constraint(equalTo: scroll.trailingAnchor, constant: 20),
             log.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -16),
@@ -167,14 +175,20 @@ final class HomeView: UIView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// Update language-specific titles in place without touching downloaded game files or layout.
+    private let scroll = UIScrollView()
+    private let secondary = UIStackView()
     func refreshLanguage() {
         brandTitle.text = AppLanguage.choose("GTA V Port")
         brandSubtitle.text = AppLanguage.choose("Fan project · plays your own game files") + " · \(Theme.appVersion)"
         mapTitle.text = AppLanguage.choose("Map")
         playButton.configuration?.title = AppLanguage.choose("Play")
-        settingsButton.configuration?.title = AppLanguage.choose("Settings")
-        layoutButton.configuration?.title = AppLanguage.choose("Controls layout")
-        telegramButton.configuration?.title = AppLanguage.choose("Telegram")
+        // The top-right buttons are icons in every language (long titles overlapped the column, GTA-47);
+        // their names stay for VoiceOver.
+        settingsButton.configuration?.title = nil
+        layoutButton.configuration?.title = nil
+        telegramButton.configuration?.title = nil
+        settingsButton.accessibilityLabel = AppLanguage.choose("Settings")
+        layoutButton.accessibilityLabel = AppLanguage.choose("Controls layout")
         for (index, card) in modeCards.enumerated() {
             card.setTitle(GameMode.allCases[index].title)
         }
@@ -330,4 +344,8 @@ private final class ModeCard: UIControl {
         panel.layer.borderWidth = isSelected ? 2 : 1
         accessibilityTraits = isSelected ? [.button, .selected] : .button
     }
+}
+
+private extension UIStackView {
+    func addArrangedSubviews(_ views: [UIView]) { views.forEach(addArrangedSubview) }
 }

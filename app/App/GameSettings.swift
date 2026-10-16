@@ -159,7 +159,10 @@ final class GameSettings {
     lazy var tier = DeviceTier.probe()
     var graphicsPreset: GraphicsPreset {
         // integer(forKey:) also reads "-graphicsPreset 4" given as a launch argument (a string).
-        get { defaults.object(forKey: "graphicsPreset") != nil ? GraphicsPreset(rawValue: defaults.integer(forKey: "graphicsPreset")) ?? tier.recommended : tier.recommended }
+        get {
+            guard defaults.object(forKey: "graphicsPreset") != nil, let preset = GraphicsPreset(rawValue: defaults.integer(forKey: "graphicsPreset")) else { return tier.recommended }
+            return preset == .lite && !GraphicsPreset.liteAvailable ? .battery : preset
+        }
         set { defaults.set(newValue.rawValue, forKey: "graphicsPreset") }
     }
     var resolutionScale: Double {
@@ -201,6 +204,11 @@ final class GameSettings {
     var steadyWhenHot: Bool {
         get { defaults.bool(forKey: "steadyWhenHot") }
         set { defaults.set(newValue, forKey: "steadyWhenHot") }
+    }
+    /// Graphics › Sharper upscaling (MetalFX), off by default: it costs some GPU time.
+    var sharperUpscaling: Bool {
+        get { defaults.bool(forKey: "sharperUpscaling") }
+        set { defaults.set(newValue, forKey: "sharperUpscaling"); PGSetSharperUpscaling(newValue ? 1 : 0) }
     }
     var showFPS: Bool {
         get { defaults.object(forKey: "showFPS") as? Bool ?? true }
@@ -257,7 +265,7 @@ final class GameSettings {
         // closed by an update or by Xcode): keep it, and only undo a resolution raised above it.
         let fallback = lastGoodPreset == failed ? failed
             : lastGoodPreset.flatMap { $0.rawValue < failed.rawValue ? $0 : nil }
-            ?? GraphicsPreset(rawValue: max(0, min(failed.rawValue - 1, tier.recommended.rawValue))) ?? .performance
+            ?? GraphicsPreset(rawValue: max(GraphicsPreset.available[0].rawValue, min(failed.rawValue - 1, tier.recommended.rawValue))) ?? .performance
         // A custom resolution above the fallback's own also costs memory: back to Auto (unless that
         // resolution already ran stably with this preset).
         let provenHeight = fallback == lastGoodPreset ? defaults.integer(forKey: "lastGoodRenderHeight") : 0

@@ -9,8 +9,11 @@ enum Theme {
     static let appVersion: String = {
         let info = Bundle.main.infoDictionary
         // Each release has one build number, so the marketing version alone identifies it.
-        return "v\(info?["CFBundleShortVersionString"] as? String ?? "?")"
+        return "v\(info?["CFBundleShortVersionString"] as? String ?? "?")" + (isLite ? " Lite" : "")
     }()
+    /// The Lite build for iPhones with little memory: Info.plist PGLiteMode (build_ipa.sh --lite), or PG_LITE=1.
+    static let isLite: Bool = (Bundle.main.object(forInfoDictionaryKey: "PGLiteMode") as? Bool ?? false)
+        || (ProcessInfo.processInfo.environment["PG_LITE"].map { $0 != "0" } ?? false)
     static let accent = UIColor(red: 1.0, green: 0.62, blue: 0.18, alpha: 1)        // sunset orange
     static let accentDeep = UIColor(red: 0.95, green: 0.36, blue: 0.16, alpha: 1)
     static let ok = UIColor(red: 0.30, green: 0.85, blue: 0.47, alpha: 1)

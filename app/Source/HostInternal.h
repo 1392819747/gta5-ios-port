@@ -3,6 +3,7 @@
 #include "wasm-rt-exceptions.h"
 #include "EngineHost.h"
 #include <stdatomic.h>
+#include <setjmp.h>
 
 struct w2c_env {
   wasm_rt_shared_memory_t memory;
@@ -11,12 +12,17 @@ struct w2c_env {
 struct w2c_wasi__snapshot__preview1 { struct w2c_env *env; };
 void pg_log(const char *message);
 void pg_missing_import(const char *name);
+// A call into the engine through an invoke_* import, which an engine longjmp can end early
+// (Scripts/prepare_longjmp.py). The innermost one on each thread is pg_invoke_top.
+typedef struct pg_invoke_frame { jmp_buf jump; struct pg_invoke_frame *outer; u64 stack; } pg_invoke_frame;
+extern _Thread_local pg_invoke_frame *pg_invoke_top;
 void *pg_pointer(struct w2c_env *, uint64_t address, uint64_t size);
 
 const char *pg_string(struct w2c_env *, uint64_t);
 void pg_files_init(const char *root);
 u32 pg_file_io(struct w2c_env *,u32,u64,u64,u64,u64,bool,bool);
 void pg_assets_configure(const char *,const char *);
+const char *pg_assets_manifest_override(void); // the manifest with Mods applied, or NULL
 #include "NativeAssetServer.h"
 void pg_assets_prewarm(void);
 void pg_threads_main(struct w2c_env *);

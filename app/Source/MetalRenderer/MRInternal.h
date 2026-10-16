@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <memory>
 #include <atomic>
+#include <map>
 
 extern "C" void pg_log(const char *);
 extern "C" uint32_t PGGraphicsNotify(uint64_t);
@@ -80,6 +81,9 @@ struct Texture : Object {
 	bool bcNative = false;		// stored as a Metal BC format: uploads, copies and readbacks use the blocks as they are
 	bool astc = false;		// BC1 rewritten as ASTC 4x4 on upload (gASTCBC1); readbacks use the original blocks
 	bool bcSrgb = false;
+	// Lite build (gSkipTopMip): GPU levels dropped from the top. The GPU texture is that many times half
+	// the size and has that many fewer levels; width/height/mips stay the game's, so GPU level = mip - skip.
+	uint32_t skip = 0;
 	uint64_t lastUse = 0;		// command buffer serial that last referenced it
 	std::unordered_map<uint64_t, id<MTLTexture>> views;
 	uint64_t gpuBytes = 0, bcGameBytes = 0;		// GPU allocation, and the compressed size the game budgets (for the report)
@@ -102,6 +106,12 @@ struct Buffer : Object {
 	uint32_t cbCap = 0, cbPad = 0;
 	uint32_t version = 0;
 	id<MTLBuffer> counter = nil;		// UAV append/consume counter
+	uint64_t counted = 0;		// bytes added to the buffer statistics (report)
+	// A small mesh buffer lives in a shared slab (GTA-34): its bytes start at `base` in `buf`. Every use of
+	// buf adds base. slab is the slab's index, or -1 for a buffer of its own.
+	NSUInteger base = 0;
+	int32_t slab = -1;
+	~Buffer() override;
 };
 
 struct Shader : Object {
@@ -163,6 +173,9 @@ extern bool gPackedBC1;
 // BC1 rewritten block by block as ASTC 4x4 (Source/BC1ToASTC.c): 8 bits per texel, half of A1BGR5 and a
 // quarter of RGBA8, for sRGB BC1 too. Every Apple GPU reads ASTC; takes precedence over gPackedBC1.
 extern bool gASTCBC1;
+// Lite build: the game's loaded textures go to the GPU without their largest mip level (a quarter
+// of the memory; at phone render resolutions that level is rarely sampled), as consoles shipped them.
+extern bool gSkipTopMip;
 FormatInfo mapFormat(uint32_t dxgi, uint32_t bind);
 MTLPixelFormat viewFormat(uint32_t dxgi, MTLPixelFormat textureFormat);
 bool isDepthFormat(MTLPixelFormat f);

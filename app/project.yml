@@ -37,6 +37,12 @@ settings:
     OTHER_LDFLAGS:
       - $(inherited)
       - -lopus
+    # MetalFX (Settings › Sharper upscaling) exists in the iPhone SDK only.
+    "OTHER_LDFLAGS[sdk=iphoneos*]":
+      - $(inherited)
+      - -lopus
+      - -weak_framework
+      - MetalFX
     OTHER_CFLAGS:
       - $(inherited)
       - -include
@@ -94,16 +100,18 @@ targets:
       properties:
         CFBundleDisplayName: GTA V Port
         CFBundleDevelopmentRegion: en
-        CFBundleShortVersionString: "1.3.4"
+        CFBundleShortVersionString: "1.4"
         # Your game-file server may be a plain-http address on your tailnet.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         # Filled in by the cloud build so you don't have to type it.
         PGDefaultAssetServer: ""
+        # The Lite build for iPhones with little memory (build_ipa.sh --lite).
+        PGLiteMode: false
         # The app folder (logs) is visible in the Files app.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
-        CFBundleVersion: "10"
+        CFBundleVersion: "11"
         UILaunchScreen: {}
         UIRequiresFullScreen: true
         # Lets the game present above 60 FPS on ProMotion iPhones when the frame rate is unlocked.

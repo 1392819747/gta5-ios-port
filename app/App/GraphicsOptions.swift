@@ -5,16 +5,25 @@ import os
 
 /// Graphics presets. The engine reads quality settings once at boot; only the
 /// resolution can change while it runs.
+/// Ultra Performance (the Lite mode) sits below Battery (raw value -1, so the saved values of the
+/// others stay as they were).
 enum GraphicsPreset: Int, CaseIterable {
-    case battery, performance, balanced, quality, ultra, max
+    case lite = -1, battery, performance, balanced, quality, ultra, max
 
-    var title: String { [AppLanguage.choose("Battery"), AppLanguage.choose("Performance"), AppLanguage.choose("Balanced"), AppLanguage.choose("Quality"), AppLanguage.choose("Ultra"), AppLanguage.choose("Max")][rawValue] }
+    /// Ultra Performance: Battery's options, plus half-size textures and a thinner, shorter-range world
+    /// (PG_LITE), for phones whose app limit is about 2-2.5 GB. PG_LITE_PRESET=0 hides it (comparisons).
+    static let liteAvailable: Bool = ProcessInfo.processInfo.environment["PG_LITE_PRESET"] != "0"
+    /// The presets Settings offers, lowest first.
+    static var available: [GraphicsPreset] { allCases.filter { $0 != .lite || liteAvailable } }
+
+    var title: String { [AppLanguage.choose("Ultra Performance"), AppLanguage.choose("Battery"), AppLanguage.choose("Performance"), AppLanguage.choose("Balanced"), AppLanguage.choose("Quality"), AppLanguage.choose("Ultra"), AppLanguage.choose("Max")][rawValue + 1] }
     /// Render height in pixels; width follows the screen's shape.
-    var height: Int { [432, 540, 720, 900, 1080, 1290][rawValue] }
+    var height: Int { [432, 432, 540, 720, 900, 1080, 1290][rawValue + 1] }
     var detail: String {
-        [AppLanguage.choose("Lowest load, longest play time"), AppLanguage.choose("Today's tested setup for 6 GB iPhones"), AppLanguage.choose("Sharper image and shadows"),
+        [AppLanguage.choose("For iPhones with little memory: lower detail and draw distance, so the world keeps loading"),
+         AppLanguage.choose("Lowest load, longest play time"), AppLanguage.choose("Today's tested setup for 6 GB iPhones"), AppLanguage.choose("Sharper image and shadows"),
          AppLanguage.choose("Higher detail textures, effects and draw distance"), AppLanguage.choose("1080p with high shaders, shadows and reflections"),
-         AppLanguage.choose("Near-native resolution, high textures and full draw distance (newest Pro phones)")][rawValue]
+         AppLanguage.choose("Near-native resolution, high textures and full draw distance (newest Pro phones)")][rawValue + 1]
     }
 
     /// Engine command-line options. Shader quality never goes below 1 (the
@@ -22,7 +31,7 @@ enum GraphicsPreset: Int, CaseIterable {
     /// field stay off because their shaders do not run on Metal here.
     var engineOptions: [String] {
         switch self {
-        case .battery, .performance:
+        case .lite, .battery, .performance:
             return ["-shaderQuality=1", "-textureQuality=0", "-shadowQuality=-1", "-reflectionQuality=0", "-particleQuality=0",
                     "-grassQuality=0", "-cityDensity=0", "-lodScale=0", "-pedLodBias=0", "-vehicleLodBias=0", "-pedVariety=0", "-vehicleVariety=0"]
         case .balanced:
@@ -84,10 +93,10 @@ struct DeviceTier {
     /// The Metal renderer needs about 700 MB less than the old renderer did: a 6 GB phone on a
     /// free Apple ID (about 3 GB limit) runs Battery with room to spare.
     var recommended: GraphicsPreset {
-        memoryLimitMB < 3400 ? .battery : memoryLimitMB < 4600 ? .performance : memoryLimitMB < 6000 ? .balanced : memoryLimitMB < 8000 ? .quality : .ultra
+        GraphicsPreset.liteAvailable && memoryLimitMB < 2600 ? .lite : memoryLimitMB < 3400 ? .battery : memoryLimitMB < 4600 ? .performance : memoryLimitMB < 6000 ? .balanced : memoryLimitMB < 8000 ? .quality : .ultra
     }
     /// Every preset can be chosen; those above the recommended one show a warning.
-    var allowed: [GraphicsPreset] { GraphicsPreset.allCases }
+    var allowed: [GraphicsPreset] { GraphicsPreset.available }
     /// Presets shown with a warning because they may run out of memory or heat up.
     func risky(_ preset: GraphicsPreset) -> Bool { preset.rawValue > recommended.rawValue }
     /// For the log (kept in English).
@@ -146,11 +155,14 @@ enum GraphicsConfiguration {
     }
 
     /// Pass the chosen settings to the engine. Call before PGStartEngine.
-    static func apply(_ settings: GameSettings, screen: CGSize) -> String {
+    static func apply(_ settings: GameSettings, screen: CGSize, tv: Bool = false) -> String {
         let preset = settings.graphicsPreset
-        let (width, height) = size(for: preset, renderHeight: settings.renderHeight, screen: screen, matchScreenShape: settings.matchScreenShape)
+        let (width, height) = size(for: preset, renderHeight: settings.renderHeight, screen: screen, matchScreenShape: tv || settings.matchScreenShape)
         let options = preset.engineOptions
+        // The engine and renderer read PG_LITE when they start, after this. The Lite build always sets it.
+        if preset == .lite { setenv("PG_LITE", "1", 1) } else if !Theme.isLite { unsetenv("PG_LITE") }
         PGSetMemoryCap(Int32(settings.memoryCapMB))
+        PGSetSharperUpscaling(settings.sharperUpscaling ? 1 : 0)
         var pointers = options.map { strdup($0) }
         defer { pointers.forEach { free($0) } }
         pointers.withUnsafeMutableBufferPointer { buffer in

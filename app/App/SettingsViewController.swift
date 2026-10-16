@@ -123,7 +123,7 @@ final class SettingsViewController: UITableViewController {
         switch sectionKind(section) {
         // While the game runs, settings that only take effect at the next start are hidden.
         case .mode: return engineRunning ? 0 : GameMode.allCases.count + (settings.gameModeChoice == .sandbox ? 1 : 0)
-        case .graphics: return engineRunning ? Self.liveGraphicsRows.count : settings.tier.allowed.count + 6
+        case .graphics: return engineRunning ? Self.liveGraphicsRows.count : settings.tier.allowed.count + 7
         case .controls: return controlsRows.count
         case .cheats: return engineRunning ? StoryCheats.all.count + 1 : 0   // row 0: Set money
         case .gyro: return (settings.gyroAim == .off ? 1 : 3) + (settings.tiltSteer == .off ? 1 : 2)
@@ -146,9 +146,9 @@ final class SettingsViewController: UITableViewController {
         return [AppLanguage.choose("Language"), AppLanguage.choose("Game mode"), AppLanguage.choose("Graphics"), AppLanguage.choose("Touch controls"), AppLanguage.choose("Story cheats"), AppLanguage.choose("Gyro"), AppLanguage.choose("Game files"), AppLanguage.choose("This device")][sectionKind(section).rawValue]
     }
 
-    /// Graphics rows that act during play: resolution, fill the screen, FPS counter, steady when hot
-    /// (row numbers after the presets). Presets and the frame rate apply at the next start.
-    private static let liveGraphicsRows = [0, 1, 3, 4]
+    /// Graphics rows that act during play: resolution, fill the screen, FPS counter, steady when hot,
+    /// sharper upscaling (row numbers after the presets). Presets and the frame rate apply at the next start.
+    private static let liveGraphicsRows = [0, 1, 3, 4, 6]
 
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
         if engineRunning, [.mode, .files].contains(sectionKind(section)) { return nil }
@@ -245,6 +245,12 @@ final class SettingsViewController: UITableViewController {
                     content.secondaryText = AppLanguage.choose("Render at the screen's shape instead of stretching 16:9")
                     cell.accessoryView = toggle(settings.matchScreenShape, label: AppLanguage.choose("Fill the screen")) { [weak self] in
                         self?.settings.matchScreenShape = $0; self?.resolutionChanged?(); self?.tableView.reloadData()
+                    }
+                } else if row == 6 {
+                    content.text = AppLanguage.choose("Sharper upscaling")
+                    content.secondaryText = AppLanguage.choose("MetalFX brings the picture to the screen's resolution with sharpening instead of stretching it. Uses a little more battery.")
+                    cell.accessoryView = toggle(settings.sharperUpscaling, label: AppLanguage.choose("Sharper upscaling")) { [weak self] in
+                        self?.settings.sharperUpscaling = $0
                     }
                 } else if row == 3 {
                     content.text = AppLanguage.choose("Show FPS counter")

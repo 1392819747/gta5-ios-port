@@ -12,12 +12,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct { uint8_t bytes[16]; } Block;
-
-static void putBits(uint8_t *b, unsigned at, unsigned count, uint32_t value) {
-	for (unsigned i = 0; i < count; i++) if (value >> i & 1) b[(at + i) >> 3] |= (uint8_t)(1u << ((at + i) & 7));
-}
-
 // The ASTC integer sequence for trits: five values in 8 bits. Built once by running the spec's decoder
 // over every 8-bit pattern and keeping the first pattern for each combination.
 static uint8_t tritPack[243];
@@ -40,17 +34,17 @@ static void buildTrits(void) {
 }
 
 // Weights (values 0..2, 3-level range) as an integer sequence, written from bit 127 downwards.
-static void putTritWeights(uint8_t *b, const uint8_t *w, unsigned count) {
+static unsigned __int128 tritWeights(const uint8_t *w, unsigned count) {
+	static const unsigned bitsFor[6] = {0, 2, 4, 5, 7, 8};
+	uint64_t stream = 0;
 	unsigned bit = 0;
-	uint8_t stream[16] = {0};
 	for (unsigned g = 0; g < count; g += 5) {
 		unsigned n = count - g < 5 ? count - g : 5, key = 0, mul = 1;
-		for (unsigned i = 0; i < 5; i++, mul *= 3) key += (i < n ? w[g + i] : 0) * mul;
-		static const unsigned bitsFor[6] = {0, 2, 4, 5, 7, 8};
-		putBits(stream, bit, bitsFor[n], tritPack[key]);
+		for (unsigned i = 0; i < n; i++, mul *= 3) key += w[g + i] * mul;
+		stream |= (uint64_t)(tritPack[key] & ((1u << bitsFor[n]) - 1)) << bit;
 		bit += bitsFor[n];
 	}
-	for (unsigned i = 0; i < bit; i++) if (stream[i >> 3] >> (i & 7) & 1) b[(127 - i) >> 3] |= (uint8_t)(1u << ((127 - i) & 7));
+	return (unsigned __int128)__builtin_bitreverse64(stream) << 64;		// stream bit i lands on block bit 127 - i
 }
 
 static uint8_t quant7(unsigned v8) {		// best 7-bit endpoint: decodes as v << 1 | v >> 6
@@ -70,30 +64,32 @@ void PGBC1BlockToASTC(const uint8_t bc1[8], uint8_t astc[16]) {
 	unsigned e[2][3] = {
 		{(((c0 >> 11) & 31) * 527 + 23) >> 6, (((c0 >> 5) & 63) * 259 + 33) >> 6, ((c0 & 31) * 527 + 23) >> 6},
 		{(((c1 >> 11) & 31) * 527 + 23) >> 6, (((c1 >> 5) & 63) * 259 + 33) >> 6, ((c1 & 31) * 527 + 23) >> 6}};
-	memset(astc, 0, 16);
 	bool fourColour = c0 > c1, transparent = false;
 	if (!fourColour) for (unsigned i = 0; i < 16; i++) if ((indices >> 2 * i & 3) == 3) transparent = true;
 	if (fourColour) {
 		// Block mode 0x042: 4x4 weights, range 0..3, one plane. CEM 8 (RGB direct), endpoints at 8 bits.
-		static const uint8_t weightOf[4] = {0, 3, 1, 2};
+		// Built as one 128-bit value: this is most blocks, and it runs on the render thread for every upload.
 		bool swap = e[1][0] + e[1][1] + e[1][2] < e[0][0] + e[0][1] + e[0][2];	// keep ASTC's blue contraction off
-		putBits(astc, 0, 11, 0x042); putBits(astc, 13, 4, 8);
-		for (unsigned c = 0; c < 3; c++) { putBits(astc, 17 + 16 * c, 8, e[swap][c]); putBits(astc, 25 + 16 * c, 8, e[!swap][c]); }
-		for (unsigned i = 0; i < 16; i++) {
-			unsigned w = weightOf[indices >> 2 * i & 3]; if (swap) w = 3 - w;
-			for (unsigned k = 0; k < 2; k++) if (w >> k & 1) { unsigned at = 127 - (2 * i + k); astc[at >> 3] |= (uint8_t)(1u << (at & 7)); }
-		}
+		unsigned __int128 v = 0x042 | 8u << 13;
+		for (unsigned c = 0; c < 3; c++) v |= (unsigned __int128)(e[swap][c] | e[!swap][c] << 8) << (17 + 16 * c);
+		// BC1 index to weight (0, 3, 1, 2) per 2-bit field: low bit = i0 ^ i1, high bit = i0. Weight bit k of
+		// texel i sits at bit 127 - (2i + k), which is the 32-bit index word reversed into the top 32 bits.
+		uint32_t weights = ((indices ^ indices >> 1) & 0x55555555u) | (indices << 1 & 0xAAAAAAAAu);
+		if (swap) weights = ~weights;
+		v |= (unsigned __int128)__builtin_bitreverse32(weights) << 96;
+		memcpy(astc, &v, 16);		// little-endian: bit n of v is bit n of the block
 		return;
 	}
 	static const uint8_t weightOf[4] = {0, 2, 1, 0};		// c0, c1, midpoint; the transparent texel's colour doesn't matter
 	bool swap = e[1][0] + e[1][1] + e[1][2] < e[0][0] + e[0][1] + e[0][2];
 	if (!transparent) {
 		// Block mode 0x051: 4x4 weights, range 0..2, one plane. CEM 8, endpoints at 8 bits.
-		putBits(astc, 0, 11, 0x051); putBits(astc, 13, 4, 8);
-		for (unsigned c = 0; c < 3; c++) { putBits(astc, 17 + 16 * c, 8, e[swap][c]); putBits(astc, 25 + 16 * c, 8, e[!swap][c]); }
+		unsigned __int128 v = 0x051 | 8u << 13;
+		for (unsigned c = 0; c < 3; c++) v |= (unsigned __int128)(e[swap][c] | e[!swap][c] << 8) << (17 + 16 * c);
 		uint8_t w[16];
 		for (unsigned i = 0; i < 16; i++) { w[i] = weightOf[indices >> 2 * i & 3]; if (swap) w[i] = 2 - w[i]; }
-		putTritWeights(astc, w, 16);
+		v |= tritWeights(w, 16);
+		memcpy(astc, &v, 16);
 		return;
 	}
 	// Block mode 0x451: two planes (colour, then alpha: CCS 3), range 0..2. CEM 12 (RGBA direct), 7-bit endpoints.
@@ -103,16 +99,17 @@ void PGBC1BlockToASTC(const uint8_t bc1[8], uint8_t astc[16]) {
 	unsigned s0 = 0, s1 = 0;
 	for (unsigned c = 0; c < 3; c++) { s0 += q[0][c] << 1 | q[0][c] >> 6; s1 += q[1][c] << 1 | q[1][c] >> 6; }
 	swap = s1 < s0;
-	putBits(astc, 0, 11, 0x451); putBits(astc, 13, 4, 12);
-	for (unsigned c = 0; c < 4; c++) { putBits(astc, 17 + 14 * c, 7, q[swap][c]); putBits(astc, 24 + 14 * c, 7, q[!swap][c]); }
+	unsigned __int128 v = 0x451 | 12u << 13;
+	for (unsigned c = 0; c < 4; c++) v |= (unsigned __int128)(q[swap][c] | q[!swap][c] << 7) << (17 + 14 * c);
 	uint8_t w[32];
 	for (unsigned i = 0; i < 16; i++) {
 		unsigned index = indices >> 2 * i & 3, colour = weightOf[index], alpha = index == 3 ? 2 : 0;
 		if (swap) { colour = 2 - colour; alpha = 2 - alpha; }
 		w[2 * i] = (uint8_t)colour; w[2 * i + 1] = (uint8_t)alpha;
 	}
-	putTritWeights(astc, w, 32);
-	putBits(astc, 128 - 52 - 2, 2, 3);		// colour component selector, right below the 52 weight bits
+	v |= tritWeights(w, 32);
+	v |= (unsigned __int128)3 << (128 - 52 - 2);		// colour component selector, right below the 52 weight bits
+	memcpy(astc, &v, 16);
 }
 
 void *PGTranscodeBC1ToASTC(uint32_t w, uint32_t h, uint32_t d, uint32_t bpr, uint32_t rpi, const void *data, size_t size,

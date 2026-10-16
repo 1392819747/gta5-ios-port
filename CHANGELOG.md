@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.4
+- **Sandbox runs smoothly again on 4 GB iPhones.** Converting the game's most common texture format for the iPhone's GPU is 12.7 times faster (same output, bit for bit), so the world streams in without the lag v1.3.4 brought (Sandbox went from about 15 back to 30 FPS on a 2 GB memory limit).
+- **New Ultra Performance preset** (Settings › Graphics) for iPhones with little memory, recommended automatically under about 2.6 GB. It keeps less of the world in memory so it doesn't run out.
+- **No more "sea of clay"** when memory is low: when the memory guard holds the game back, it now asks the game to free its own unused models, so new areas load their detailed models and textures.
+- **Guns show and fire in Sandbox again:** the memory guard makes room for the weapon you select.
+- **The GTA VI test map and Sandbox no longer crash** soon after loading.
+- **Play on a TV** with AirPlay or an HDMI adapter: the game shows on the TV, the controls stay on the phone.
+- **Sharper upscaling** (Settings › Graphics): MetalFX upscaling when the game renders below the screen's resolution.
+- **Mods folder:** Files › On My iPhone › GTA V Port › Mods. Put a replacement game file there at the same path it has in the game files (for example `common/data/handling.meta`); it's read when the game starts (#3).
+- **Mission button row:** when a mission or minigame asks for a button that has no touch button (LB/RB/LT/RT/X/Y, LT and RT together, stick clicks), a button for it appears while it's asked for. This covers the yoga breathing, Skip Mission ("Press X"), torture and the container crane.
+- **Barber and shop menus work** (#19). The scripts ask for two Scaleform movies (the hair colour switcher) that no game version players have contains; the barber waited for them and gave up without its menu. A missing movie is now replaced by a blank one and logged, so the menu opens. Menus that lock player control get Accept/Back, with the left side free when the menu reads the stick.
+- **Aim and Duck buttons while driving** (#15).
+- **Phone calls no longer take over the driving controls** (#19), and the phone button always opens the phone (missions that wait for it no longer get stuck).
+- **The sprint button sprints** instead of jogging, and **character switching works in helicopters, planes and back from Chop**.
+- **Set money saves properly** (#19): it sets the game's own balance, so spending lowers it and the amount survives saving and loading.
+- **Fewer crashes:** taking a photo with the in-game phone (#16), opening the pause map or watching a TV (the Friend Request mission, #19), changing the resolution while playing, and Simeon's first mission.
+- **The pause menu responds at once** instead of after a few seconds, and the mission passed screen shows real button icons instead of "???".
+- **No more "missing" text labels** (for example after a stunt jump): the release text files are used.
+- **Your outfit stays** after restarting the game.
+- **Sound comes back** after a call or after leaving the app.
+- **Taking a screenshot for a log no longer turns the screen black.**
+- **Fills the screen on iPhone 17 Pro Max.**
+- **Home screen fits long languages** (Russian and others); the top buttons are icons in every language, and the story cheats list follows the app's language.
+- **The folder picker explains** how to choose the game folder.
+- **New button icons** for every touch button.
+- **A "Loading…" note** shows during long loads after a death or between story scenes, so they don't look like a freeze.
+- **Builder site:** an expired GitHub sign-in sends you back to sign in instead of stopping at "Bad credentials" (#18).
+
+Thanks to @k49kg9xmsd-prog, @abtastic-hub, @mmts7hrnb5-jpg, @Blue7366 and @sonubhutani1979-afk for the issues behind these fixes (#3, #15, #16, #18, #19), and to everyone in the Telegram group who sent logs and screenshots.
+
 ## v1.3.4
 - **Story money no longer resets to $0.** Right after a save loaded, a game script set every character's cash to $0, so each save after that kept $0. The app now ignores that one write while a save loads (#10). Saves made after the bug already hold $0, so money lost before this update doesn't come back.
 - **Downloading the game in the app works with more file hosts.** The app asks for the file exactly the way Safari does, in one request. If a host shows a bot check (such as Cloudflare's), the link opens in the app's browser, which passes it and hands the download back. If a site refuses the download because of the ad blocking, the browser turns it off for that site; a shield button does the same by hand.

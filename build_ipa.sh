@@ -5,6 +5,7 @@
 #                                                                    the folder with data/manifest.json and b/)
 #   The app asks for the extra-memory entitlements; sideloaders drop what an account can't grant.
 #   --free  leave them out, for an installer that refuses the app (--paid is still accepted)
+#   --lite  the Lite build for iPhones with little memory (about 4 GB of RAM): GTA5Port-Lite.ipa
 # Needs: an Apple Silicon Mac (or the GitHub Actions workflow), Xcode, xcodegen.
 set -euo pipefail
 SERVER=""
@@ -12,7 +13,15 @@ MIRROR=""
 if [ "${1:-}" = "--mirror" ]; then MIRROR="$(cd "${2:?Usage: ./build_ipa.sh --mirror /path/to/game-folder [--free]}" && pwd)"; shift 2
 else SERVER="${1:?Usage: ./build_ipa.sh https://your-server [--paid]  or  ./build_ipa.sh --mirror /path [--free]}"; shift; fi
 ENTITLEMENTS=App/Full.entitlements
-[ "${1:-}" = "--free" ] && ENTITLEMENTS=App/Free.entitlements
+LITE=false
+for option in "$@"; do
+  case "$option" in
+    --free) ENTITLEMENTS=App/Free.entitlements ;;
+    --lite) LITE=true ;;
+  esac
+done
+IPA=GTA5Port.ipa
+$LITE && IPA=GTA5Port-Lite.ipa
 cd "$(dirname "$0")/app"
 JOBS="${JOBS:-$(sysctl -n hw.ncpu)}"
 # The system Python runs natively on Apple Silicon (a Rosetta Python would
@@ -27,6 +36,7 @@ fi
 "$PY" Scripts/prepare.py --mirror "$MIRROR"
 # The app opens with your server already filled in (without one, it asks where your files are).
 /usr/libexec/PlistBuddy -c "Set :PGDefaultAssetServer $SERVER" App/Info.plist
+/usr/libexec/PlistBuddy -c "Set :PGLiteMode $LITE" App/Info.plist
 
 xcodebuild -project PlayGTA5Native.xcodeproj -scheme PlayGTA5Native \
   -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
@@ -44,5 +54,6 @@ codesign --force --sign - --entitlements "$ENTITLEMENTS" --generate-entitlement-
 STAGE=Build/IPA
 mkdir -p "$STAGE/Payload"
 ditto "$APP" "$STAGE/Payload/PlayGTA5Native.app"
-(cd "$STAGE" && zip -qry ../../../GTA5Port.ipa Payload)
-echo "Done: $(cd .. && pwd)/GTA5Port.ipa"
+rm -f "../$IPA"
+(cd "$STAGE" && zip -qry "../../../$IPA" Payload)
+echo "Done: $(cd .. && pwd)/$IPA"

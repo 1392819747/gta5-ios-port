@@ -65,6 +65,21 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
     private var diagnosticsOverlay: UIView? { home }
     private let audioEngine = AVAudioEngine()
     private var audioSource: AVAudioSourceNode?
+    private lazy var loadingPill: UILabel = {
+        let label = PaddedLabel()
+        label.text = AppLanguage.choose("Loading…")
+        label.font = Theme.body(14, .semibold)
+        label.textColor = .white
+        label.backgroundColor = UIColor.black.withAlphaComponent(0.55)
+        label.layer.cornerRadius = 14
+        label.layer.masksToBounds = true
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.isHidden = true
+        label.isUserInteractionEnabled = false
+        return label
+    }()
+    /// The boot stopped and the audio was shut down on purpose (not restarted when the app is active again).
+    private var audioShutDown = false
     private var displayLink: CADisplayLink?
     private var lastControllerPoll: CFTimeInterval?
     private var lines: [String] = []
@@ -262,11 +277,13 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
             inputTestLabel.widthAnchor.constraint(equalToConstant: 210),
             inputTestLabel.heightAnchor.constraint(equalToConstant: 23)
         ])
-        NSLayoutConstraint.activate([
+        phoneGameConstraints = [
             metalView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             metalView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             metalView.topAnchor.constraint(equalTo: view.topAnchor),
-            metalView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            metalView.bottomAnchor.constraint(equalTo: view.bottomAnchor)]
+        NSLayoutConstraint.activate(phoneGameConstraints)
+        NSLayoutConstraint.activate([
             home.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             home.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             home.topAnchor.constraint(equalTo: view.topAnchor),
@@ -300,6 +317,7 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
             displayLink?.preferredFrameRateRange = CAFrameRateRange(minimum: min(60, top), maximum: top, preferred: top)
         }
         displayLink?.add(to: .main, forMode: .common)
+        observeExternalDisplays()
         NotificationCenter.default.addObserver(self, selector: #selector(controllerChanged), name: .GCControllerDidDisconnect, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(controllerChanged), name: .GCControllerDidConnect, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(releaseTouchControls), name: UIApplication.willResignActiveNotification, object: nil)
@@ -407,6 +425,19 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         if line == "WORLD_READY", stableTimer == nil {
             // Three minutes in the world counts as a launch that fits in memory.
             stableTimer = Timer.scheduledTimer(withTimeInterval: 180, repeats: false) { _ in GameSettings.shared.markBootStable() }
+            #if targetEnvironment(simulator)
+            // Automation: --test-pause-resize <s> opens the pause menu that long into play, then resizes live
+            // 3 s later, as Settings does when the resolution changes while the game is paused.
+            let testArguments = ProcessInfo.processInfo.arguments
+            if let i = testArguments.firstIndex(of: "--test-pause-resize"), i + 1 < testArguments.count, let seconds = Double(testArguments[i + 1]) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+                    if !testArguments.contains("--test-no-pause") { self?.appendLog("Test: opening the pause menu."); PGRequestPauseMenu() }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                        self?.appendLog("Test: live resize while paused."); PGSetBackBufferSize(960, 444)
+                    }
+                }
+            }
+            #endif
         }
         if line == "WORLD_READY" || line.contains("\"label\":\"First frame\"") {
             diagnosticsOverlay?.isHidden = true
@@ -414,9 +445,17 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
             fpsLabel.isHidden = !GameSettings.shared.showFPS
         }
         if line.hasPrefix("Native boot stopped:") || line == "iOS could not reserve the engine memory." {
+            audioShutDown = true
             audioEngine.stop()
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             metalView.isPaused = true
+        }
+        // The engine stopped during play (a trap on one of its threads, or an unported function):
+        // the picture freezes or goes black and the pause menu never opens. The touch Settings button
+        // may be hidden (it is with a controller), so a panel offers Send log and Settings (GTA-21).
+        if engineStarted, line.hasPrefix("Native game thread stopped:") || line.hasPrefix("Native boot stopped:")
+            || line.hasPrefix("Engine stopped at unported host function:") {
+            showEngineStopped()
         }
         if !written { LogWriter.shared.write(line) }
         for key in ["[wgpu] fps:", "[wgpu] draw costs", "Native frame costs:", "Phone memory:", "WORLD_READY"] where line.hasPrefix(key) {
@@ -486,6 +525,7 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         // Dawn owns the drawable size from here; MTKView must not reset it on layout.
         metalView.autoResizeDrawable = false
         PGAttachMetalLayer(Unmanaged.passUnretained(metalView.layer).toOpaque())
+        DispatchQueue.main.async { [weak self] in self?.updateExternalDisplay(resize: false) }
         launchButton.isEnabled = false
         home.settingsButton.isHidden = true
         home.layoutButton.isHidden = true
@@ -497,7 +537,9 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         PGSetStartMode(testMap ? 3 : Int32(mode.rawValue))
         appendLog("Game mode: \(mode.title)\(mode == .sandbox ? " on " + GameSettings.sandboxMapTitles[GameSettings.shared.sandboxMap] : "")")
         bootedPreset = GameSettings.shared.graphicsPreset
-        appendLog("Graphics: " + GraphicsConfiguration.apply(GameSettings.shared, screen: view.bounds.size))
+        // A TV already connected gets the picture from the start, in its own shape.
+        let tvScreen = ProcessInfo.processInfo.arguments.contains("--no-tv") ? nil : UIScreen.screens.first(where: { $0 != UIScreen.main })
+        appendLog("Graphics: " + GraphicsConfiguration.apply(GameSettings.shared, screen: tvScreen?.bounds.size ?? view.bounds.size, tv: tvScreen != nil))
         appendLog("Device: " + GameSettings.shared.tier.summary)
         GameSettings.shared.markBootStarted()
         playIntro()
@@ -714,10 +756,82 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
             // Silent test runs on a phone.
             if ProcessInfo.processInfo.arguments.contains("--mute") { audioEngine.mainMixerNode.outputVolume = 0 }
             try audioEngine.start()
+            observeAudioInterruptions()
         } catch { appendLog("Native audio setup failed: \(error.localizedDescription)") }
     }
 
+    /// A call, Siri, another app's audio or the app going to the background stops the audio engine,
+    /// and iOS doesn't start it again: the game was silent after coming back (log 418). Restarted when
+    /// the interruption ends, when the app is active again, and when the route or format changes.
+    private func observeAudioInterruptions() {
+        let center = NotificationCenter.default
+        center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
+            let type = (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init)
+            self?.appendLog("Audio interruption \(type == .began ? "began" : "ended").")
+            if type == .ended { self?.resumeAudio(reason: "interruption ended") }
+        }
+        center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in self?.resumeAudio(reason: "app active") }
+        center.addObserver(forName: .AVAudioEngineConfigurationChange, object: audioEngine, queue: .main) { [weak self] _ in self?.resumeAudio(reason: "audio configuration changed") }
+    }
+    private func resumeAudio(reason: String) {
+        guard audioSource != nil, !audioEngine.isRunning, !audioShutDown else { return }
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+            try audioEngine.start()
+            appendLog("Audio restarted (\(reason)).")
+        } catch { appendLog("Audio could not restart (\(reason)): \(error.localizedDescription)") }
+    }
+
     @objc private func controllerChanged() { pollController() }
+
+    // MARK: TV (AirPlay and HDMI)
+
+    /// With a TV connected (AirPlay screen mirroring or an HDMI adapter), the game picture goes to the TV
+    /// during play and the phone keeps the touch controls over black (GTA-3).
+    private var tvWindow: UIWindow?
+    private var phoneGameConstraints: [NSLayoutConstraint] = []
+    private func observeExternalDisplays() {
+        let center = NotificationCenter.default
+        center.addObserver(forName: UIScreen.didConnectNotification, object: nil, queue: .main) { [weak self] _ in self?.updateExternalDisplay() }
+        center.addObserver(forName: UIScreen.didDisconnectNotification, object: nil, queue: .main) { [weak self] _ in self?.updateExternalDisplay() }
+        center.addObserver(forName: UIScreen.modeDidChangeNotification, object: nil, queue: .main) { [weak self] _ in self?.updateExternalDisplay() }
+    }
+    private func updateExternalDisplay(resize: Bool = true) {
+        let tv = engineStarted && !ProcessInfo.processInfo.arguments.contains("--no-tv") ? UIScreen.screens.first(where: { $0 != UIScreen.main }) : nil
+        if let tv {
+            if tvWindow?.screen === tv, tvWindow?.bounds == tv.bounds { return }
+            let window = tvWindow ?? UIWindow(frame: tv.bounds)
+            window.screen = tv
+            window.frame = tv.bounds
+            if window.rootViewController == nil {
+                let root = UIViewController()
+                root.view.backgroundColor = .black
+                window.rootViewController = root
+            }
+            tv.overscanCompensation = .none
+            if metalView.superview !== window.rootViewController?.view {
+                NSLayoutConstraint.deactivate(phoneGameConstraints)
+                metalView.removeFromSuperview()
+                let host = window.rootViewController!.view!
+                host.addSubview(metalView)
+                NSLayoutConstraint.activate([
+                    metalView.leadingAnchor.constraint(equalTo: host.leadingAnchor), metalView.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+                    metalView.topAnchor.constraint(equalTo: host.topAnchor), metalView.bottomAnchor.constraint(equalTo: host.bottomAnchor)])
+                view.backgroundColor = .black
+            }
+            window.isHidden = false
+            tvWindow = window
+            appendLog("TV connected (\(Int(tv.bounds.width * tv.scale))×\(Int(tv.bounds.height * tv.scale))): the game shows on the TV, the controls stay on the phone.")
+        } else if let window = tvWindow {
+            metalView.removeFromSuperview()
+            view.insertSubview(metalView, at: 0)
+            NSLayoutConstraint.activate(phoneGameConstraints)
+            window.isHidden = true
+            tvWindow = nil
+            appendLog("TV disconnected: the game is back on the phone.")
+        } else { return }
+        if resize { applyLiveResolution() }
+    }
 
     // MARK: Game file server
 
@@ -883,15 +997,21 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         present(alert, animated: true)
     }
 
+    private var healthLines = 0
     private func logHealth() {
         var vm = task_vm_info_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
         let ok = withUnsafeMutablePointer(to: &vm) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count) }
         } == KERN_SUCCESS
-        let used = ok ? Int(vm.phys_footprint / 1_048_576) : -1
+        var used = ok ? Int(vm.phys_footprint / 1_048_576) : -1
+        #if targetEnvironment(simulator)
+        if used >= 0 { used += Int(PGGPUTextureBytes() / 1_048_576) }   // counted as an iPhone counts it (see EngineHost.c)
+        #endif
         let available = Int(os_proc_available_memory() / 1_048_576)
         let free = available > 0 ? available : max(0, GameSettings.shared.tier.memoryLimitMB - used)
+        healthLines += 1
+        if healthLines % 6 == 1 { PGLogMemoryPools() }   // where the memory is, once a minute
         var reads = [UInt64](repeating: 0, count: 6)
         reads.withUnsafeMutableBufferPointer { PGAssetHealth($0.baseAddress) }
         let now = [PGMemoryBudgetClamps()] + reads + [PGMemoryBudgetEvictions()]
@@ -932,6 +1052,75 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         if !engineStarted { controllerLabel.text = AppLanguage.choose("Controller: none connected") }
     }
 
+    private var stoppedPanel: UIView?
+    /// Shown once the engine has stopped: what happened, Send log and Settings, above everything.
+    private func showEngineStopped() {
+        guard stoppedPanel == nil else { return }
+        touchControls.reset(publish: false)
+        touchControls.isHidden = true
+        PGUpdateVirtualPad(PGPadState())
+        let title = UILabel()
+        title.text = AppLanguage.choose("The game stopped")
+        title.font = Theme.display(22, .heavy)
+        title.textColor = .white
+        let info = UILabel()
+        info.text = AppLanguage.choose("Please send the log so this can be fixed, then close the app and open it again to keep playing.")
+        info.numberOfLines = 0
+        info.textAlignment = .center
+        info.font = .preferredFont(forTextStyle: .subheadline)
+        info.textColor = UIColor(white: 1, alpha: 0.8)
+        var sendStyle = UIButton.Configuration.filled()
+        sendStyle.title = AppLanguage.choose("Send log to the developer")
+        sendStyle.cornerStyle = .large
+        let send = UIButton(configuration: sendStyle, primaryAction: UIAction { [weak self] _ in self?.sendLogAfterStop() })
+        var settingsStyle = UIButton.Configuration.gray()
+        settingsStyle.title = AppLanguage.choose("Settings")
+        settingsStyle.cornerStyle = .large
+        let settings = UIButton(configuration: settingsStyle, primaryAction: UIAction { [weak self] _ in self?.showSettings() })
+        let stack = UIStackView(arrangedSubviews: [title, info, send, settings])
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 14
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        let panel = UIView()
+        panel.backgroundColor = UIColor.black.withAlphaComponent(0.78)
+        panel.layer.cornerRadius = 18
+        panel.translatesAutoresizingMaskIntoConstraints = false
+        panel.addSubview(stack)
+        view.addSubview(panel)
+        NSLayoutConstraint.activate([
+            panel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            panel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            panel.widthAnchor.constraint(equalToConstant: 380),
+            stack.topAnchor.constraint(equalTo: panel.topAnchor, constant: 22),
+            stack.bottomAnchor.constraint(equalTo: panel.bottomAnchor, constant: -22),
+            stack.leadingAnchor.constraint(equalTo: panel.leadingAnchor, constant: 22),
+            stack.trailingAnchor.constraint(equalTo: panel.trailingAnchor, constant: -22),
+            info.widthAnchor.constraint(equalTo: stack.widthAnchor),
+        ])
+        stoppedPanel = panel
+        appendLog("The engine stopped: showing Send log and Settings.")
+        #if targetEnvironment(simulator)
+        // Test: --send-log-after-stop opens the Send log screen from the panel.
+        if ProcessInfo.processInfo.arguments.contains("--send-log-after-stop") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.sendLogAfterStop() }
+        }
+        #endif
+    }
+    private func sendLogAfterStop() {
+        guard presentedViewController == nil else { return }
+        let screen = SendLogViewController()
+        screen.finished = { [weak self] title, message in
+            let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: AppLanguage.choose("OK"), style: .default))
+            self?.present(alert, animated: true)
+        }
+        let navigation = UINavigationController(rootViewController: screen)
+        navigation.modalPresentationStyle = .fullScreen
+        present(navigation, animated: true)
+        appendLog("Send log opened after the engine stopped.")
+    }
+
     private func showSettings() {
         guard presentedViewController == nil else { return }
         touchControls.reset()
@@ -955,7 +1144,9 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
     private func applyLiveResolution() {
         guard engineStarted else { return }
         let settings = GameSettings.shared
-        let (width, height) = GraphicsConfiguration.size(for: bootedPreset, renderHeight: settings.renderHeight, screen: view.bounds.size, matchScreenShape: settings.matchScreenShape)
+        // On a TV the picture takes the TV's shape.
+        let surface = tvWindow?.bounds.size ?? view.bounds.size
+        let (width, height) = GraphicsConfiguration.size(for: bootedPreset, renderHeight: settings.renderHeight, screen: surface, matchScreenShape: tvWindow != nil || settings.matchScreenShape)
         PGSetBackBufferSize(Int32(width), Int32(height))
         appendLog("Graphics: live resize to \(width)×\(height)")
     }
@@ -981,8 +1172,19 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         PGRequestPauseMenu()
     }
     private var injectedKey = false, releasedKey = false, injectedMouse = false
+    private var touchSprintTesting = false
+    private var controllerTriggerPeak: (Float, Float) = (0, 0)
+    private var controllerTriggerLoggedAt: CFTimeInterval = 0
     private func injectTestInput(sinceWorld: Double) {
         let arguments = ProcessInfo.processInfo.arguments
+        #if targetEnvironment(simulator)
+        // --test-touch-sprint <after> <seconds>: Sprint through the touch controls (GTA-46).
+        if let i = arguments.firstIndex(of: "--test-touch-sprint"), i + 2 < arguments.count,
+           let after = Double(arguments[i + 1]), let hold = Double(arguments[i + 2]) {
+            let on = sinceWorld > after && sinceWorld < after + hold
+            if on != touchSprintTesting { touchSprintTesting = on; touchControls.testSprint(on); appendLog("Test: touch sprint \(on ? "on" : "off")") }
+        }
+        #endif
         if let i = arguments.firstIndex(of: "--inject-key"), i + 3 < arguments.count,
            let key = UInt8(arguments[i + 1], radix: 16), let after = Double(arguments[i + 2]), let hold = Double(arguments[i + 3]) {
             if !injectedKey && sinceWorld > after { injectedKey = true; KeyboardMouse.shared.inject(key: key, down: true); appendLog("Test: key 0x\(arguments[i + 1]) down") }
@@ -1016,6 +1218,16 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         let elapsed = lastControllerPoll.map { now - $0 } ?? (1.0 / 60.0)
         lastControllerPoll = now
         let gameStatus = PGGameStatus()
+        // A long respawn or story load looked like a freeze (GTA-50): say it's loading.
+        let loading = engineStarted && PGLoadSceneSeconds() >= 3 && gameStatus & 1 != 0 && gameStatus & 16 == 0
+        if loading == loadingPill.isHidden {
+            loadingPill.isHidden = !loading
+            if loadingPill.superview == nil {
+                view.addSubview(loadingPill)
+                NSLayoutConstraint.activate([loadingPill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                                             loadingPill.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -18)])
+            }
+        }
         if gameStatus != lastGameStatus {
             lastGameStatus = gameStatus
             appendLog("Game state: control \(gameStatus & 1 != 0 ? "off" : "on")\(gameStatus & 2 != 0 ? ", phone out" : "")\(gameStatus & 4 != 0 ? ", cutscene" : "")\(gameStatus & 8 != 0 ? ", warning screen" : "")\(gameStatus & 16 != 0 ? ", no player" : "")")
@@ -1029,6 +1241,13 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         if let controller = GCController.controllers().first(where: { $0.extendedGamepad != nil }), let pad = controller.extendedGamepad {
             state = PGPadState(gamepad: pad)
             hasController = true
+            // Diagnostics (GTA-58, "R2 sometimes doesn't accelerate"): the strongest trigger values the
+            // controller reported, logged every 10 s while they move.
+            controllerTriggerPeak = (max(controllerTriggerPeak.0, pad.leftTrigger.value), max(controllerTriggerPeak.1, pad.rightTrigger.value))
+            if now - controllerTriggerLoggedAt > 10, controllerTriggerPeak.0 + controllerTriggerPeak.1 > 0 {
+                appendLog(String(format: "Controller %@: LT peak %.2f, RT peak %.2f (analog %@) in the last 10 s, vehicle %u", controller.vendorName ?? "?", controllerTriggerPeak.0, controllerTriggerPeak.1, pad.rightTrigger.isAnalog ? "yes" : "no", PGCurrentTouchContext()))
+                controllerTriggerPeak = (0, 0); controllerTriggerLoggedAt = now
+            }
             if diagnosticsOverlay?.isHidden != true { controllerLabel.text = AppLanguage.interpolate(AppLanguage.choose("Controller: {arg0}"), [controller.vendorName ?? AppLanguage.choose("Gamepad")]) }
         } else if diagnosticsOverlay?.isHidden != true {
             controllerLabel.text = AppLanguage.choose("Touch controls ready")
@@ -1041,7 +1260,7 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         if let ready = worldReadyAt { injectTestInput(sinceWorld: now - ready) }
         let pcControls = keyboardMouse && KeyboardMouse.shared.hasKeyboard && KeyboardMouse.shared.hasMouse
         let previewing = ProcessInfo.processInfo.arguments.contains("--touch-controls-preview")
-        let touchActive = touchControlsAvailable && (previewing || !((hasController || pcControls) && GameSettings.shared.hideTouchWithController))
+        let touchActive = touchControlsAvailable && stoppedPanel == nil && (previewing || !((hasController || pcControls) && GameSettings.shared.hideTouchWithController))
         touchControls.isHidden = !touchActive
         var vehicle = touchActive ? PGCurrentTouchContext() : 0
         var pauseMenu = PGPauseMenuActive()
@@ -1071,6 +1290,9 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
                 if wanted.contains("taxi") { hints.vehicleModel = 0xC703DB5F; hints.passenger = true; hints.taxiMenu = true }
             }
             touchControls.updateHints(hints)
+            // Debug: --preview-mission-inputs shows every mission button.
+            let previewMission = arguments.contains("--preview-mission-inputs")
+            touchControls.updateMissionInputs { previewMission || PGInputPolledWithin($0, 700) != 0 }
             // Deliberately let the native game decide if relative mouse motion
             // disables assisted targeting. Never force the last-device flag.
             let mouseSwipe = touchControls.experimentalMouseLookActive && !hasController && !pcControls
@@ -1216,4 +1438,10 @@ final class IntroVideoView: UIView {
         player.pause()
         finished()
     }
+}
+
+/// A label with room around its text (the loading pill).
+private final class PaddedLabel: UILabel {
+    override func drawText(in rect: CGRect) { super.drawText(in: rect.insetBy(dx: 14, dy: 6)) }
+    override var intrinsicContentSize: CGSize { let size = super.intrinsicContentSize; return CGSize(width: size.width + 28, height: size.height + 12) }
 }

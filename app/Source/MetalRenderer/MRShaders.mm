@@ -151,6 +151,7 @@ static const uint32_t BIND_DS = 0x40;
 bool gNativeBC = false;
 bool gPackedBC1 = false;
 bool gASTCBC1 = false;
+bool gSkipTopMip = false;
 
 FormatInfo mapFormat(uint32_t f, uint32_t bind) {
 	bool ds = (bind & BIND_DS) != 0;

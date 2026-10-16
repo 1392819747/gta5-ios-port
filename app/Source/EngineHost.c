@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/mman.h>
 #include <time.h>
 #include <unistd.h>
 #include <math.h>
@@ -37,9 +38,14 @@ void pg_record_memory_fault(unsigned long long address,unsigned long long bytes,
  char line[240];snprintf(line,sizeof line,"Native heap access fault: address 0x%llx, bytes %llu, memory limit %llu",address,bytes,limit);pg_log(line);
 }
 
+// Lines from before the engine starts (the Settings preloader configures the assets and Mods early)
+// wait here for the log.
+static char earlyLines[32][256];
+static int earlyCount;
 static void pg_log_line(const char *message) {
   fprintf(stderr, "[native-port] %s\n", message);
   if (logCallback) logCallback(message, logContext);
+  else if (earlyCount < 32) snprintf(earlyLines[earlyCount++], sizeof earlyLines[0], "%s", message);
 }
 // Engine lines arrive from several threads. A bare severity prefix (an engine message that
 // formatted to nothing) is dropped, and a run of identical lines is written once with a count,
@@ -47,7 +53,18 @@ static void pg_log_line(const char *message) {
 static pthread_mutex_t logLock = PTHREAD_MUTEX_INITIALIZER;
 static char lastLogLine[512];
 static uint64_t lastLogRepeats;
+// The engine's memory pools, from its own "[wasm] region 0x... +N MB" lines: PGLogMemoryPools measures
+// how much of each iOS really holds (mincore), to see where the memory goes.
+static struct { uint64_t base, bytes; } engineRegions[64];
+static _Atomic int engineRegionCount;
+static void pg_note_region(const char *message) {
+  unsigned long long base = 0, mb = 0;
+  if (sscanf(message, "[wasm] region 0x%llx +%llu MB", &base, &mb) != 2) return;
+  int i = atomic_fetch_add(&engineRegionCount, 1);
+  if (i < 64) { engineRegions[i].base = base; engineRegions[i].bytes = mb << 20; } else atomic_store(&engineRegionCount, 64);
+}
 void pg_log(const char *message) {
+  if (!strncmp(message, "[wasm] region 0x", 16)) pg_note_region(message);
   size_t length = strlen(message);
   while (length && (message[length-1] == '\n' || message[length-1] == ' ')) length--;
   if (!length || (length == 6 && !memcmp(message, "Error:", 6)) || (length == 8 && !memcmp(message, "Warning:", 8)) ||
@@ -69,6 +86,36 @@ void pg_missing_import(const char *name) {
   snprintf(message, sizeof(message), "Engine stopped at unported host function: %s", name);
   pg_log(message);
   wasm_rt_trap(WASM_RT_TRAP_UNREACHABLE);
+}
+
+// Emscripten's longjmp, used by libjpeg's error exit among others: the engine records where to
+// jump (setThrew) and throws, and the innermost invoke_* import catches the throw, as emscripten's
+// JavaScript does with try/catch. Each invoke_* keeps a native jump point (Scripts/prepare_longjmp.py);
+// this returns there, and the engine code after that invoke finds its setjmp target on its own.
+// It used to stop the game, so a photo whose JPEG could not be read ended the game (GTA-21).
+_Thread_local pg_invoke_frame *pg_invoke_top;
+void w2c_env_0x5Femscripten_throw_longjmp(struct w2c_env *host) {
+  pg_invoke_frame *frame = pg_invoke_top;
+#if TARGET_OS_SIMULATOR
+  if (getenv("PG_TEST_NO_LONGJMP")) frame = NULL; // reproduces the old behaviour
+#endif
+  if (!frame) pg_missing_import("env._emscripten_throw_longjmp");
+  static _Atomic int logged;
+  if (atomic_fetch_add(&logged, 1) < 20) pg_log("The engine handled an error with longjmp; the game continues.");
+  _longjmp(frame->jump, 1);
+}
+// Where fiDeviceMemory::Create finds the address in "memory:$0x...,size,flags:name"
+// (Scripts/prepare_memory_file_create.py): after "memory:$" and the "0x" this build's %p writes,
+// as fiDeviceMemory::Open does. Without it a photo's JPEG was written to address 0 (GTA-21).
+#if TARGET_OS_SIMULATOR
+static _Atomic uint64_t pgTestLastMemoryFile; // PG_TEST_PHOTO=corrupt: where the last one starts
+#endif
+u64 pg_memory_file_address_start(w2c_game *instance, u64 name) {
+#if TARGET_OS_SIMULATOR
+  if (getenv("PG_TEST_OLD_MEMORY_FILE")) return 8; // reproduces the old behaviour
+  atomic_store(&pgTestLastMemoryFile, strtoull(pg_string(&env, name + 8), NULL, 16));
+#endif
+  return *(const char *)pg_pointer(&env, name + 9, 1) == 'x' ? 10 : 8;
 }
 
 void *pg_pointer(struct w2c_env *host, uint64_t address, uint64_t size) {
@@ -95,12 +142,76 @@ f64 w2c_env_wasm_now_ms(struct w2c_env *host) { return timeMS(CLOCK_REALTIME); }
 f64 w2c_env_emscripten_date_now(struct w2c_env *host) { return timeMS(CLOCK_REALTIME); }
 u64 w2c_env_emscripten_get_heap_max(struct w2c_env *host) { wasm_rt_shared_memory_t *memory=w2c_env_memory(host);return memory->max_pages*memory->page_size; }
 static bool nativeMemoryGuard;
-static _Atomic uint64_t memoryBudgetClamps,memoryBudgetEvictions,memoryBudgetQueries;
+static _Atomic uint64_t memoryBudgetClamps,memoryBudgetEvictions,memoryBudgetQueries,memoryBudgetNudges;
 uint64_t PGMemoryBudgetQueries(void){return atomic_load(&memoryBudgetQueries);}
 // Times the guard stopped streaming from growing, and times it asked the engine to evict.
 uint64_t PGMemoryBudgetClamps(void){return atomic_load(&memoryBudgetClamps);}
+// Memory the engine frees, back to iOS (GTA-34, Scripts/prepare_heap_return.py). A freed buddy block
+// keeps counting against the app's limit until it is reused; its whole pages are marked reusable (as
+// Apple's malloc does) and marked in use again when a block is handed out. PG_HEAP_RETURN=0 turns it off.
+u64 PG_FN_BUDDY_GET_SIZE(w2c_game*, u64, u64);
+static int heapReturn=-1;
+static _Atomic uint64_t heapReturnedBytes,heapReturnedBlocks;
+static bool heapReturnOn(void){
+ if(heapReturn<0){const char *v=getenv("PG_HEAP_RETURN");heapReturn=!(v&&!strcmp(v,"0"));
+  if(heapReturn)pg_log("Engine memory: freed blocks go back to iOS.");}
+ return heapReturn;
+}
+void pg_buddy_free(w2c_game *instance,u64 allocator,u64 block){
+ if(!block||!heapReturnOn())return;
+ const uint64_t page=16384,size=PG_FN_BUDDY_GET_SIZE(instance,allocator,block);
+ if(size<65536||block+size>env.memory.size)return;
+ uint64_t b=(block+page-1)&~(page-1),e=(block+size)&~(page-1);
+ if(e<=b)return;
+ if(madvise(env.memory.data+b,(size_t)(e-b),MADV_FREE_REUSABLE)==0){atomic_fetch_add(&heapReturnedBytes,e-b);atomic_fetch_add(&heapReturnedBlocks,1);}
+}
+void pg_buddy_allocated(w2c_game *instance,u64 block,u64 size){
+ (void)instance;
+ if(!block||!size||heapReturn!=1)return;
+ const uint64_t page=16384;
+ uint64_t b=block&~(page-1),e=(block+size+page-1)&~(page-1);
+ if(e>env.memory.size)e=env.memory.size;
+ if(e>b)madvise(env.memory.data+b,(size_t)(e-b),MADV_FREE_REUSE);
+}
+// Defragment moves blocks without Allocate: the allocator's whole heap (base +8, size +24) in use first.
+void pg_buddy_defragment(w2c_game *instance,u64 allocator){
+ (void)instance;
+ if(heapReturn!=1||allocator+32>env.memory.size)return;
+ uint64_t base,size;memcpy(&base,env.memory.data+allocator+8,8);memcpy(&size,env.memory.data+allocator+24,8);
+ if(!size||base+size>env.memory.size)return;
+ madvise(env.memory.data+base,(size_t)size,MADV_FREE_REUSE);
+ static bool logged;if(!logged){logged=true;pg_log("Engine memory: the engine defragments a pool (marked in use first).");}
+}
+// Resident memory per engine pool region and in the rest of the engine heap, plus the D3D layer's
+// CPU copies of dynamic buffers (bytes, count, peak at 8324208/16/24).
+void PGLogMemoryPools(void){
+ uint8_t *data=env.memory.data;uint64_t size=env.memory.size;
+ if(!data||!size)return;
+ const uint64_t page=16384;
+ int n=atomic_load(&engineRegionCount);if(n>64)n=64;
+ char line[1024];int at=snprintf(line,sizeof line,"Engine memory held:");
+ uint64_t inRegions=0;
+ for(int i=0;i<n;i++){
+  uint64_t b=engineRegions[i].base&~(page-1),e=engineRegions[i].base+engineRegions[i].bytes;
+  if(e>size)e=size; if(b>=e)continue;
+  size_t pages=(size_t)((e-b+page-1)/page);char *vec=malloc(pages);if(!vec)continue;
+  uint64_t held=0;
+  if(mincore(data+b,(size_t)(e-b),vec)==0)for(size_t k=0;k<pages;k++)if(vec[k]&(MINCORE_INCORE|MINCORE_PAGED_OUT))held+=page;
+  free(vec);inRegions+=held;
+  if(at<(int)sizeof line-48)at+=snprintf(line+at,sizeof line-at," %lluMB@%llx=%llu",(unsigned long long)(engineRegions[i].bytes>>20),(unsigned long long)engineRegions[i].base,(unsigned long long)(held>>20));
+ }
+ // The whole heap, to get what lies outside the pools (the engine's general allocations).
+ uint64_t total=0;size_t pages=(size_t)(size/page);char *vec=malloc(pages);
+ if(vec&&mincore(data,(size_t)(pages*page),vec)==0)for(size_t k=0;k<pages;k++)if(vec[k]&(MINCORE_INCORE|MINCORE_PAGED_OUT))total+=page;
+ free(vec);
+ uint64_t cpuCopies=0,copies=0,peak=0;
+ if(8324232<=size){memcpy(&cpuCopies,data+8324208,8);memcpy(&copies,data+8324216,8);memcpy(&peak,data+8324224,8);}
+ if(at<(int)sizeof line-160)snprintf(line+at,sizeof line-at," | pools %lluMB, rest %lluMB, all %lluMB | D3D CPU copies %lluMB (%llu, peak %lluMB) | returned to iOS %lluMB in %llu frees",(unsigned long long)(inRegions>>20),(unsigned long long)((total>inRegions?total-inRegions:0)>>20),(unsigned long long)(total>>20),(unsigned long long)(cpuCopies>>20),(unsigned long long)copies,(unsigned long long)(peak>>20),(unsigned long long)(atomic_load(&heapReturnedBytes)>>20),(unsigned long long)atomic_load(&heapReturnedBlocks));
+ pg_log(line);
+}
 uint64_t PGMemoryBudgetEvictions(void){return atomic_load(&memoryBudgetEvictions);}
 static uint64_t simulatedProcessLimit;
+uint64_t PGGPUTextureBytes(void);
 static uint64_t processLimitMB; // the app's memory limit at boot, or the player's cap (0 in the simulator)
 // Settings › Memory cap (0 automatic): the game behaves as if iOS allowed only this much.
 static uint64_t memoryCapMB, capReserveBytes;
@@ -113,7 +224,9 @@ static bool nativeProcessHeadroom(uint64_t *headroom){
  if(!simulatedProcessLimit)return false;
  task_vm_info_data_t info={};mach_msg_type_number_t count=TASK_VM_INFO_COUNT;
  if(task_info(mach_task_self(),TASK_VM_INFO,(task_info_t)&info,&count)!=KERN_SUCCESS)return false;
- available=simulatedProcessLimit>info.phys_footprint?simulatedProcessLimit-info.phys_footprint:0;
+ // Textures live in the Mac's GPU memory here, outside the footprint; on an iPhone they count against the limit.
+ uint64_t footprint=info.phys_footprint+PGGPUTextureBytes();
+ available=simulatedProcessLimit>footprint?simulatedProcessLimit-footprint:0;
 #else
  available=os_proc_available_memory();
  available=available>capReserveBytes?available-capReserveBytes:0;
@@ -121,11 +234,39 @@ static bool nativeProcessHeadroom(uint64_t *headroom){
  *headroom=available;
  return true;
 }
+// The guard's reserve (below it the engine evicts) and band (above reserve+band streaming grows):
+// 384 and 256 MB. PG_GUARD_RESERVE_MB and PG_GUARD_BAND_MB change them, for tests and the Lite build.
+static uint64_t guardReserve(void){
+ static uint64_t value;
+ if(!value){const char *v=getenv("PG_GUARD_RESERVE_MB");long mb=v?atol(v):0;value=(uint64_t)(mb>=128&&mb<=1024?mb:384)<<20;}
+ return value;
+}
+static uint64_t guardBand(void){
+ static uint64_t value;
+ // Ultra Performance (PG_LITE) uses 64 MB: it sits around 600 MB free, so the 256 MB band (growth stops
+ // below reserve + band = 640 MB) held every detail load and far areas stayed "clay" (GTA-38). Simulator,
+ // 2348 MB, one teleport then 90 s: band 256 clay (no ground), 128 partly, 64 fully detailed; same FPS,
+ // 3-7 evictions, 449 MB still free. The normal preset keeps 256 (it thrashed with smaller bands).
+ if(!value){const char *v=getenv("PG_GUARD_BAND_MB"),*lite=getenv("PG_LITE");long mb=v?atol(v):0;
+  value=(uint64_t)(mb>=16&&mb<=1024?mb:lite&&strcmp(lite,"0")?64:256)<<20;}
+ return value;
+}
+// The player's weapon must load even when memory is tight: with the guard holding, the selected gun's
+// model never streamed in, so it was invisible and unusable (GTA-55; simulator at 2098 MB: weapon
+// object 0 for a minute). While the player has a weapon selected on foot with no weapon object
+// (pg_keep_weapon_loaded), the guard gives streaming 64 MB of room.
+static _Atomic double weaponGrantUntil;
+static int64_t weaponGrant(int64_t result){
+ const int64_t room=64ll<<20;
+ if(result>=room||timeMS(CLOCK_MONOTONIC)>atomic_load(&weaponGrantUntil))return result;
+ return room;
+}
 uint64_t pg_streaming_available_memory(uint64_t engineAvailable){
  uint64_t available;
  if(!nativeProcessHeadroom(&available))return engineAvailable;
- uint64_t result=pg_streaming_headroom_budget(engineAvailable,available,384ull*1048576,256ull*1048576);
- return result;
+ uint64_t result=pg_streaming_headroom_budget(engineAvailable,available,guardReserve(),guardBand());
+ int64_t granted=weaponGrant((int64_t)result);
+ return granted>(int64_t)result&&(uint64_t)granted<=engineAvailable?(uint64_t)granted:result;
 }
 // The engine heap has its own ceiling (the reservation), below the process limit on phones that
 // allow more memory. Once it refuses to grow, streaming more only loops on failed allocations
@@ -140,10 +281,46 @@ static int64_t heapCeilingBudget(int64_t result){
  if(since<30)return result<0?result:0;
  return result;
 }
+// A hold that lasts (free memory inside the band: growth stopped, nothing evicted) also stops the
+// engine from dropping what the player left behind, so new areas never load their detailed models
+// and textures ("sea of clay", GTA-38). After 1.5 s of holding, the engine is asked to free a small
+// slice, which its own cleanup takes from objects no longer needed; loading then resumes.
+// PG_GUARD_NUDGE_MB sets the slice (default 16, 0 turns it off).
+// During a load scene (respawn, warp, story transition) everything at the old place is dead weight and
+// the player waits: holds made respawns take minutes (GTA-50), so the nudge comes after 0.25 s and frees
+// 96 MB at a time.
+static _Atomic double loadSceneSince;		// CLOCK_MONOTONIC ms when a load scene started, 0 none
+int PGLoadSceneSeconds(void){
+ double since=atomic_load(&loadSceneSince);if(since==0)return 0;
+ double s=(timeMS(CLOCK_MONOTONIC)-since)/1000;
+ if(s>180){atomic_store(&loadSceneSince,0);return 0;}		// a stop line that never came
+ return (int)s;
+}
+static void pg_note_load_scene(const char *line){
+ if(strstr(line,"Starting new load scene")||strstr(line,"calling LoadScene.Start()")||strstr(line,"Awaiting LoadScene.IsLoaded()")){
+  double none=0;atomic_compare_exchange_strong(&loadSceneSince,&none,timeMS(CLOCK_MONOTONIC));
+ }else if(strstr(line,"LoadScene.Stop()")||strstr(line,"NEW_LOAD_SCENE_STOP")){
+  double since=atomic_exchange(&loadSceneSince,0);
+  if(since>0&&timeMS(CLOCK_MONOTONIC)-since>3000){char out[96];snprintf(out,sizeof out,"Load scene finished after %.1f s.",(timeMS(CLOCK_MONOTONIC)-since)/1000);pg_log(out);}
+ }
+}
+static int64_t guardNudge(int64_t result){
+ static int64_t slice=-1;static _Atomic double holdingSince;
+ if(slice<0){const char *v=getenv("PG_GUARD_NUDGE_MB");long mb=v?atol(v):16;slice=(int64_t)(mb>=0&&mb<=256?mb:16)<<20;}
+ if(result!=0||!slice){atomic_store(&holdingSince,0);return result;}
+ struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);double t=now.tv_sec+now.tv_nsec/1e9;
+ double since=atomic_load(&holdingSince);
+ if(since==0){atomic_store(&holdingSince,t);return result;}
+ const bool loading=atomic_load(&loadSceneSince)>0;
+ if(t-since<(loading?0.25:1.5))return result;
+ atomic_store(&holdingSince,t);atomic_fetch_add(&memoryBudgetNudges,1);
+ return loading?-(slice>(96ll<<20)?slice:(96ll<<20)):-slice;
+}
 uint64_t pg_streaming_resource_memory(uint64_t engineAvailable){
  uint64_t available;
  int64_t result=(int64_t)engineAvailable;
- if(nativeProcessHeadroom(&available))result=pg_streaming_resource_budget((int64_t)engineAvailable,available,384ull*1048576,256ull*1048576);
+ if(nativeProcessHeadroom(&available))result=weaponGrant(guardNudge(pg_streaming_resource_budget((int64_t)engineAvailable,available,guardReserve(),guardBand())));
+ if(result>(int64_t)engineAvailable)result=(int64_t)engineAvailable;
  result=heapCeilingBudget(result);
  if(result<(int64_t)engineAvailable&&result<=0)atomic_fetch_add(result<0?&memoryBudgetEvictions:&memoryBudgetClamps,1);
  return (uint64_t)result;
@@ -198,6 +375,7 @@ static _Atomic double saveLoadedAt = -1e9;		// when the engine last read a save'
 void w2c_env_wasm_print_line_js(struct w2c_env *host, u64 address) {
   const char *line = pg_string(host, address);
   if (line[0] == '[' && strstr(line, "ReadScriptTreesFromLoadedPso")) atomic_store(&saveLoadedAt, timeMS(CLOCK_MONOTONIC));
+  pg_note_load_scene(line);
   pg_log(line);
 }
 void w2c_env_wasm_hang_line_js(struct w2c_env *host, u64 address) { pg_log(pg_string(host, address)); }
@@ -269,7 +447,8 @@ void w2c_env_0x5Ftzset_js(struct w2c_env *host, u64 zone, u64 daylight, u64 stan
 }
 
 u32 w2c_env_wasm_httpfs_manifest_js(struct w2c_env *host, u64 address, u32 capacity) {
-  FILE *file = fopen(manifestPath, "rb");
+  const char *mods = pg_assets_manifest_override();		// Mods change file sizes (NativeAssets.m)
+  FILE *file = fopen(mods ? mods : manifestPath, "rb");
   if (!file) return (u32)-1;
   fseek(file, 0, SEEK_END);
   long length = ftell(file);
@@ -666,6 +845,10 @@ static void pg_apply_targeting_mode(w2c_game *instance) {
   char line[96]; snprintf(line, sizeof line, "Targeting mode set to %d.", mode); pg_log(line);
 }
 u64 PG_FN_OPERATOR_NEW(w2c_game*, u64); // operator new
+// Used outside the simulator tests below too (the weapon streaming guard, the saved-cash restore).
+u32 PG_FN_STAT_GET_INT(w2c_game*, u32, u64, u32); // stats_commands::CommandStatGetInt
+u32 PG_FN_WEAPON_ENTITY(w2c_game*, u32, u32); // weapon_commands::CommandGetCurrentPedWeaponEntityIndex
+u32 PG_FN_SELECTED_WEAPON(w2c_game*, u32); // weapon_commands::CommandGetSelectedPedWeapon
 u32 PG_FN_PLAYER_PED_ID(w2c_game*); // player_commands::CommandPlayerPedId
 void PG_FN_SET_ENTITY_COORDS_NO_OFFSET(w2c_game*, u32, u64, u32, u32, u32); // entity_commands::CommandSetEntityCoordsNoOffset
 #if TARGET_OS_SIMULATOR
@@ -684,7 +867,9 @@ static void pg_test_teleport(w2c_game *instance) {
   int fields = sscanf(target, "%f,%f,%f;%f,%f,%f;%f", &p[0][0], &p[0][1], &p[0][2], &p[1][0], &p[1][1], &p[1][2], &seconds);
   if (fields != 3 && fields != 7) return;
   const int period = fields == 7 && seconds >= 5 ? (int)(seconds * 30) : 0;
-  if (++frames < 900 || (frames - 900) % (period ? period : 1)) return;
+  const char *after = getenv("PG_TEST_TELEPORT_AFTER");		// seconds before the first move (default 30)
+  const int first = after ? atoi(after) * 30 : 900;
+  if (++frames < first || (frames - first) % (period ? period : 1)) return;
   if (!period) frames = -1;
   const float *t = p[jumps++ & 1];
   uint64_t vector = PG_FN_OPERATOR_NEW(instance, 32);
@@ -696,6 +881,8 @@ u32 PG_FN_STAT_GET_INT(w2c_game*, u32, u64, u32); // stats_commands::CommandStat
 static uint32_t pg_joaat(const char *text);
 u32 PG_FN_STAT_SET_INT(w2c_game*, u32, u32, u32); // stats_commands::CommandStatSetInt
 void PG_FN_DO_AUTO_SAVE(w2c_game*); // misc_commands::CommandDoAutoSave
+void PG_FN_SET_ENTITY_HEALTH(w2c_game*, u32, u32, u32); // entity_commands::CommandSetEntityHealth
+u32 PG_FN_PLAYER_PED_ID(w2c_game*); // PLAYER_PED_ID
 // Test (PG_TEST_CASH=1): every 30 s from about 30 s in, logs each character's cash stat (the save-load
 // cash guard above). PG_TEST_CASH=set first gives them 1111, 2222 and 3333 and autosaves, so a later
 // run can load a save with known amounts.
@@ -704,6 +891,15 @@ static void pg_test_cash(w2c_game *instance) {
   const char *mode = getenv("PG_TEST_CASH");
   if (!mode) return;
   ++frames;
+  // PG_TEST_CASH=spend: 30 s after the save loads, Set money to 500000 as Settings does; 15 s later the
+  // player dies, so the scripts charge the hospital bill through their own payment code.
+  // PG_TEST_CASH=die skips the Set money (a run on the autosave the spend run made at its end).
+  if ((!strcmp(mode, "spend") || !strcmp(mode, "die")) && atomic_load(&saveLoadedAt) >= 0) {
+    static int sinceLoad;
+    if (++sinceLoad == 900 && !strcmp(mode, "spend")) { pg_log("TEST: Set money 500000."); PGSetPlayerCash(500000); }
+    if (sinceLoad == 1350) { pg_log("TEST: the player dies (hospital bill)."); PG_FN_SET_ENTITY_HEALTH(instance, PG_FN_PLAYER_PED_ID(instance), 0, 0); }
+    if (sinceLoad == 2100 && !strcmp(mode, "spend")) { PG_FN_DO_AUTO_SAVE(instance); pg_log("TEST: autosave requested."); }
+  }
   if (!strcmp(mode, "set") && frames == 600) {
     for (int k = 0; k < 3; k++) { char name[16]; snprintf(name, sizeof name, "SP%d_TOTAL_CASH", k); PG_FN_STAT_SET_INT(instance, pg_joaat(name), 1111u * (k + 1), 1); }
     PG_FN_DO_AUTO_SAVE(instance);
@@ -722,6 +918,68 @@ static void pg_test_cash(w2c_game *instance) {
   if (!changed) return;
   char line[120]; snprintf(line, sizeof line, "TEST: cash SP0 %d SP1 %d SP2 %d (frame %d)", now[0], now[1], now[2], frames);
   pg_log(line);
+}
+f32 PG_FN_GET_ENTITY_SPEED(w2c_game*, u32); // entity_commands::CommandGetEntitySpeed
+u32 PG_FN_GET_ENTITY_MODEL(w2c_game*, u32); // entity_commands::CommandGetEntityModel
+u64 PG_FN_INSTRUCTIONAL_BUTTON(w2c_game*, u32, u32, u32); // pad_commands::CommandGetInputInstructionalButtonsString
+// Test (PG_TEST_PROMPTS=1): about 40 s in, logs the button glyphs the game would show for the mission
+// passed screen's inputs (215 ENDSCREEN_ACCEPT, 216 ENDSCREEN_EXPAND) next to FRONTEND_ACCEPT (201)
+// and FRONTEND_X (203) (GTA-48). Empty means "???" on screen.
+static void pg_test_prompts(w2c_game *instance) {
+  static int frames;
+  if (frames < 0 || !getenv("PG_TEST_PROMPTS") || ++frames < 1200) return;
+  frames = -1;
+  static const u32 inputs[4] = {215, 216, 201, 203};
+  for (int i = 0; i < 4; i++) {
+    u64 text = PG_FN_INSTRUCTIONAL_BUTTON(instance, 2, inputs[i], 1);
+    char line[160]; snprintf(line, sizeof line, "TEST: input %u shows \"%.80s\".", inputs[i], text ? pg_string(&env, text) : "");
+    pg_log(line);
+  }
+}
+u32 PG_FN_GET_PED_DRAWABLE(w2c_game*, u32, u32); // ped_commands::CommandGetPedDrawableVariation
+u32 PG_FN_GET_PED_TEXTURE(w2c_game*, u32, u32); // ped_commands::CommandGetPedTextureVariation
+// Test (PG_TEST_OUTFIT=1): 60 s after a save loads, logs the player's clothing (drawable/texture of the
+// 12 ped components), so a save and a reload can be compared (GTA-60).
+static void pg_test_outfit(w2c_game *instance) {
+  static int sinceLoad;
+  if (!getenv("PG_TEST_OUTFIT") || atomic_load(&saveLoadedAt) < 0 || ++sinceLoad != 1800 || PGGameStatus() & 16) return;
+  const u32 ped = PG_FN_PLAYER_PED_ID(instance);
+  char line[256]; int at = snprintf(line, sizeof line, "TEST: outfit");
+  for (u32 c = 0; c < 12; c++) at += snprintf(line + at, sizeof line - at, " %u:%u/%u", c, PG_FN_GET_PED_DRAWABLE(instance, ped, c), PG_FN_GET_PED_TEXTURE(instance, ped, c));
+  pg_log(line);
+}
+void PG_FN_GIVE_WEAPON(w2c_game*, u32, u32, u32, u32, u32); // weapon_commands::CommandGiveWeaponToPed
+u32 PG_FN_WEAPON_ENTITY(w2c_game*, u32, u32); // weapon_commands::CommandGetCurrentPedWeaponEntityIndex
+u32 PG_FN_SELECTED_WEAPON(w2c_game*, u32); // weapon_commands::CommandGetSelectedPedWeapon
+// Test (PG_TEST_WEAPON=1): 30 s after the world is ready, gives the player a pistol in hand, then logs
+// every 5 s whether its weapon object exists (the gun is visible and usable) (GTA-55).
+static void pg_test_weapon(w2c_game *instance) {
+  static int frames;
+  if (!getenv("PG_TEST_WEAPON") || PGGameStatus() & 16) return;
+  ++frames;
+  const u32 ped = PG_FN_PLAYER_PED_ID(instance);
+  if (frames == 900) { PG_FN_GIVE_WEAPON(instance, ped, pg_joaat("weapon_pistol"), 100, 0, 1); pg_log("TEST: pistol given and equipped."); }
+  if (frames > 900 && frames % 150 == 0 && frames < 900 + 150 * 12) {
+    char line[120]; snprintf(line, sizeof line, "TEST: selected weapon 0x%x, weapon object %u.", PG_FN_SELECTED_WEAPON(instance, ped), PG_FN_WEAPON_ENTITY(instance, ped, 0));
+    pg_log(line);
+  }
+}
+// Test (PG_TEST_SPEED=1): logs the player's speed (m/s) twice a second when it changes, to compare
+// walking, jogging and sprinting from the touch controls (GTA-46).
+static void pg_test_speed(w2c_game *instance) {
+  static int frames; static int last = -1;
+  if (!getenv("PG_TEST_SPEED") || ++frames % 15 || PGGameStatus() & 16) return;		// only once there is a player
+  static u32 model;		// which character is played (character switch tests)
+  u32 now = PG_FN_GET_ENTITY_MODEL(instance, PG_FN_PLAYER_PED_ID(instance));
+  if (now != model) {
+    model = now;
+    char line[96]; snprintf(line, sizeof line, "TEST: playing %s (model 0x%x, frame %d)", now == pg_joaat("player_zero") ? "Michael" : now == pg_joaat("player_one") ? "Franklin" : now == pg_joaat("player_two") ? "Trevor" : "someone else", now, frames);
+    pg_log(line);
+  }
+  int tenths = (int)(PG_FN_GET_ENTITY_SPEED(instance, PG_FN_PLAYER_PED_ID(instance)) * 10 + 0.5f);
+  if (abs(tenths - last) < 3) return;
+  last = tenths;
+  char line[64]; snprintf(line, sizeof line, "TEST: speed %.1f m/s (frame %d)", tenths / 10.0, frames); pg_log(line);
 }
 void PG_FN_SET_TV_CHANNEL(w2c_game*, u32); // graphics_commands::CommandSetTVChannel
 // Test (PG_TEST_TV=1): from about 45 s in, switches the TV on as a script does (SET_TV_CHANNEL),
@@ -746,6 +1004,80 @@ static void pg_test_video(w2c_game *instance) {
   uint32_t handle = PG_FN_PRELOAD_MOVIE(instance, 28366608, name);
   PG_FN_PLAY_MOVIE(instance, handle);
   char line[120]; snprintf(line, sizeof line, "TEST: video handle %u, the engine was held up %.0f ms.", handle, timeMS(CLOCK_MONOTONIC) - start); pg_log(line);
+}
+void PG_FN_TV_SETUP_LESTER1(w2c_game*); // CTVPlaylistManager::SetupLester1CB
+f32 PG_FN_TV_SCALE_TO_REAL_TIME(w2c_game*, f32); // CTVPlaylistManager::ScaleToRealTime
+u32 PG_FN_TV_CURRENT_SHOW_HASH(w2c_game*); // CTVPlaylistManager::GetCurrentShowNameHash
+void PG_FN_TV_SHOW_PLAY_TIME(w2c_game*, u64); // scrWrapped_GET_CURRENT_TV_SHOW_PLAY_TIME
+void PG_FN_TV_SHOW_DURATION(w2c_game*, u64); // scrWrapped_GET_CURRENT_TV_SHOW_DURATION
+u32 PG_FN_BEGIN_TAKE_HIGH_QUALITY_PHOTO(w2c_game*); // graphics_commands::CommandBeginTakeHighQualityPhoto
+u32 PG_FN_TAKE_HIGH_QUALITY_PHOTO_STATUS(w2c_game*); // graphics_commands::CommandGetStatusOfTakeHighQualityPhoto
+u32 PG_FN_BEGIN_LOW_QUALITY_PHOTO_COPY(w2c_game*, u32); // graphics_commands::CommandBeginCreateLowQualityCopyOfPhoto
+u32 PG_FN_LOW_QUALITY_PHOTO_COPY_STATUS(w2c_game*, u32); // graphics_commands::CommandGetStatusOfCreateLowQualityCopyOfPhoto
+static uint64_t pg_test_enter_script(w2c_game *instance);
+static void pg_test_leave_script(w2c_game *instance, uint64_t previous);
+// Test (PG_TEST_LESTER1_TV=1): about 45 s in, puts the Lifeinvader presentation of the mission
+// Friend Request (Lester1) on the TV the way the engine's own "Setup Lester1" debug button does
+// (playlist PL_SP_INV on channel 0), then logs every 2 s what GET_CURRENT_TV_SHOW_PLAY_TIME and
+// GET_CURRENT_TV_SHOW_DURATION would answer the mission script, and the state of the show's video.
+static void pg_test_lester1_tv(w2c_game *instance) {
+  static int frames;
+  if (!getenv("PG_TEST_LESTER1_TV") || ++frames < 1350) return;
+  if (frames == 1350) { pg_log("TEST: Lester1 presentation on the TV."); PG_FN_TV_SETUP_LESTER1(instance); return; }
+  if ((frames - 1350) % 60) return;
+  const int32_t channel = *(int32_t *)pg_pointer(&env, 28444788, 4);
+  uint64_t cached = *(uint64_t *)pg_pointer(&env, 28445104, 8), show = cached ? *(uint64_t *)pg_pointer(&env, cached, 8) : 0;
+  const float time = *(float *)pg_pointer(&env, 28444944, 4);
+  const float duration = show ? *(float *)pg_pointer(&env, show + 28, 4) : 0;
+  int32_t clock = 0, offset = 0;
+  if (channel >= 0 && channel < 4) { clock = *(int32_t *)pg_pointer(&env, 28444800 + 24ull * channel + 8, 4); offset = *(int32_t *)pg_pointer(&env, 28444800 + 24ull * channel + 12, 4); }
+  uint32_t handle = cached ? *(uint32_t *)pg_pointer(&env, cached + 8, 4) : 0, flags = 0; uint64_t bink = 0;
+  uint64_t movies = *(uint64_t *)pg_pointer(&env, 28366640, 8); uint16_t count = *(uint16_t *)pg_pointer(&env, 28366648, 2);
+  for (uint16_t i = 0; handle && i < count; i++) if (*(uint32_t *)pg_pointer(&env, movies + 160ull * i + 24, 4) == handle) {
+    bink = *(uint64_t *)pg_pointer(&env, movies + 160ull * i, 8); flags = *(uint32_t *)pg_pointer(&env, movies + 160ull * i + 96, 4);
+  }
+  // What the mission script gets: the natives themselves, called like a script does (+0 result pointer).
+  static uint64_t call; if (!call) call = PG_FN_OPERATOR_NEW(instance, 64);
+  uint64_t *info = pg_pointer(&env, call, 64); int32_t answers[2];
+  for (int k = 0; k < 2; k++) {
+    memset(info, 0, 64); info[0] = call + 32; info[2] = call + 40;
+    if (k == 0) PG_FN_TV_SHOW_PLAY_TIME(instance, call); else PG_FN_TV_SHOW_DURATION(instance, call);
+    answers[k] = *(int32_t *)pg_pointer(&env, call + 32, 4);
+  }
+  char line[320]; snprintf(line, sizeof line, "TEST: TV channel %d show 0x%08x: GET_CURRENT_TV_SHOW_PLAY_TIME %d ms, GET_CURRENT_TV_SHOW_DURATION %d ms (cached show %s, %u of %u ms; channel clock %d + %d, raw show time %.1f), video handle %u flags 0x%x player %s",
+    channel, PG_FN_TV_CURRENT_SHOW_HASH(instance), answers[0], answers[1], show ? "yes" : "no", show ? (uint32_t)(PG_FN_TV_SCALE_TO_REAL_TIME(instance, time) * 1000) : 0,
+    show ? (uint32_t)(PG_FN_TV_SCALE_TO_REAL_TIME(instance, duration) * 1000) : 0, clock, offset, time, handle, flags, bink ? "yes" : "no");
+  pg_log(line);
+}
+// Test (PG_TEST_PHOTO=1): about a minute in, takes a photo the way the phone camera script does
+// (BEGIN_TAKE_HIGH_QUALITY_PHOTO, then BEGIN_CREATE_LOW_QUALITY_COPY_OF_PHOTO for the phone's
+// screen) and logs each status change.
+static void pg_test_photo(w2c_game *instance) {
+  static int frames, stage, last = -1;
+  if (stage > 2 || !getenv("PG_TEST_PHOTO") || ++frames < 1800) return;
+  uint64_t previous = pg_test_enter_script(instance);
+  int status = -1;
+  if (stage == 0) { pg_log("TEST: taking a phone photo."); status = (int)PG_FN_BEGIN_TAKE_HIGH_QUALITY_PHOTO(instance); stage = 1; last = -1; }
+  else if (stage == 1) status = (int)PG_FN_TAKE_HIGH_QUALITY_PHOTO_STATUS(instance);
+  else status = (int)PG_FN_LOW_QUALITY_PHOTO_COPY_STATUS(instance, 0);
+  pg_test_leave_script(instance, previous);
+  if (status != last) { char line[96]; snprintf(line, sizeof line, "TEST: photo stage %d status %d (frame %d).", stage, status, frames); pg_log(line); last = status; }
+  if (stage == 1 && status != 0 && frames > 1801) {
+    const uint8_t *low = pg_pointer(&env, 0, 4); // a JPEG written to address 0 (the old memory file bug)
+    char bytes[96]; snprintf(bytes, sizeof bytes, "TEST: memory at address 0: %02x %02x %02x %02x.", low[0], low[1], low[2], low[3]); pg_log(bytes);
+    // PG_TEST_PHOTO=corrupt: the photo's JPEG then starts like the one in the player's log (GTA-21).
+    uint64_t jpeg = atomic_load(&pgTestLastMemoryFile);
+    if (!strcmp(getenv("PG_TEST_PHOTO"), "corrupt") && jpeg) {
+      uint8_t *start = pg_pointer(&env, jpeg, 2); start[0] = 0x00; start[1] = 0x5f;
+      pg_log("TEST: the photo's JPEG now starts with 00 5f.");
+    }
+    previous = pg_test_enter_script(instance);
+    int started = (int)PG_FN_BEGIN_LOW_QUALITY_PHOTO_COPY(instance, 0);
+    pg_test_leave_script(instance, previous);
+    char line[96]; snprintf(line, sizeof line, "TEST: low quality copy requested (%d).", started); pg_log(line);
+    stage = 2; last = -1;
+  } else if (stage == 2 && status != 0) { pg_log("TEST: photo finished."); stage = 3; }
+  if (frames > 1800 + 30 * 60 && stage < 3) { pg_log("TEST: photo still not finished after 60 s."); stage = 3; }
 }
 void PG_FN_REQUEST_MODEL(w2c_game*, u32); // streaming_commands::CommandRequestModel
 u32 PG_FN_HAS_MODEL_LOADED(w2c_game*, u32); // streaming_commands::HasModelLoaded
@@ -890,8 +1222,46 @@ static void pg_keep_on_test_map(w2c_game *instance) {
 // changes the station, so the touch button asks for the next weapon the way a script does:
 // GET_CURRENT_PED_VEHICLE_WEAPON (f63032), then SET_CURRENT_PED_VEHICLE_WEAPON (f63031) on the next
 // known aircraft weapon until one is accepted (it refuses weapons the vehicle doesn't have).
+void PG_FN_REDUCE_PED_MODEL_BUDGET(w2c_game*, u32);
+void PG_FN_REDUCE_VEHICLE_MODEL_BUDGET(w2c_game*, u32);
+void PG_FN_PED_DENSITY_THIS_FRAME(w2c_game*, f32);
+void PG_FN_VEHICLE_DENSITY_THIS_FRAME(w2c_game*, f32);
+void PG_FN_PARKED_DENSITY_THIS_FRAME(w2c_game*, f32);
+void PG_FN_LOD_SCALE_THIS_FRAME(w2c_game*, f32);
+// Lite build (PG_LITE): below the PC game's lowest settings, the way the consoles ran it. The game's
+// own switches for heavy missions keep fewer ambient ped and vehicle models loaded; every frame fewer
+// people and cars are placed and detail starts closer (measured: about 50 MB more headroom at a
+// 2.3 GB limit, and no eviction churn). Scripts that set these themselves
+// (missions, cutscenes) run later in the frame and win. PG_LITE_DENSITY and PG_LITE_LOD tune it.
+static void pg_apply_lite(w2c_game *instance) {
+  static int lite = -1; static float density = 0.45f, lod = 0.7f; static unsigned frames;
+  if (lite < 0) {
+    const char *flag = getenv("PG_LITE"), *d = getenv("PG_LITE_DENSITY"), *l = getenv("PG_LITE_LOD");
+    lite = flag && strcmp(flag, "0") && !(getenv("PG_LITE_WORLD") && !strcmp(getenv("PG_LITE_WORLD"), "0"));
+    if (d) density = fmaxf(0, fminf(1, (float)atof(d)));
+    if (l) lod = fmaxf(0.3f, fminf(1, (float)atof(l)));
+    if (lite) { char line[120]; snprintf(line, sizeof line, "Lite: fewer ambient models, density %.2f, detail distance %.2f.", density, lod); pg_log(line); }
+  }
+  if (!lite) return;
+  if (frames++ % 60 == 0) { PG_FN_REDUCE_PED_MODEL_BUDGET(instance, 1); PG_FN_REDUCE_VEHICLE_MODEL_BUDGET(instance, 1); }
+  PG_FN_PED_DENSITY_THIS_FRAME(instance, density);
+  PG_FN_VEHICLE_DENSITY_THIS_FRAME(instance, density);
+  PG_FN_PARKED_DENSITY_THIS_FRAME(instance, density);
+  if (lod < 1) PG_FN_LOD_SCALE_THIS_FRAME(instance, lod);
+}
 u32 PG_FN_GET_ENTITY_MODEL(w2c_game*, u32); // entity_commands::CommandGetEntityModel
 u32 PG_FN_STAT_SET_INT(w2c_game*, u32, u32, u32); // stats_commands::CommandStatSetInt
+// The story scripts keep each character's balance in a script global (Global_68115[character]) and
+// write the SPn_TOTAL_CASH stat from it after every purchase or payment. The globals' first block is
+// at *(15408128); an array's size comes first (3), the balances follow. NULL if it isn't there, or
+// with PG_CASH_GLOBAL=0 (comparisons).
+static int64_t *pg_cash_balance(int character) {
+  const char *setting = getenv("PG_CASH_GLOBAL");
+  if ((setting && !strcmp(setting, "0")) || character < 0 || character > 2 || env.memory.size < 15408136) return NULL;
+  const uint64_t globals = *(uint64_t *)pg_pointer(&env, 15408128, 8), balances = globals ? globals + 68115ull * 8 : 0;
+  if (!balances || balances + 32 > env.memory.size || *(int32_t *)pg_pointer(&env, balances, 4) != 3) return NULL;
+  return (int64_t *)pg_pointer(&env, balances + 8 * (1 + (uint64_t)character), 8);		// script values are 8 bytes
+}
 // Story cheat "Set money" (Settings): writes SPn_TOTAL_CASH of the character being played, the
 // stat the game's money display and shops read. Michael is player_zero, Franklin player_one,
 // Trevor player_two; any other model (Sandbox's) has no story cash.
@@ -909,6 +1279,14 @@ static void pg_apply_cash_request(w2c_game *instance) {
     pg_log(line); return;
   }
   char stat[16]; snprintf(stat, sizeof stat, "SP%d_TOTAL_CASH", character);
+  // The stat alone would be overwritten from the scripts' balance (or a purchase above the old
+  // balance refused) by the next transaction, so both are set.
+  int64_t *balance = pg_cash_balance(character);
+  if (balance) {
+    snprintf(line, sizeof line, "Set money: the scripts' balance for character %d was %d.", character, (int32_t)*balance);
+    pg_log(line);
+    *balance = amount;
+  } else pg_log("Set money: the scripts' balance wasn't found; only the stat changes.");
   PG_FN_STAT_SET_INT(instance, pg_joaat(stat), (u32)amount, 1);
   snprintf(line, sizeof line, "Set money: %s set to %lld.", stat, (long long)amount);
   pg_log(line);
@@ -954,13 +1332,28 @@ static void pg_next_aircraft_weapon(w2c_game *instance) {
   snprintf(line, sizeof line, "Aircraft weapon: no other weapon on this aircraft (current 0x%x%s).", current, found ? "" : ", none");
   pg_log(line);
 }
+uint32_t PGCurrentTouchContext(void);
+static void pg_keep_weapon_loaded(w2c_game *instance) {
+  static int frames; static uint32_t unarmed;
+  if (++frames % 15 || PGGameStatus() & 16 || PGCurrentTouchContext() != 0) return;		// on foot, twice a second
+  if (!unarmed) unarmed = pg_joaat("weapon_unarmed");
+  const u32 ped = PG_FN_PLAYER_PED_ID(instance), weapon = PG_FN_SELECTED_WEAPON(instance, ped);
+  if (!weapon || weapon == unarmed || PG_FN_WEAPON_ENTITY(instance, ped, 0)) return;
+  if (timeMS(CLOCK_MONOTONIC) > atomic_load(&weaponGrantUntil)) {
+    static _Atomic int logged;
+    if (atomic_fetch_add(&logged, 1) < 3) { char line[96]; snprintf(line, sizeof line, "Memory guard: making room for the selected weapon (0x%x).", weapon); pg_log(line); }
+  }
+  atomic_store(&weaponGrantUntil, timeMS(CLOCK_MONOTONIC) + 2000);
+}
 void pg_virtual_pad_apply(w2c_game *instance, uint64_t pad) {
   if (pad == 12840656) pg_next_aircraft_weapon(instance);
   if (pad == 12840656) pg_apply_cash_request(instance);
+  if (pad == 12840656) pg_apply_lite(instance);
   if (pad == 12840656) pg_apply_targeting_mode(instance);
   if (pad == 12840656) pg_keep_on_test_map(instance);
+  if (pad == 12840656) pg_keep_weapon_loaded(instance);
 #if TARGET_OS_SIMULATOR
-  if (pad == 12840656) { pg_test_teleport(instance); pg_test_cash(instance); pg_test_tv(instance); pg_test_video(instance); pg_test_car(instance); pg_test_request_models(instance); pg_test_loadscene(instance); pg_test_loadscene_monitor(instance); }
+  if (pad == 12840656) { pg_test_teleport(instance); pg_test_speed(instance); pg_test_weapon(instance); pg_test_outfit(instance); pg_test_prompts(instance); pg_test_cash(instance); pg_test_tv(instance); pg_test_video(instance); pg_test_lester1_tv(instance); pg_test_photo(instance); pg_test_car(instance); pg_test_request_models(instance); pg_test_loadscene(instance); pg_test_loadscene_monitor(instance); }
 #endif
   if (pad != 12840656 || !atomic_load(&virtualPadActive)) return;
   uint64_t packed = atomic_load(&virtualPad);
@@ -1019,6 +1412,20 @@ void pg_movie_wait(w2c_game *instance, uint64_t movie) {
     return;
   }
   PG_FN_SYS_IPC_SLEEP(instance, 1);
+}
+// The show GET_CURRENT_TV_SHOW_PLAY_TIME, GET_CURRENT_TV_SHOW_DURATION and IS_TVSHOW_CURRENTLY_PLAYING
+// answer about (Scripts/prepare_tv_without_video.py). The engine only counts a show whose video has
+// loaded (the cached show), and no video ever loads here, so these answered 0 and a mission that
+// waits for a moment in a show waited forever (Friend Request, GTA-22). Without a cached show they
+// answer about the channel's current show from its playlist, as GET_CURRENT_TV_CLIP_NAMEHASH does:
+// its play time moves on with the channel's clock. Both addresses hold a pointer to the show's info.
+u64 pg_tv_current_show(w2c_game *instance, u64 cached, u64 current, u64 channel) {
+  uint64_t show = *(uint64_t *)pg_pointer(&env, cached, 8);
+#if TARGET_OS_SIMULATOR
+  if (getenv("PG_TEST_TV_SHOW_OLD")) return show; // reproduces the old behaviour
+#endif
+  if (show || *(int32_t *)pg_pointer(&env, channel, 4) == -1) return show;
+  return current;
 }
 // GET_INDEX_OF_CURRENT_LEVEL for scripts (Scripts/prepare_level_index.py). PG_LEVEL_INDEX_OVERRIDE
 // answers a fixed index instead (test hook). Each new index the game reports is logged once.
@@ -1097,15 +1504,28 @@ static void pg_fence_dump(uint64_t map, const char *tag) {
 // so every load lost the money. Writes of 0 to those stats within a minute of a save being read (the
 // engine logs "ReadScriptTreesFromLoadedPso" for each) are dropped; every cash write is logged.
 // PG_CASH_GUARD=0 lets them through (comparisons).
+// The scripts zeroed their balance global too (it is copied back from the stat only when signed in to
+// Rockstar's network, which never happens here), so the next payment would have started from $0:
+// the kept amount is copied into the balance as well.
 u32 pg_stat_set_int(w2c_game *instance, u32 stat, u32 value) {
-  (void)instance;
   static uint32_t cash[3];
+  static uint64_t out;
   if (!cash[0]) { cash[0] = pg_joaat("SP0_TOTAL_CASH"); cash[1] = pg_joaat("SP1_TOTAL_CASH"); cash[2] = pg_joaat("SP2_TOTAL_CASH"); }
   for (int k = 0; k < 3; k++) if (stat == cash[k]) {
     const char *guard = getenv("PG_CASH_GUARD");
     bool drop = value == 0 && timeMS(CLOCK_MONOTONIC) - atomic_load(&saveLoadedAt) < 60000 && !(guard && !strcmp(guard, "0"));
-    char line[120]; snprintf(line, sizeof line, "Stat SP%d_TOTAL_CASH set to %d%s.", k, (int32_t)value, drop ? ": kept the saved amount (still loading)" : "");
+    char line[160]; snprintf(line, sizeof line, "Stat SP%d_TOTAL_CASH set to %d%s.", k, (int32_t)value, drop ? ": kept the saved amount (still loading)" : "");
     pg_log(line);
+    int64_t *balance = drop ? pg_cash_balance(k) : NULL;
+    if (balance) {
+      if (!out) out = PG_FN_OPERATOR_NEW(instance, 16);
+      int32_t *kept = pg_pointer(&env, out, 4); *kept = 0;
+      if (PG_FN_STAT_GET_INT(instance, stat, out, (u32)-1) && *kept > 0 && *balance != *kept) {
+        snprintf(line, sizeof line, "Stat SP%d_TOTAL_CASH: the scripts' balance was %d, set to the kept %d.", k, (int32_t)*balance, *kept);
+        pg_log(line);
+        *balance = *kept;
+      }
+    }
     return drop;
   }
   return 0;
@@ -1406,6 +1826,12 @@ static void *boot(void *ignored) {
   const char *defaultQuality[]={"-shaderQuality=1","-textureQuality=0","-pedVariety=0","-vehicleVariety=0","-shadowQuality=-1","-reflectionQuality=0","-particleQuality=0","-grassQuality=0","-cityDensity=0","-lodScale=0","-pedLodBias=0","-vehicleLodBias=0"};
   const char *options[64];unsigned optionCount=0;
   for(unsigned i=0;i<sizeof base/sizeof *base;i++)options[optionCount++]=base[i];
+  // The text the release scripts use is in the release language archives (x64/data/lang/<language>_REL.rpf);
+  // without the suffix the game loads the development ones and shows "<label> missing" (GTA-49).
+  // PG_LANG_SUFFIX= (empty) loads the old ones, for comparisons.
+  const char *langSuffix=getenv("PG_LANG_SUFFIX");static char langOption[48];
+  snprintf(langOption,sizeof langOption,"-langfilesuffix=%s",langSuffix?langSuffix:"_REL");
+  if(!langSuffix||*langSuffix)options[optionCount++]=langOption;
   // Benchmarks keep the measured low profile so results stay comparable.
   if(configuredQualityCount&&!benchmarkEnabled())for(unsigned i=0;i<configuredQualityCount;i++)options[optionCount++]=configuredQuality[i];
   else for(unsigned i=0;i<sizeof defaultQuality/sizeof *defaultQuality;i++)options[optionCount++]=defaultQuality[i];
@@ -1446,6 +1872,8 @@ void PGStartEngine(const char *path, const char *filesRoot, PGLogCallback callba
   manifestPath = strdup(path);
   pg_files_init(filesRoot);
   logCallback = callback; logContext = context;
+  for (int i = 0; i < earlyCount; i++) logCallback(earlyLines[i], logContext);
+  earlyCount = 0;
   pg_assets_configure(path, filesRoot);
   pthread_attr_t attributes;
   pthread_attr_init(&attributes);
@@ -1462,8 +1890,93 @@ void PGStartEngine(const char *path, const char *filesRoot, PGLogCallback callba
 // The last indirect call that failed the fast check on this thread (Scripts/prepare_trap_context.py).
 static _Thread_local const char *indirectFunction;
 static _Thread_local uint32_t indirectIndex,indirectSize;
+// Test (PG_TEST_CONTROLS=1, Scripts/prepare_control_trace.py): every 3 s, which controls scripts read
+// and the strongest answer each got, e.g. "N2:31=1.00" (GET_CONTROL_NORMAL of input 31 reached 1).
+// Kinds: P pressed, V value, N normal, DP disabled pressed, DN disabled normal.
+static _Atomic float controlMax[5][400];
+static _Atomic uint32_t controlReads[5][400];
+// When scripts last asked for each input (any control, any kind): the touch controls show a button for
+// an input a mission polls that has none on screen (GTA-51, PGInputPolledWithin).
+static _Atomic double inputPolledAt[400];
+int PGInputPolledWithin(int action, double ms) {
+  if (action < 0 || action >= 400) return 0;
+  double at = atomic_load_explicit(&inputPolledAt[action], memory_order_relaxed);
+  return at > 0 && timeMS(CLOCK_MONOTONIC) - at < ms;
+}
+void pg_control_read(u32 kind, u32 control, u32 action, f32 value) {
+  if (action < 400) atomic_store_explicit(&inputPolledAt[action], timeMS(CLOCK_MONOTONIC), memory_order_relaxed);
+  static int on = -1;
+  if (on < 0) on = getenv("PG_TEST_CONTROLS") != NULL;
+  if (!on || kind > 4 || action >= 400) return;
+  (void)control;
+  atomic_fetch_add(&controlReads[kind][action], 1);
+  float magnitude = fabsf(kind == 1 ? (value - 127.f) / 127.f : value);
+  if (magnitude > atomic_load(&controlMax[kind][action])) atomic_store(&controlMax[kind][action], magnitude);
+  static _Atomic double next;
+  double now = timeMS(CLOCK_MONOTONIC);
+  if (now < atomic_load(&next)) return;
+  atomic_store(&next, now + 3000);
+  static const char *names[5] = {"P", "V", "N", "DP", "DN"};
+  char line[1024]; int at = snprintf(line, sizeof line, "TEST: controls read:");
+  for (int k = 0; k < 5; k++) for (int a = 0; a < 400; a++) {
+    if (!atomic_exchange(&controlReads[k][a], 0)) continue;
+    float m = atomic_exchange(&controlMax[k][a], 0);
+    if (at < (int)sizeof line - 24) at += snprintf(line + at, sizeof line - at, " %s:%d=%.2f", names[k], a, m);
+  }
+  pg_log(line);
+}
+// The pause menu's input waits for its "ready" call (Scripts/prepare_pause_ready.py, GTA-22); after
+// PG_PAUSE_READY_MS (default 2000, 0 = wait as the game does) it takes input anyway. Both are logged.
+static _Atomic double pauseOpenedAt;
+static _Atomic int pauseReadyLogged;
+void pg_pause_opened(void) { atomic_store(&pauseOpenedAt, timeMS(CLOCK_MONOTONIC)); atomic_store(&pauseReadyLogged, 0); }
+u32 pg_pause_input_ready(u32 ready) {
+  static long limit = -1;
+  if (limit < 0) { const char *v = getenv("PG_PAUSE_READY_MS"); limit = v ? atol(v) : 2000; }
+  const double since = timeMS(CLOCK_MONOTONIC) - atomic_load(&pauseOpenedAt);
+  if (ready == 1) {
+    if (!atomic_exchange(&pauseReadyLogged, 1)) { char line[96]; snprintf(line, sizeof line, "Pause menu: ready %.0f ms after opening.", since); pg_log(line); }
+    return ready;
+  }
+  if (!limit || since < limit) return ready;
+  if (atomic_exchange(&pauseReadyLogged, 2) != 2) { char line[120]; snprintf(line, sizeof line, "Pause menu: still not ready after %.0f ms; taking input anyway.", since); pg_log(line); }
+  return 1;
+}
+// Shader texture slots that outlive their texture (Scripts/prepare_stale_texture_slots.py, GTA-20/24).
+// grcEffect_Technique_Pass::Bind fills six per-stage arrays of 42 texture pointers at 12629008; a
+// freed texture or render target is cleared from them, and SetProgramResources skips a slot whose
+// object no longer looks like a texture instead of trapping in its GetTextureView call.
+static _Atomic uint64_t textureSlotsCleared, textureViewsSkipped;
+void pg_texture_freed(w2c_game *instance, u64 texture) {
+  (void)instance;
+  if (!texture || env.memory.size < 12631024) return;
+  _Atomic uint64_t *slot = (_Atomic uint64_t *)pg_pointer(&env, 12629008, 2016);
+  for (int i = 0; i < 252; i++) {
+    uint64_t held = texture;
+    if (atomic_load_explicit(&slot[i], memory_order_relaxed) == texture &&
+        atomic_compare_exchange_strong(&slot[i], &held, 0) && atomic_fetch_add(&textureSlotsCleared, 1) < 4) {
+      char line[120]; snprintf(line, sizeof line, "Shader texture slot %d still held a freed texture (0x%llx); cleared it.", i, (unsigned long long)texture);
+      pg_log(line);
+    }
+  }
+}
+u32 pg_texture_view_bad(w2c_game *instance, u64 texture) {
+  (void)instance;
+  const uint64_t size = env.memory.size;
+  bool bad = !texture;		// 0: the caller found its GetTextureView entry isn't a function of that type
+  if (texture) {
+    bad = texture + 8 > size;
+    if (!bad) { uint64_t vtable = *(uint64_t *)pg_pointer(&env, texture, 8); bad = vtable < 4096 || vtable + 200 > size; }
+  }
+  if (bad && atomic_fetch_add(&textureViewsSkipped, 1) < 8) {
+    char line[120]; snprintf(line, sizeof line, "Shader texture slot held a freed or invalid texture (0x%llx); skipped it.", (unsigned long long)texture);
+    pg_log(line);
+  }
+  return bad;
+}
 void pg_note_call_indirect(const char *function,uint32_t index,uint32_t size){indirectFunction=function;indirectIndex=index;indirectSize=size;}
 void pg_record_trap(int code) {
+  pg_invoke_top=NULL; // the trap leaves every invoke_* on this thread, so their jump points are gone
   void *frames[20];int count=backtrace(frames,20);char line[160];
   snprintf(line,sizeof line,"Native trap %d; app image base %p",code,_dyld_get_image_header(0));pg_log(line);
   // Names the engine function (w2c_game_fN) for an invalid indirect call, which native frames can't do.
@@ -1478,4 +1991,34 @@ uint32_t PGGraphicsWait(uint64_t address,uint32_t expected,int64_t timeoutNs){re
 void w2c_env_wgpu_start_worker(struct w2c_env *host,u64 ring,u64 size,u64 debug){
   pg_log("Connecting game graphics commands to native Metal.");
   PGStartGraphics((void *)env.memory.data,env.memory.max_pages*env.memory.page_size,ring,size,debug);
+}
+
+// REQUEST_SCALEFORM_MOVIE for a movie the game files don't have (Scripts/prepare_missing_scaleform.py):
+// the barber asks for COLOUR_SWITCHER_01/02 and waited for them until it gave up without a menu (GTA-43).
+// The request is made again for midsized_message, which every game version has and which draws nothing
+// until a script asks it to show a message; the name string is rewritten so later requests go straight
+// there. Script commands run on one thread.
+u32 PG_FN_REQUEST_SCALEFORM_MOVIE(w2c_game*, u64, u32, u32); // graphics_commands::CommandRequestScaleformMovieCommon
+static u32 scaleformFlags[2]; static bool scaleformStandIn;
+void pg_scaleform_request_begin(w2c_game *instance, u64 name, u32 a, u32 b) {
+  (void)instance; (void)name;
+  if (!scaleformStandIn) { scaleformFlags[0] = a; scaleformFlags[1] = b; }
+}
+u32 pg_scaleform_missing(w2c_game *instance, u64 name) {
+  static const char standIn[] = "midsized_message";
+  if (scaleformStandIn) return 0; // the stand-in failed too
+  size_t length = strnlen(pg_string(&env, name), 64);
+  char line[200];
+  if (length < sizeof standIn - 1) {
+    snprintf(line, sizeof line, "Scaleform movie \"%.64s\" isn't in the game files.", pg_string(&env, name));
+    pg_log(line);
+    return 0;
+  }
+  snprintf(line, sizeof line, "Scaleform movie \"%.64s\" isn't in the game files; scripts get a blank one instead.", pg_string(&env, name));
+  pg_log(line);
+  memcpy(pg_pointer(&env, name, sizeof standIn), standIn, sizeof standIn);
+  scaleformStandIn = true;
+  u32 handle = PG_FN_REQUEST_SCALEFORM_MOVIE(instance, name, scaleformFlags[0], scaleformFlags[1]);
+  scaleformStandIn = false;
+  return handle;
 }

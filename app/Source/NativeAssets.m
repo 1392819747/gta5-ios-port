@@ -90,6 +90,61 @@ static BOOL assetBlockInFlight(PGAssetCondition *condition,uint64_t block){
   return NO;
 }
 
+// Mods (GitHub #3): files in the app's Mods folder (Files > GTA V Port > Mods) replace the game file
+// at the same path, e.g. Mods/common/data/handling.meta or Mods/x64/levels/gta5/vehicles.rpf. They are
+// read at launch: the game sees their sizes through a merged manifest, and their reads skip the
+// download cache. Archives must be encrypted like the game's own (AES); OPEN or unencrypted ones
+// would stop the game, so they are skipped with a log line.
+static NSDictionary<NSNumber *,NSString *> *modFiles;
+static NSString *modsManifest;
+const char *pg_assets_manifest_override(void){return modsManifest.fileSystemRepresentation;}
+static NSString *modsFolder(void){
+  const char *test=getenv("PG_MODS_FOLDER");
+  if(test&&*test)return @(test);
+  return [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"Mods"];
+}
+static NSArray *applyMods(NSArray *files,NSDictionary *manifest){
+  NSString *folder=modsFolder();NSFileManager *fm=NSFileManager.defaultManager;
+  [fm createDirectoryAtPath:folder withIntermediateDirectories:YES attributes:nil error:nil];
+  NSString *readme=[folder stringByAppendingPathComponent:@"README.txt"];
+  if(![fm fileExistsAtPath:readme])[@"Put a replacement game file here at the same path it has in the game files, for example\ncommon/data/handling.meta or x64/levels/gta5/vehicles.rpf. Mods are read when the game starts.\nArchives (.rpf) must be encrypted like the game's own; OPEN archives are skipped.\n" writeToFile:readme atomically:YES encoding:NSUTF8StringEncoding error:nil];
+  NSMutableDictionary *ids=[NSMutableDictionary dictionaryWithCapacity:files.count];
+  for(NSUInteger i=0;i<files.count;i++)ids[files[i][0]]=@(i);
+  NSMutableArray *merged=nil;NSMutableDictionary *mods=[NSMutableDictionary dictionary];
+  NSString *resolvedFolder=folder.stringByResolvingSymlinksInPath;
+  NSDirectoryEnumerator *walk=[fm enumeratorAtURL:[NSURL fileURLWithPath:folder] includingPropertiesForKeys:@[NSURLIsRegularFileKey,NSURLFileSizeKey,NSURLIsSymbolicLinkKey] options:NSDirectoryEnumerationSkipsHiddenFiles errorHandler:nil];
+  for(NSURL *url in walk){
+    NSNumber *regular,*link,*size;[url getResourceValue:&regular forKey:NSURLIsRegularFileKey error:nil];[url getResourceValue:&link forKey:NSURLIsSymbolicLinkKey error:nil];[url getResourceValue:&size forKey:NSURLFileSizeKey error:nil];
+    if(!regular.boolValue||link.boolValue)continue;
+    NSString *full=url.path.stringByResolvingSymlinksInPath;
+    if(![full hasPrefix:[resolvedFolder stringByAppendingString:@"/"]])continue;
+    NSString *relative=[full substringFromIndex:resolvedFolder.length+1];
+    if([relative isEqualToString:@"README.txt"])continue;
+    NSNumber *identity=ids[relative];
+    if(!identity){char line[PATH_MAX+80];snprintf(line,sizeof line,"Mods: %s is not a game file path; ignored.",relative.UTF8String);pg_log(line);continue;}
+    if([relative.pathExtension.lowercaseString isEqualToString:@"rpf"]){
+      uint32_t header[4]={0};FILE *file=fopen(full.fileSystemRepresentation,"rb");
+      size_t got=file?fread(header,4,4,file):0;if(file)fclose(file);
+      if(got!=4||header[0]!=0x52504637||header[3]!=0x0FFFFFF9){
+        char line[PATH_MAX+120];snprintf(line,sizeof line,"Mods: %s is not an archive encrypted like the game's (AES); skipped.",relative.UTF8String);pg_log(line);continue;
+      }
+    }
+    if(!merged)merged=[files mutableCopy];
+    NSUInteger index=identity.unsignedIntegerValue;
+    merged[index]=@[relative,size,@((uint64_t)NSDate.date.timeIntervalSince1970)];
+    mods[identity]=full;
+    char line[PATH_MAX+96];snprintf(line,sizeof line,"Mods: %s replaces the game's file (%llu bytes, was %llu).",relative.UTF8String,size.unsignedLongLongValue,[files[index][1] unsignedLongLongValue]);pg_log(line);
+  }
+  if(!merged)return files;
+  modFiles=mods;
+  NSMutableDictionary *out=[manifest mutableCopy];out[@"files"]=merged;
+  NSString *path=[NSTemporaryDirectory() stringByAppendingPathComponent:@"manifest-mods.json"];
+  if([[NSJSONSerialization dataWithJSONObject:out options:0 error:nil] writeToFile:path atomically:YES])modsManifest=path;
+  else {modFiles=nil;pg_log("Mods: the merged file list couldn't be written; mods are off.");return files;}
+  char line[96];snprintf(line,sizeof line,"Mods: %lu file%s replaced.",(unsigned long)mods.count,mods.count==1?"":"s");pg_log(line);
+  return merged;
+}
+
 static _Atomic bool assetsConfigured;
 void pg_assets_configure(const char *manifest,const char *root) {
   // The Settings preloader may configure the same cache before Play; the
@@ -98,7 +153,7 @@ void pg_assets_configure(const char *manifest,const char *root) {
   @autoreleasepool {
     NSData *data=[NSData dataWithContentsOfFile:@(manifest)];
     NSDictionary *parsed=[NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-    assetFiles=parsed[@"files"];
+    assetFiles=applyMods(parsed[@"files"],parsed);
     assetVersion=parsed[@"version"];
     NSMutableArray *locks=[NSMutableArray arrayWithCapacity:assetFiles.count];
     for(NSUInteger i=0;i<assetFiles.count;i++)[locks addObject:[PGAssetCondition new]];
@@ -279,7 +334,7 @@ static int64_t readLocalAsset(uint32_t id,uint64_t offset,uint8_t *destination,u
   NSArray *entry=assetFiles[id];uint64_t size=[entry[1] unsignedLongLongValue];
   if(!length||offset>=size)return 0;
   length=(uint32_t)MIN((uint64_t)length,size-offset);
-  NSString *file=[localDataRoot stringByAppendingPathComponent:entry[0]];
+  NSString *file=modFiles[@(id)]?:[localDataRoot stringByAppendingPathComponent:entry[0]];
   int descriptor=open(file.fileSystemRepresentation,O_RDONLY);
   if(descriptor<0){NSString *message=[@"Game file missing from your folder: " stringByAppendingString:entry[0]];pg_log(message.UTF8String);return -1;}
   uint64_t done=0;
@@ -299,7 +354,7 @@ static int64_t readLocalAsset(uint32_t id,uint64_t offset,uint8_t *destination,u
 }
 static int64_t readAssetImpl(uint32_t id,uint64_t offset,uint8_t *destination,uint32_t length) {
   if(id>=assetFiles.count)return -1;
-  if(localDataRoot)return readLocalAsset(id,offset,destination,length);
+  if(localDataRoot||modFiles[@(id)])return readLocalAsset(id,offset,destination,length);
   if(assetTraceFD>=0&&length){char record[96];int n=snprintf(record,sizeof record,"%u,%llu,%u\n",id,offset,length);if(n>0&&n<sizeof record)write(assetTraceFD,record,(size_t)n);}
 #if TARGET_OS_SIMULATOR
   if(assetStreamSimulation){
@@ -353,11 +408,60 @@ static void envTestMetaOverlay(uint32_t id,uint64_t offset,uint8_t *destination,
       memcpy(destination,(const uint8_t *)envTestMeta.bytes+offset,(size_t)MIN((uint64_t)count,envTestMeta.length-offset));
   }
 }
+// The mission passed screen asks for INPUT_FRONTEND_ENDSCREEN_ACCEPT and _EXPAND, which no control file
+// maps (on any device), so its prompts read "???" and Continue can't be pressed (GTA-48). The control
+// files get those mappings as the game reads them: the XML is compacted (whitespace between tags) to
+// make room and padded back to its size, so file sizes stay as the manifest says.
+static NSDictionary<NSString *,NSArray<NSArray<NSString *> *> *> *controlAdditions(void){
+  static NSDictionary *table;static dispatch_once_t once;
+  dispatch_once(&once,^{table=@{
+    @"common/data/control/standard_accept_cancel.meta":@[@[@"INPUT_FRONTEND_ENDSCREEN_ACCEPT",@"IOMS_PAD_DIGITALBUTTON",@"RDOWN"],@[@"INPUT_FRONTEND_ENDSCREEN_EXPAND",@"IOMS_PAD_DIGITALBUTTON",@"RLEFT"]],
+    @"common/data/control/alternate_accept_cancel.meta":@[@[@"INPUT_FRONTEND_ENDSCREEN_ACCEPT",@"IOMS_PAD_DIGITALBUTTON",@"RRIGHT"],@[@"INPUT_FRONTEND_ENDSCREEN_EXPAND",@"IOMS_PAD_DIGITALBUTTON",@"RLEFT"]],
+    @"x64/data/control/fixed.meta":@[@[@"INPUT_FRONTEND_ENDSCREEN_ACCEPT",@"IOMS_KEYBOARD",@"KEY_RETURN"],@[@"INPUT_FRONTEND_ENDSCREEN_EXPAND",@"IOMS_KEYBOARD",@"KEY_SPACE"]]};});
+  return table;
+}
+NSData *PGControlMetaRewrite(NSData *original,NSArray<NSArray<NSString *> *> *additions){
+  NSString *text=[[NSString alloc] initWithData:original encoding:NSUTF8StringEncoding];
+  if(!text||[text containsString:additions[0][0]])return nil;
+  NSRegularExpression *gaps=[NSRegularExpression regularExpressionWithPattern:@">\\s+<" options:0 error:nil];
+  NSMutableString *compact=[[gaps stringByReplacingMatchesInString:text options:0 range:NSMakeRange(0,text.length) withTemplate:@"><"] mutableCopy];
+  NSRange end=[compact rangeOfString:@"</Mappings>" options:NSBackwardsSearch];
+  if(end.location==NSNotFound)return nil;
+  NSMutableString *items=[NSMutableString string];
+  for(NSArray<NSString *> *a in additions)[items appendFormat:@"<Item><Input>%@</Input><Source>%@</Source><Parameters><Item>%@</Item></Parameters></Item>",a[0],a[1],a[2]];
+  [compact insertString:items atIndex:end.location];
+  NSMutableData *out=[[compact dataUsingEncoding:NSUTF8StringEncoding] mutableCopy];
+  if(out.length>original.length)return nil;
+  while(out.length<original.length)[out appendBytes:" " length:1];
+  return out;
+}
+static NSMutableDictionary<NSNumber *,NSData *> *controlMetas;
+static void controlMetaOverlay(uint32_t id,uint64_t offset,uint8_t *destination,int64_t count){
+  if(count<=0)return;
+  NSArray *additions=controlAdditions()[assetFiles[id][0]];
+  if(!additions)return;
+  NSData *rewritten;
+  @synchronized(controlAdditions()) {
+    if(!controlMetas)controlMetas=[NSMutableDictionary dictionary];
+    rewritten=controlMetas[@(id)];
+    if(!rewritten){
+      uint64_t size=[assetFiles[id][1] unsignedLongLongValue];
+      NSMutableData *original=[NSMutableData dataWithLength:(NSUInteger)size];
+      rewritten=readAssetImpl(id,0,original.mutableBytes,(uint32_t)size)==(int64_t)size?PGControlMetaRewrite(original,additions):nil;
+      controlMetas[@(id)]=rewritten?:[NSData data];
+      char line[200];snprintf(line,sizeof line,"Controls: %s %s.",[assetFiles[id][0] UTF8String],rewritten?"gets the mission passed screen's buttons":"has no room or is not the expected file; unchanged");pg_log(line);
+      rewritten=controlMetas[@(id)];
+    }
+  }
+  if(rewritten.length&&offset<rewritten.length)
+    memcpy(destination,(const uint8_t *)rewritten.bytes+offset,(size_t)MIN((uint64_t)count,rewritten.length-offset));
+}
 static int64_t readAsset(uint32_t id,uint64_t offset,uint8_t *destination,uint32_t length){
   assetReadNetworkMS=assetReadLockMS=0;assetReadNetworkBytes=0;assetReadSource=2;
   double healthStart=assetNowMS();
   double start=assetTimingFD>=0?healthStart:0;int64_t result=readAssetImpl(id,offset,destination,length);
   envTestMetaOverlay(id,offset,destination,result);
+  controlMetaOverlay(id,offset,destination,result);
   double took=assetNowMS()-healthStart;
   atomic_fetch_add(&healthReads,1);atomic_fetch_add(&healthReadMicros,(uint64_t)(took*1000));
   if(result<0)atomic_fetch_add(&healthReadErrors,1);

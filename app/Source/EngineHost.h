@@ -61,6 +61,10 @@ PGControlHints PGReadControlHints(uint32_t touchContext);
 void PGNextAircraftWeapon(void);
 /// Story cheat "Set money": the playing character's cash becomes `amount` at the next engine frame.
 void PGSetPlayerCash(int32_t amount);
+/// Seconds the engine has been in a load scene (respawn, warp, story transition), 0 when none.
+int PGLoadSceneSeconds(void);
+/// Whether a script asked for input `action` (the engine's input id) in the last `ms` milliseconds.
+int PGInputPolledWithin(int action, double ms);
 /// Presses Start (opens the pause menu, or closes it when open): held for the next three engine frames.
 void PGRequestPauseMenu(void);
 // Keyboard and mouse, through the game's own PC input (the block the browser build wrote): key
@@ -102,5 +106,9 @@ void PGFillAudio(float *left, float *right, uint32_t count);
 // Health counters for the periodic log line.
 uint64_t PGMemoryBudgetQueries(void);
 uint64_t PGMemoryBudgetClamps(void);
+/// Memory the renderer's textures hold on the GPU (estimated in the simulator, where it isn't in the footprint).
+uint64_t PGGPUTextureBytes(void);
+/// Logs how much of each engine memory pool iOS really holds (diagnostics, every minute).
+void PGLogMemoryPools(void);
 uint64_t PGMemoryBudgetEvictions(void);
 void PGAssetHealth(uint64_t out[6]);
