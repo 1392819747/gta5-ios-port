@@ -10,6 +10,7 @@
 #include <errno.h>
 #include "NativePackedAssetCache.h"
 #include "NativeAssetPreload.h"
+#include "NativeOIV.h"
 
 // A language choice requested by the native app when the WASM engine boots.
 // This does not guarantee the underlying web game uses the locale or has the necessary fonts.
@@ -29,10 +30,13 @@ const char *PGSelectedGameLanguage(void) {
 
 // The server that holds your own copy of the game files (set in the app).
 static NSString *assetServer=@"";
+static void PGReapplyMods(void);static bool modsWantLocal;static bool modsLocked;static NSArray *modsBaseFiles;
 void PGSetAssetServer(const char *url){
   NSString *value=[[NSString stringWithUTF8String:url?url:""] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
   while([value hasSuffix:@"/"])value=[value substringToIndex:value.length-1];
   assetServer=value;
+  // Mods installed since the file list was first read (Settings › Mods on the home screen) count too.
+  if(modsBaseFiles&&!modsLocked)PGReapplyMods();
 }
 NSString *PGAssetServer(void){return assetServer;}
 
@@ -42,6 +46,9 @@ static NSString *localDataRoot;
 void PGSetLocalGameFolder(const char *dataPath){
   localDataRoot=dataPath&&*dataPath?[NSString stringWithUTF8String:dataPath]:nil;
   if(localDataRoot)pg_log("Game files are read from the folder on this device; no server is used.");
+  // The file list may have been loaded before the folder was known (home screen); mods inside archives
+  // and add-on packs need the folder, so they are applied again now, before the engine starts.
+  if(localDataRoot&&modsBaseFiles&&!modsLocked)PGReapplyMods();
 }
 bool PGUsingLocalGameFolder(void){return localDataRoot!=nil;}
 #include "NativeAssetHints.h"
@@ -97,55 +104,265 @@ static BOOL assetBlockInFlight(PGAssetCondition *condition,uint64_t block){
 // would stop the game, so they are skipped with a log line.
 static NSDictionary<NSNumber *,NSString *> *modFiles;
 static NSString *modsManifest;
-const char *pg_assets_manifest_override(void){return modsManifest.fileSystemRepresentation;}
+// Read by the engine when it starts: by then a game folder on the device would have been set.
+const char *pg_assets_manifest_override(void){
+  modsLocked=true;   // the engine has the file list now: mods stay as they are until the next launch
+  if(modsWantLocal){static bool told;if(!told){told=true;pg_log("Mods: cars, skins and add-on packs inside the game's archives need the game files on this iPhone (Game files > A folder on this iPhone); with a server they are not loaded. Whole-file mods still work.");}}
+  return modsManifest.fileSystemRepresentation;
+}
 static NSString *modsFolder(void){
   const char *test=getenv("PG_MODS_FOLDER");
   if(test&&*test)return @(test);
   return [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"Mods"];
 }
+// The game's file index for the mod installer (App/ModInstaller.swift): every file inside the archives,
+// written by the engine as it opens them (EngineHost.c), with the game files' version on its first line.
+const char *pg_game_index_path(void){
+  static char path[PATH_MAX];
+  if(!path[0])snprintf(path,sizeof path,"%s/game-file-index.txt",[NSSearchPathForDirectoriesInDomains(NSCachesDirectory,NSUserDomainMask,YES).firstObject fileSystemRepresentation]);
+  return path;
+}
+const char *pg_game_files_version(void){static char version[128];snprintf(version,sizeof version,"%s",(assetVersion?:@"current").UTF8String);return version;}
+// An archive name as the engine reports it, as a game file path ("platform:\dlcPacks\x\dlc.rpf" ->
+// "x64/dlcPacks/x/dlc.rpf"); false for archives inside other archives ("dlcMPBeach:/...").
+bool pg_mods_archive_path(const char *enginePath,char *out,size_t cap){
+  size_t n=0;const char *s=enginePath;
+  if(!strncmp(s,"/game/",6))s+=6;
+  if(!strncasecmp(s,"platform:",9)){s+=9;if(*s=='/'||*s=='\\')s++;n=(size_t)snprintf(out,cap,"x64/");}
+  else if(strchr(s,':')){snprintf(out,cap,"%s",s);return false;}
+  for(;*s&&n<cap-1;s++)out[n++]=*s=='\\'?'/':*s;
+  out[n]=0;return true;
+}
+// The Mods folder for the script mod layer (Source/NativeASI.c), as a C path.
+const char *pg_mods_folder_path(void){
+  static char path[PATH_MAX];
+  if(!path[0])snprintf(path,sizeof path,"%s",modsFolder().fileSystemRepresentation);
+  return path;
+}
+// Mods use the PC game's paths (OpenIV): x64e.rpf/levels/..., common.rpf/data/..., update/update.rpf/common/...,
+// update/x64/dlcpacks/<pack>/dlc.rpf. The web build's game files have the PC's top-level archives unpacked
+// (x64/..., common/...) and keep the packs in x64/dlcPacks, so those paths are translated; names match
+// regardless of case (mods write vehicleaihandlinginfo.meta, the game has VehicleaiHandlingInfo.meta).
+static bool isGameLocation(NSString *folder){
+  NSString *f=folder.lowercaseString;
+  return [f isEqualToString:@"x64"]||[f isEqualToString:@"common"]||[f isEqualToString:@"common.rpf"]||[f isEqualToString:@"update"]||[f isEqualToString:@"mods"]||
+    [f rangeOfString:@"^x64[a-z]?\\.rpf$" options:NSRegularExpressionSearch].location!=NSNotFound;
+}
+static NSString *modTranslate(NSString *relative){
+  NSString *p=[relative stringByReplacingOccurrencesOfString:@"\\" withString:@"/"];
+  NSArray *rules=@[@[@"^mods/",@""],@[@"^x64[a-z]?\\.rpf/",@"x64/"],@[@"^common\\.rpf/",@"common/"],@[@"^update/update\\.rpf/",@""],
+                   @[@"^update/x64/dlcpacks/",@"x64/dlcPacks/"],@[@"^x64/dlcpacks/",@"x64/dlcPacks/"]];
+  for(NSArray *rule in rules){
+    NSRegularExpression *re=[NSRegularExpression regularExpressionWithPattern:rule[0] options:NSRegularExpressionCaseInsensitive error:nil];
+    p=[re stringByReplacingMatchesInString:p options:0 range:NSMakeRange(0,p.length) withTemplate:rule[1]];
+  }
+  return p;
+}
+// Files inside an archive: each one gets a 512-byte-aligned slot past the archive's real end (the manifest
+// size grows to cover them). Files are served whole, as an archive stores them: game resources (RSC7: .yft,
+// .ytd, .ydr, ...) keep their 16-byte header, whose flags also go into the archive entry; other files are
+// stored unencrypted and uncompressed.
+typedef struct { PGModPiece info; char inner[256]; char file[PATH_MAX]; uint64_t skip; int reported; } PGModSlot;
+typedef struct { uint32_t id; char path[512]; uint64_t realSize; int count; PGModSlot *slots; } PGModArchive;
+static PGModArchive *modArchives; static int modArchiveCount;
+static PGModArchive *modArchiveFor(uint32_t id){for(int i=0;i<modArchiveCount;i++)if(modArchives[i].id==id)return &modArchives[i];return NULL;}
+int pg_mods_for_archive(const char *enginePath,const PGModPiece **pieces){
+  // Engine names: "/game/x64/levels/gta5/vehicles.rpf", "x64/audio/sfx/X.rpf", "platform:\dlcPacks\mpBeach\dlc.rpf".
+  if(!modArchiveCount||!enginePath)return 0;
+  char path[512];size_t n=0;const char *s=enginePath;
+  if(!strncmp(s,"/game/",6))s+=6;
+  if(!strncasecmp(s,"platform:",9)){s+=9;if(*s=='/'||*s=='\\')s++;n=(size_t)snprintf(path,sizeof path,"x64/");}
+  for(;*s&&n<sizeof path-1;s++)path[n++]=*s=='\\'?'/':*s;
+  path[n]=0;
+  for(int i=0;i<modArchiveCount;i++)if(!strcasecmp(modArchives[i].path,path)){
+    static __thread PGModPiece list[256];int count=modArchives[i].count<256?modArchives[i].count:256;
+    for(int k=0;k<count;k++)list[k]=modArchives[i].slots[k].info;
+    *pieces=list;return count;
+  }
+  return 0;
+}
+static uint64_t align512(uint64_t value){return (value+511)&~(uint64_t)511;}
+static NSDictionary *modsBaseManifest;
 static NSArray *applyMods(NSArray *files,NSDictionary *manifest){
+  modsBaseFiles=files;modsBaseManifest=manifest;modsWantLocal=false;
+  modFiles=nil;modsManifest=nil;modArchiveCount=0;   // earlier slots are left allocated: the engine may hold pointers into them
   NSString *folder=modsFolder();NSFileManager *fm=NSFileManager.defaultManager;
   [fm createDirectoryAtPath:folder withIntermediateDirectories:YES attributes:nil error:nil];
   NSString *readme=[folder stringByAppendingPathComponent:@"README.txt"];
-  if(![fm fileExistsAtPath:readme])[@"Put a replacement game file here at the same path it has in the game files, for example\ncommon/data/handling.meta or x64/levels/gta5/vehicles.rpf. Mods are read when the game starts.\nArchives (.rpf) must be encrypted like the game's own; OPEN archives are skipped.\n" writeToFile:readme atomically:YES encoding:NSUTF8StringEncoding error:nil];
+  [@"Mods for GTA V on PC work here as downloaded. Put each file at its game path, like OpenIV's mods folder:\n"
+    "  x64e.rpf/levels/gta5/vehicles.rpf/adder.yft  (replaces a car)\n"
+    "  update/x64/dlcpacks/mycar/dlc.rpf  (an add-on car; added to the game automatically)\n"
+    "  common.rpf/data/handling.meta  (replaces a data file)\n"
+    "  MyMod.oiv  (an OpenIV package, installed as OpenIV would)\n"
+    "  Trainer.asi  (a Script Hook V script; its keys are under Mod keys in the game)\n"
+    "Cars, skins and add-on packs need the game files on this iPhone. Mods are read when the game starts.\n"
+    "Mods can cause crashes and glitches we can't fix: ask in the Mods topic on Telegram.\n"
+    "Guide: https://github.com/kevinerikjs/gta5-ios-port/blob/main/docs/MODS.md\n" writeToFile:readme atomically:YES encoding:NSUTF8StringEncoding error:nil];
   NSMutableDictionary *ids=[NSMutableDictionary dictionaryWithCapacity:files.count];
-  for(NSUInteger i=0;i<files.count;i++)ids[files[i][0]]=@(i);
+  for(NSUInteger i=0;i<files.count;i++)ids[[files[i][0] lowercaseString]]=@(i);
   NSMutableArray *merged=nil;NSMutableDictionary *mods=[NSMutableDictionary dictionary];
+  NSMutableDictionary<NSNumber *,NSMutableArray *> *inside=[NSMutableDictionary dictionary];   // archive id -> @[inner, full]
+  NSMutableArray<NSString *> *packs=[NSMutableArray array];
   NSString *resolvedFolder=folder.stringByResolvingSymlinksInPath;
+  // OpenIV packages (NativeOIV.m) become mod files at PC paths; their own files in Mods are left to them.
+  bool oivNeedsGame=false;NSArray<NSString *> *oivOwned=nil;
+  NSArray<NSArray *> *oivFiles=pg_oiv_expand(folder,^NSString *(NSString *pc){
+    NSNumber *game=ids[modTranslate(pc).lowercaseString];
+    return game&&localDataRoot?[localDataRoot stringByAppendingPathComponent:files[game.unsignedIntegerValue][0]]:nil;},localDataRoot!=nil,&oivNeedsGame,&oivOwned);
+  if(oivNeedsGame)modsWantLocal=true;
+  NSMutableArray<NSArray *> *candidates=[NSMutableArray array];   // @[path in Mods or PC path, file, size]
   NSDirectoryEnumerator *walk=[fm enumeratorAtURL:[NSURL fileURLWithPath:folder] includingPropertiesForKeys:@[NSURLIsRegularFileKey,NSURLFileSizeKey,NSURLIsSymbolicLinkKey] options:NSDirectoryEnumerationSkipsHiddenFiles errorHandler:nil];
   for(NSURL *url in walk){
     NSNumber *regular,*link,*size;[url getResourceValue:&regular forKey:NSURLIsRegularFileKey error:nil];[url getResourceValue:&link forKey:NSURLIsSymbolicLinkKey error:nil];[url getResourceValue:&size forKey:NSURLFileSizeKey error:nil];
     if(!regular.boolValue||link.boolValue)continue;
     NSString *full=url.path.stringByResolvingSymlinksInPath;
     if(![full hasPrefix:[resolvedFolder stringByAppendingString:@"/"]])continue;
-    NSString *relative=[full substringFromIndex:resolvedFolder.length+1];
-    if([relative isEqualToString:@"README.txt"])continue;
-    NSNumber *identity=ids[relative];
-    if(!identity){char line[PATH_MAX+80];snprintf(line,sizeof line,"Mods: %s is not a game file path; ignored.",relative.UTF8String);pg_log(line);continue;}
-    if([relative.pathExtension.lowercaseString isEqualToString:@"rpf"]){
-      uint32_t header[4]={0};FILE *file=fopen(full.fileSystemRepresentation,"rb");
-      size_t got=file?fread(header,4,4,file):0;if(file)fclose(file);
-      if(got!=4||header[0]!=0x52504637||header[3]!=0x0FFFFFF9){
-        char line[PATH_MAX+120];snprintf(line,sizeof line,"Mods: %s is not an archive encrypted like the game's (AES); skipped.",relative.UTF8String);pg_log(line);continue;
+    NSString *original=[full substringFromIndex:resolvedFolder.length+1];
+    if([original isEqualToString:@"README.txt"])continue;
+    // One folder per mod (Settings › Mods installs them so): Mods/<mod>/<game path>. A first folder that
+    // isn't a game location is the mod's own; ".off" means switched off. Scripts and their settings
+    // are for the script layer (NativeASI.c).
+    bool owned=false;for(NSString *o in oivOwned)if([o hasSuffix:@"/"]?[original hasPrefix:o]:[original isEqualToString:o])owned=true;
+    NSArray<NSString *> *parts=original.pathComponents;
+    if([parts.firstObject.lowercaseString hasSuffix:@".off"])continue;
+    if([@[@"asi",@"ini",@"log",@"json",@"cfg",@"txt",@"md",@"png",@"jpg"] containsObject:original.pathExtension.lowercaseString])continue;
+    if(parts.count>1&&!isGameLocation(parts.firstObject))original=[NSString pathWithComponents:[parts subarrayWithRange:NSMakeRange(1,parts.count-1)]];
+    // Still not under a game location: a script's own files (Menyoo's menyooStuff/...).
+    if(original.pathComponents.count>1&&!isGameLocation(original.pathComponents.firstObject))continue;
+    if(!owned)[candidates addObject:@[original,full,size?:@0]];
+  }
+  [candidates addObjectsFromArray:oivFiles];
+  NSUInteger modCount=0;
+  for(NSArray *candidate in candidates){
+    NSString *original=candidate[0],*full=candidate[1];NSNumber *size=candidate[2];
+    modCount++;
+    NSString *relative=modTranslate(original),*lower=relative.lowercaseString;
+    NSNumber *identity=ids[lower];
+    if(!identity){
+      // Inside an archive the game has: the outermost "<archive>.rpf/" prefix that is a game file.
+      NSRange range=[lower rangeOfString:@".rpf/"];NSNumber *archive=nil;NSString *inner=nil;
+      while(range.location!=NSNotFound){
+        NSString *prefix=[lower substringToIndex:range.location+4];
+        if(ids[prefix]){archive=ids[prefix];inner=[relative substringFromIndex:range.location+5];break;}
+        range=[lower rangeOfString:@".rpf/" options:0 range:NSMakeRange(range.location+5,lower.length-range.location-5)];
       }
+      if(archive&&[inner.lowercaseString rangeOfString:@".rpf/"].location!=NSNotFound){
+        char line[PATH_MAX+120];snprintf(line,sizeof line,"Mods: %s is inside an archive within an archive; not supported yet, ignored.",original.UTF8String);pg_log(line);continue;
+      }
+      if(archive){
+        if(!inside[archive])inside[archive]=[NSMutableArray array];
+        [inside[archive] addObject:@[inner,full,size]];continue;
+      }
+      // A new add-on pack: x64/dlcPacks/<pack>/dlc.rpf, added to the file list and the game's pack list.
+      NSArray *parts=lower.pathComponents;
+      if(parts.count==4&&[parts[0] isEqualToString:@"x64"]&&[parts[1] isEqualToString:@"dlcpacks"]&&[parts[3] isEqualToString:@"dlc.rpf"]){
+        if(!merged)merged=[files mutableCopy];
+        NSString *pack=relative.pathComponents[2];
+        NSString *path=[NSString stringWithFormat:@"x64/dlcPacks/%@/dlc.rpf",pack];
+        mods[@(merged.count)]=full;ids[path.lowercaseString]=@(merged.count);
+        [merged addObject:@[path,size,@((uint64_t)NSDate.date.timeIntervalSince1970)]];[packs addObject:pack];
+        char line[PATH_MAX+96];snprintf(line,sizeof line,"Mods: add-on pack %s (%llu bytes).",pack.UTF8String,size.unsignedLongLongValue);pg_log(line);continue;
+      }
+      char line[PATH_MAX+80];snprintf(line,sizeof line,"Mods: %s is not a game file path; ignored.",original.UTF8String);pg_log(line);continue;
     }
     if(!merged)merged=[files mutableCopy];
     NSUInteger index=identity.unsignedIntegerValue;
-    merged[index]=@[relative,size,@((uint64_t)NSDate.date.timeIntervalSince1970)];
+    merged[index]=@[files[index][0],size,@((uint64_t)NSDate.date.timeIntervalSince1970)];
     mods[identity]=full;
-    char line[PATH_MAX+96];snprintf(line,sizeof line,"Mods: %s replaces the game's file (%llu bytes, was %llu).",relative.UTF8String,size.unsignedLongLongValue,[files[index][1] unsignedLongLongValue]);pg_log(line);
+    char line[PATH_MAX+96];snprintf(line,sizeof line,"Mods: %s replaces the game's file (%llu bytes, was %llu).",[files[index][0] UTF8String],size.unsignedLongLongValue,[files[index][1] unsignedLongLongValue]);pg_log(line);
+  }
+  // Files inside archives: slots past each archive's end.
+  if((inside.count||packs.count)&&!localDataRoot){modsWantLocal=true;[inside removeAllObjects];[packs removeAllObjects];}
+  if(inside.count){
+    if(!merged)merged=[files mutableCopy];
+    modArchives=calloc(inside.count,sizeof *modArchives);
+    for(NSNumber *archive in inside){
+      NSUInteger index=archive.unsignedIntegerValue;
+      if(mods[archive]){char line[PATH_MAX+96];snprintf(line,sizeof line,"Mods: %s is replaced whole; the files inside it from Mods are ignored.",[files[index][0] UTF8String]);pg_log(line);continue;}
+      PGModArchive *a=&modArchives[modArchiveCount];a->id=(uint32_t)index;
+      snprintf(a->path,sizeof a->path,"%s",[files[index][0] UTF8String]);a->realSize=[files[index][1] unsignedLongLongValue];
+      NSArray *list=inside[archive];a->slots=calloc(list.count,sizeof *a->slots);
+      uint64_t cursor=align512(a->realSize);
+      for(NSArray *item in list){
+        PGModSlot *slot=&a->slots[a->count];uint64_t size=[item[2] unsignedLongLongValue];
+        snprintf(slot->inner,sizeof slot->inner,"%s",[item[0] UTF8String]);snprintf(slot->file,sizeof slot->file,"%s",[item[1] fileSystemRepresentation]);
+        uint32_t header[4]={0};FILE *file=fopen(slot->file,"rb");size_t got=file?fread(header,4,4,file):0;if(file)fclose(file);
+        if(got==4&&header[0]==0x37435352){slot->info.resource=1;slot->skip=0;slot->info.length=size;slot->info.low=header[2];slot->info.high=header[3];}
+        else {slot->info.resource=0;slot->skip=0;slot->info.length=size;slot->info.low=(uint32_t)size;slot->info.high=0;}
+        if(slot->info.length>=0xFFFFFF&&slot->info.resource){char line[PATH_MAX+96];snprintf(line,sizeof line,"Mods: %s is over 16 MB; not supported inside archives yet, ignored.",[item[1] lastPathComponent].UTF8String);pg_log(line);continue;}
+        slot->info.inner=slot->inner;slot->info.offset=cursor;cursor=align512(cursor+slot->info.length);a->count++;
+        char line[PATH_MAX+128];snprintf(line,sizeof line,"Mods: %s/%s comes from the Mods folder (%llu bytes%s).",a->path,slot->inner,slot->info.length,slot->info.resource?", game resource":"");pg_log(line);
+      }
+      if(!a->count)continue;
+      merged[index]=@[files[index][0],@(cursor),files[index][2]];
+      modArchiveCount++;
+    }
+  }
+  // New add-on packs go into the game's pack list (common/data/dlcList.xml), after the game's own.
+  NSNumber *listId=ids[@"common/data/dlclist.xml"];
+  if(packs.count&&listId){
+    NSString *source=mods[listId]?:(localDataRoot?[localDataRoot stringByAppendingPathComponent:files[listId.unsignedIntegerValue][0]]:nil);
+    NSString *text=source?[NSString stringWithContentsOfFile:source encoding:NSUTF8StringEncoding error:nil]:nil;
+    NSRange close=text?[text rangeOfString:@"</Paths>" options:NSCaseInsensitiveSearch]:(NSRange){NSNotFound,0};
+    if(close.location!=NSNotFound){
+      NSMutableString *items=[NSMutableString string];
+      for(NSString *pack in packs){
+        NSString *item=[NSString stringWithFormat:@"platform:\\dlcPacks\\%@\\",pack];
+        if([text rangeOfString:item options:NSCaseInsensitiveSearch].location==NSNotFound)[items appendFormat:@"\t\t<Item>%@</Item>\n",item];
+      }
+      NSString *updated=[text stringByReplacingCharactersInRange:NSMakeRange(close.location,0) withString:items];
+      NSString *path=[NSTemporaryDirectory() stringByAppendingPathComponent:@"dlcList-mods.xml"];
+      if([updated writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil]){
+        mods[listId]=path;NSData *bytes=[updated dataUsingEncoding:NSUTF8StringEncoding];
+        merged[listId.unsignedIntegerValue]=@[files[listId.unsignedIntegerValue][0],@(bytes.length),@((uint64_t)NSDate.date.timeIntervalSince1970)];
+        char line[96];snprintf(line,sizeof line,"Mods: %lu add-on pack%s added to the game's pack list.",(unsigned long)packs.count,packs.count==1?"":"s");pg_log(line);
+      }
+    } else pg_log("Mods: the game's pack list couldn't be read; add-on packs won't load.");
   }
   if(!merged)return files;
   modFiles=mods;
   NSMutableDictionary *out=[manifest mutableCopy];out[@"files"]=merged;
   NSString *path=[NSTemporaryDirectory() stringByAppendingPathComponent:@"manifest-mods.json"];
   if([[NSJSONSerialization dataWithJSONObject:out options:0 error:nil] writeToFile:path atomically:YES])modsManifest=path;
-  else {modFiles=nil;pg_log("Mods: the merged file list couldn't be written; mods are off.");return files;}
-  char line[96];snprintf(line,sizeof line,"Mods: %lu file%s replaced.",(unsigned long)mods.count,mods.count==1?"":"s");pg_log(line);
+  else {modFiles=nil;modArchiveCount=0;pg_log("Mods: the merged file list couldn't be written; mods are off.");return files;}
+  char line[160];snprintf(line,sizeof line,"Mods active: %lu mod file%s (%lu replaced, %d archive%s changed, %lu add-on pack%s).",(unsigned long)modCount,modCount==1?"":"s",
+    (unsigned long)mods.count,modArchiveCount,modArchiveCount==1?"":"s",(unsigned long)packs.count,packs.count==1?"":"s");pg_log(line);
   return merged;
+}
+// Reads past a changed archive's real end come from the mod files in its slots.
+static int64_t readModArchive(PGModArchive *a,NSString *realFile,uint64_t offset,uint8_t *destination,uint32_t length){
+  uint64_t done=0;
+  static _Atomic int pastEnd;
+  if(offset+length>a->realSize&&getenv("PG_TEST_MODS")&&atomic_fetch_add(&pastEnd,1)<20){char line[300];snprintf(line,sizeof line,"TEST: read past the end of %s: offset %llu, %u bytes (real size %llu).",a->path,offset,length,a->realSize);pg_log(line);}
+  if(offset<a->realSize){
+    uint32_t part=(uint32_t)MIN((uint64_t)length,a->realSize-offset);
+    int descriptor=open(realFile.fileSystemRepresentation,O_RDONLY);if(descriptor<0)return -1;
+    while(done<part){ssize_t n=pread(descriptor,destination+done,part-done,(off_t)(offset+done));if(n<0&&errno==EINTR)continue;if(n<=0)break;done+=(uint64_t)n;}
+    close(descriptor);if(done<part)return (int64_t)done;
+  }
+  while(done<length){
+    uint64_t at=offset+done;PGModSlot *slot=NULL;
+    for(int i=0;i<a->count;i++)if(at>=a->slots[i].info.offset&&at<a->slots[i].info.offset+a->slots[i].info.length){slot=&a->slots[i];break;}
+    if(!slot){uint64_t next=UINT64_MAX;for(int i=0;i<a->count;i++)if(a->slots[i].info.offset>at&&a->slots[i].info.offset<next)next=a->slots[i].info.offset;
+      uint64_t gap=MIN((uint64_t)(length-done),next==UINT64_MAX?(uint64_t)(length-done):next-at);memset(destination+done,0,gap);done+=gap;continue;}
+    uint64_t within=at-slot->info.offset,part=MIN((uint64_t)(length-done),slot->info.length-within);
+    if(!slot->reported&&getenv("PG_TEST_MODS")){slot->reported=1;char line[400];snprintf(line,sizeof line,"TEST: first read of mod slot %s/%s at %llu (+%llu, %u bytes).",a->path,slot->inner,offset,within,length);pg_log(line);}
+    int descriptor=open(slot->file,O_RDONLY);if(descriptor<0){char line[PATH_MAX+48];snprintf(line,sizeof line,"Mods: %s could not be read.",slot->file);pg_log(line);return -1;}
+    uint64_t got=0;while(got<part){ssize_t n=pread(descriptor,destination+done+got,part-got,(off_t)(slot->skip+within+got));if(n<0&&errno==EINTR)continue;if(n<=0)break;got+=(uint64_t)n;}
+    close(descriptor);done+=got;if(got<part)break;
+  }
+  return (int64_t)done;
 }
 
 static _Atomic bool assetsConfigured;
+static void PGReapplyMods(void){
+  @autoreleasepool {
+    NSArray *files=applyMods(modsBaseFiles,modsBaseManifest);
+    NSMutableArray *locks=[assetLocks mutableCopy];
+    while(locks.count<files.count)[locks addObject:[PGAssetCondition new]];
+    assetLocks=locks;assetFiles=files;
+  }
+}
 void pg_assets_configure(const char *manifest,const char *root) {
   // The Settings preloader may configure the same cache before Play; the
   // engine's later call then reuses it (same manifest and root).
@@ -153,6 +370,12 @@ void pg_assets_configure(const char *manifest,const char *root) {
   @autoreleasepool {
     NSData *data=[NSData dataWithContentsOfFile:@(manifest)];
     NSDictionary *parsed=[NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+#if TARGET_OS_SIMULATOR
+    // Simulator profiling: PG_LOCAL_MIRROR (folder with data/) reads the Mac's copy directly.
+    assetStreamSimulation=[NSProcessInfo.processInfo.arguments containsObject:@"--stream-assets"];
+    const char *mirror=getenv("PG_LOCAL_MIRROR");
+    if(!localDataRoot&&!assetStreamSimulation&&mirror)localDataRoot=[[NSString stringWithUTF8String:mirror] stringByAppendingPathComponent:@"data"];
+#endif
     assetFiles=applyMods(parsed[@"files"],parsed);
     assetVersion=parsed[@"version"];
     NSMutableArray *locks=[NSMutableArray arrayWithCapacity:assetFiles.count];
@@ -193,11 +416,6 @@ void pg_assets_configure(const char *manifest,const char *root) {
     prefetchQueue=dispatch_queue_create("playgta5.assets.prefetch",assetBalancedQOS?dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_CONCURRENT,QOS_CLASS_UTILITY,0):DISPATCH_QUEUE_CONCURRENT);
     speculativeQueue=assetBalancedQOS?dispatch_queue_create("playgta5.assets.speculation",dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_CONCURRENT,QOS_CLASS_BACKGROUND,0)):prefetchQueue;
     pg_log(assetBalancedQOS?"Native background asset priorities: utility hints, background speculation (opt-in).":"Native background asset priorities: original.");
-#if TARGET_OS_SIMULATOR
-    // Simulator profiling: PG_LOCAL_MIRROR (folder with data/) reads the Mac's copy directly.
-    const char *mirror=getenv("PG_LOCAL_MIRROR");
-    if(!localDataRoot&&!assetStreamSimulation&&mirror)localDataRoot=[[NSString stringWithUTF8String:mirror] stringByAppendingPathComponent:@"data"];
-#endif
     if(!localDataRoot)[[assetSession dataTaskWithURL:[NSURL URLWithString:[assetServer stringByAppendingString:@"/data/manifest.json"]] completionHandler:^(NSData *body,NSURLResponse *response,NSError *error){
       if(error){NSString *message=[@"Asset server connection failed: " stringByAppendingString:error.localizedDescription];pg_log(message.UTF8String);}
       else if([(NSHTTPURLResponse *)response statusCode]==200){pg_log("Connected to the asset server.");}
@@ -335,6 +553,8 @@ static int64_t readLocalAsset(uint32_t id,uint64_t offset,uint8_t *destination,u
   if(!length||offset>=size)return 0;
   length=(uint32_t)MIN((uint64_t)length,size-offset);
   NSString *file=modFiles[@(id)]?:[localDataRoot stringByAppendingPathComponent:entry[0]];
+  PGModArchive *changed=modArchiveCount?modArchiveFor(id):NULL;
+  if(changed){int64_t got=readModArchive(changed,file,offset,destination,length);if(got>=0)assetReadSource=4;return got;}
   int descriptor=open(file.fileSystemRepresentation,O_RDONLY);
   if(descriptor<0){NSString *message=[@"Game file missing from your folder: " stringByAppendingString:entry[0]];pg_log(message.UTF8String);return -1;}
   uint64_t done=0;

@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.4.1
+- **Mods work as downloaded** (see [docs/MODS.md](docs/MODS.md)): replacement cars and characters (files inside the game's archives, like `x64e.rpf/levels/gta5/vehicles.rpf/oracle.yft`), add-on cars (`dlc.rpf` packs, added to the game's pack list automatically), OpenIV packages (`.oiv` files and unpacked packages, with their text and XML edits) and data files. PC/OpenIV paths work; names match regardless of case.
+- **Script Hook V scripts and trainers** (`.asi`): the app runs them in a built-in x86-64 interpreter (Blink, ISC license), with the Windows functions they use and the Script Hook V API, so the same file from gta5-mods.com works. Simple Trainer runs at about 2 to 3 ms per frame. Features that patch the PC game's memory stay off; a script that crashes or freezes is stopped on its own. ScriptHookVDotNet (C#) scripts aren't supported.
+- **Settings › Mods:** install a mod by picking the downloaded file (zip, rar, oiv, asi or loose files). The app works out where each file goes, using the game's own index of its files, shows the plan first, and leaves out what it can't place safely (and says why). Each mod gets its own folder and can be switched off or removed.
+- **Mod controls:** while a script mod runs, a Mods button in the top row opens its keys (the key that opens its menu first, learned from the mod or read from its settings), a D-pad shows while its menu is open, and Type sends the iPhone keyboard to the mod (car names); mods that ask with the game's text box get the same keyboard.
+- **Logs show when mods are active**, and the app explains once that mods can break things and where to ask about them.
+- **Fewer crashes on 6 to 8 GB iPhones** (GTA-70): the memory guard also watches the engine's own 4 GB address space, which v1.4 could fill.
+- **iPhone 8, 8 Plus and X** (GTA-68): if iOS refuses the 4 GB engine reservation the app tries smaller ones, and says so instead of freezing when none fits.
+- **Yoga** (GTA-37): the poses read both sticks on the touch controls.
+- **In-game phone browser** (GTA-71): websites scroll with the swipe camera on.
+
 ## v1.4
 - **Sandbox runs smoothly again on 4 GB iPhones.** Converting the game's most common texture format for the iPhone's GPU is 12.7 times faster (same output, bit for bit), so the world streams in without the lag v1.3.4 brought (Sandbox went from about 15 back to 30 FPS on a 2 GB memory limit).
 - **New Ultra Performance preset** (Settings › Graphics) for iPhones with little memory, recommended automatically under about 2.6 GB. It keeps less of the world in memory so it doesn't run out.

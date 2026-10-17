@@ -28,6 +28,7 @@ HOST_FUNCTIONS = {
     'PG_FN_OPUS_DECODE_FRAME': 'opus_decode_frame',
     'PG_FN_LOAD_SCENE_START': 'CLoadScene::StartFromScript(rage::Vec3V const&, rage::Vec3V const&, float, rage::scrThreadId, bool, int)',
     'PG_FN_OPERATOR_NEW': 'operator new(unsigned long)',
+    'PG_FN_OPERATOR_DELETE': 'operator delete(void*)',
     'PG_FN_PLAYER_PED_ID': 'player_commands::CommandPlayerPedId()',
     'PG_FN_PLAY_MOVIE': 'CMovieMgr::Play(unsigned int)',
     'PG_FN_PRELOAD_MOVIE': 'CMovieMgr::PreloadMovie(char const*, bool)',

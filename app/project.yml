@@ -30,17 +30,21 @@ settings:
       - $(SRCROOT)/App/GameInstaller
       - $(SRCROOT)/Vendor/libarchive.xcframework/ios-arm64/Headers
       - $(SRCROOT)/Tools/opus-1.5.2/include
+      - $(SRCROOT)/Vendor/blink
     # Native libopus for the game's audio (Scripts/build_opus.py builds one per SDK).
     LIBRARY_SEARCH_PATHS:
       - $(inherited)
       - $(SRCROOT)/Tools/opus-lib/$(PLATFORM_NAME)
+      - $(SRCROOT)/Tools/blink-lib/$(PLATFORM_NAME)
     OTHER_LDFLAGS:
       - $(inherited)
       - -lopus
+      - -lblink
     # MetalFX (Settings › Sharper upscaling) exists in the iPhone SDK only.
     "OTHER_LDFLAGS[sdk=iphoneos*]":
       - $(inherited)
       - -lopus
+      - -lblink
       - -weak_framework
       - MetalFX
     OTHER_CFLAGS:
@@ -100,7 +104,7 @@ targets:
       properties:
         CFBundleDisplayName: GTA V Port
         CFBundleDevelopmentRegion: en
-        CFBundleShortVersionString: "1.4"
+        CFBundleShortVersionString: "1.4.1"
         # Your game-file server may be a plain-http address on your tailnet.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
@@ -111,7 +115,7 @@ targets:
         # The app folder (logs) is visible in the Files app.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
-        CFBundleVersion: "11"
+        CFBundleVersion: "12"
         UILaunchScreen: {}
         UIRequiresFullScreen: true
         # Lets the game present above 60 FPS on ProMotion iPhones when the frame rate is unlocked.

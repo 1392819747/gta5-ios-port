@@ -1,7 +1,7 @@
 """Test trace of the controls scripts read (PG_TEST_CONTROLS=1; see pg_control_read in Source/EngineHost.c).
 
 Wraps the script commands IS_CONTROL_PRESSED, GET_CONTROL_VALUE, GET_CONTROL_NORMAL and their
-DISABLED_ forms: the original becomes static and a wrapper with the engine's name reports each
+DISABLED_ forms, the UNBOUND_NORMAL stick reads and the JUST_PRESSED/JUST_RELEASED checks: the original becomes static and a wrapper with the engine's name reports each
 answer, so a test can see which inputs a minigame polls and what the touch controls give it
 (the yoga poses, GTA-37). Off by default: the host returns at once.
 """
@@ -11,7 +11,12 @@ import re
 root = Path(__file__).resolve().parents[1]
 COMMANDS = [('pad_commands::CommandIsControlPressed(int, int)', 'u32', 0), ('pad_commands::CommandGetControlValue(int, int)', 'u32', 1),
             ('pad_commands::CommandGetControlNormal(int, int)', 'f32', 2), ('pad_commands::CommandIsDisabledControlPressed(int, int)', 'u32', 3),
-            ('pad_commands::CommandGetDisabledControlNormal(int, int)', 'f32', 4)]
+            ('pad_commands::CommandGetDisabledControlNormal(int, int)', 'f32', 4),
+            # Minigames read analog sticks with the unbound forms and buttons with the just-pressed ones
+            # (the yoga poses read both sticks this way; GTA-37): they count as polls too.
+            ('pad_commands::CommandGetControlUnboundNormal(int, int)', 'f32', 2), ('pad_commands::CommandGetDisabledControlUnboundNormal(int, int)', 'f32', 4),
+            ('pad_commands::CommandIsControlJustPressed(int, int)', 'u32', 0), ('pad_commands::CommandIsControlJustReleased(int, int)', 'u32', 0),
+            ('pad_commands::CommandIsDisabledControlJustPressed(int, int)', 'u32', 3), ('pad_commands::CommandIsDisabledControlJustReleased(int, int)', 'u32', 3)]
 DECLARATION = 'extern void pg_control_read(u32 kind, u32 control, u32 action, f32 value);'
 
 def body_range(s, head):

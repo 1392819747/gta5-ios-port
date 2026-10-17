@@ -42,6 +42,16 @@ void PGUpdateController(PGControllerState state, double elapsedSeconds);
 uint32_t PGCurrentTouchContext(void);
 // Game state for the touch layout: 1 control off, 2 phone out, 4 cutscene, 8 warning screen, 16 no player.
 uint32_t PGGameStatus(void);
+// Script mods (.asi): press or release a Windows virtual-key code for them; which keys they poll.
+void PGAsiSetKey(int virtualKey, bool down);
+bool PGAsiModKeys(uint8_t keys[256]);
+// What the Mod keys pad shows: see PGAsiKeyInfo in NativeASI.h.
+#include "NativeASI.h"
+void PGAsiGetKeyInfo(PGAsiKeyInfo *info);
+// A script mod asks for typed text: true once per request, with its title, default text and length limit.
+bool PGAsiTextRequest(char *title, size_t titleSize, char *text, size_t textSize, int *maxLength);
+// The typed text for that request, or NULL when cancelled.
+void PGAsiTextFinish(const char *text);
 // What the touch controls need to know to show a button only when it applies (all memory reads).
 typedef struct {
   bool specialShown;   // the character has a usable special ability here
@@ -55,6 +65,7 @@ typedef struct {
   uint32_t vehicleModel; // model name hash (joaat) of the vehicle the player is in, 0 on foot
   bool passenger;        // in a vehicle, not in the driver's seat (taxi rides)
   bool taxiMenu;         // the taxi ride script (taxiservice) is running
+  bool phoneBrowser;     // the phone's internet app (appinternet) is open
 } PGControlHints;
 PGControlHints PGReadControlHints(uint32_t touchContext);
 // The next weapon of the aircraft the player flies (applied on the game thread).

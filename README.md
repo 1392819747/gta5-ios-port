@@ -101,6 +101,10 @@ A paid Apple developer account or TrollStore gets you the same result without Ge
 
 See [CHANGELOG.md](CHANGELOG.md) for every version.
 
+## Mods
+
+PC mods work as downloaded: car and character replacements, add-on cars, OpenIV packages (`.oiv`), data files and Script Hook V scripts (`.asi`), trainers included. Install them in **Settings › Mods** by picking the downloaded file, or put the files in **On My iPhone › GTA V Port › Mods** yourself. See [docs/MODS.md](docs/MODS.md).
+
 ## Community and help
 
 **[Five Star Port on Telegram](https://t.me/fivestarport)** has everything: every new release as it comes out, help with installs and builds, and a community that has solved most problems before. Please ask there instead of by email or DM.
@@ -177,11 +181,12 @@ Settings shows the memory limit iOS gave the app at the bottom.
 - Graphics use this project's own Metal renderer (`app/Source/MetalRenderer`). It runs the game's Direct3D 11-style command stream directly on Metal. At build time, the game's shaders from your files are translated to Metal with `app/ShaderTool` (built on Google's [Tint](https://dawn.googlesource.com/dawn), BSD-3-Clause/Apache-2.0, prebuilt in this project's releases) and precompiled into the app, so nothing is compiled on the phone while you play.
 - Touch input feeds the engine's own controller code, so GTA's controller features (assisted aim, analog driving) work.
 - Game files are read straight from the folder on your phone, or streamed from your server into a block cache.
+- Script Hook V mods (`.asi`, Windows x64 code) run in a built-in x86-64 interpreter ([Blink](https://github.com/jart/blink), ISC license) whose memory is the engine's own, so a mod's game commands go straight to the engine's handlers.
 - The website builder runs in your browser with your own GitHub sign-in: it uploads the three build files to your private repository and starts this repository's workflow there. Its server stores nothing.
 
 ## License
 
-The code written for this project is MIT licensed (see `LICENSE`). It does not cover the game, its data, or the third-party files fetched at build time. Those keep their own licenses: WABT and SIMDe (Apache-2.0, MIT), bcdec (MIT), libarchive (`app/Vendor/LICENSE-libarchive.txt`) and libopus (`app/Vendor/LICENSE-libopus.txt`), both BSD.
+The code written for this project is MIT licensed (see `LICENSE`). It does not cover the game, its data, or the third-party files fetched at build time. Those keep their own licenses: WABT and SIMDe (Apache-2.0, MIT), bcdec (MIT), libarchive (`app/Vendor/LICENSE-libarchive.txt`) and libopus (`app/Vendor/LICENSE-libopus.txt`), both BSD, and Blink (`app/Vendor/LICENSE-blink.txt`, ISC).
 
 ## Thanks
 

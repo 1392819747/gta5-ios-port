@@ -1,4 +1,9 @@
 #include "HostInternal.h"
+#include <dirent.h>
+#include <sys/stat.h>
+static uint64_t pg_mod_test_entry,pg_mod_test_value;
+static _Atomic int pg_mods_reported_missing;
+static void pg_mod_test_recheck(void);
 #include "wasm-rt-impl.h"
 #include "engine-functions.h" // PG_FN_*: engine functions by name (Scripts/engine_names.py)
 #include <pthread.h>
@@ -63,8 +68,10 @@ static void pg_note_region(const char *message) {
   int i = atomic_fetch_add(&engineRegionCount, 1);
   if (i < 64) { engineRegions[i].base = base; engineRegions[i].bytes = mb << 20; } else atomic_store(&engineRegionCount, 64);
 }
+static void pg_note_engine_memory(const char *line);
 void pg_log(const char *message) {
   if (!strncmp(message, "[wasm] region 0x", 16)) pg_note_region(message);
+  if (!strncmp(message, "[wasm] mem: malloc arena ", 25)) pg_note_engine_memory(message);	// the address-space guard (GTA-70)
   size_t length = strlen(message);
   while (length && (message[length-1] == '\n' || message[length-1] == ' ')) length--;
   if (!length || (length == 6 && !memcmp(message, "Error:", 6)) || (length == 8 && !memcmp(message, "Warning:", 8)) ||
@@ -215,6 +222,28 @@ uint64_t PGGPUTextureBytes(void);
 static uint64_t processLimitMB; // the app's memory limit at boot, or the player's cap (0 in the simulator)
 // Settings › Memory cap (0 automatic): the game behaves as if iOS allowed only this much.
 static uint64_t memoryCapMB, capReserveBytes;
+// The engine's own address space (its 4 GB reservation) runs out before the phone's memory on phones
+// with a 6-8 GB limit: v1.4 hands freed engine pages back to iOS, so the process headroom looked huge
+// while the engine heap filled its reservation, and the game aborted on a failed allocation ("Read
+// request ... destination addresses, some of which are NULL", "zstd ... not enough memory"; 25 of 63
+// v1.4 logs, 2026-10-17). The engine reports its malloc use about every 10 s ("[wasm] mem: malloc arena
+// A MB (in use U MB)"); headroom is the reservation minus that use, plus anything the heap grew since.
+static _Atomic uint64_t engineInUseBytes, engineSizeAtSample;
+static _Atomic bool engineLimited;		// the address space, not iOS memory, is what holds streaming back
+static void pg_note_engine_memory(const char *line){
+ const char *at=line;
+ double arena=0,inUse=0;
+ if(sscanf(at,"[wasm] mem: malloc arena %lf MB (in use %lf MB)",&arena,&inUse)!=2||inUse<=0)return;
+ atomic_store(&engineSizeAtSample,env.memory.size);
+ atomic_store(&engineInUseBytes,(uint64_t)(inUse*1048576.0));
+}
+static uint64_t engineAddressHeadroom(void){
+ // Until the engine's first report there's no limit: the heap starts at 3328 MB, mostly unused.
+ uint64_t inUse=atomic_load(&engineInUseBytes);if(!inUse)return UINT64_MAX;
+ uint64_t capacity=env.memory.max_pages*env.memory.page_size,size=env.memory.size;
+ uint64_t sampled=atomic_load(&engineSizeAtSample),used=inUse+(size>sampled?size-sampled:0);if(used>size)used=size;
+ return capacity>used?capacity-used:0;
+}
 static bool nativeProcessHeadroom(uint64_t *headroom){
  if(!nativeMemoryGuard)return false;
  atomic_fetch_add(&memoryBudgetQueries,1);
@@ -231,6 +260,14 @@ static bool nativeProcessHeadroom(uint64_t *headroom){
  available=os_proc_available_memory();
  available=available>capReserveBytes?available-capReserveBytes:0;
 #endif
+ uint64_t engine=engineAddressHeadroom();
+ atomic_store(&engineLimited,engine<available);
+ if(engine<available){
+  available=engine;
+  static _Atomic double loggedAt;double now=timeMS(CLOCK_MONOTONIC);
+  if(now-atomic_load(&loggedAt)>60000){atomic_store(&loggedAt,now);
+   char line[128];snprintf(line,sizeof line,"Memory guard: the engine's address space is the limit (%llu MB left).",(unsigned long long)(engine>>20));pg_log(line);}
+ }
  *headroom=available;
  return true;
 }
@@ -312,9 +349,13 @@ static int64_t guardNudge(int64_t result){
  double since=atomic_load(&holdingSince);
  if(since==0){atomic_store(&holdingSince,t);return result;}
  const bool loading=atomic_load(&loadSceneSince)>0;
- if(t-since<(loading?0.25:1.5))return result;
+ // Held by the engine's address space (GTA-70): the phone has memory, so making room is cheap and a new
+ // area must still load; in the simulator 16 MB every 1.5 s left a teleport's new area empty.
+ const bool engine=atomic_load(&engineLimited);
+ if(t-since<(loading?0.25:engine?0.5:1.5))return result;
  atomic_store(&holdingSince,t);atomic_fetch_add(&memoryBudgetNudges,1);
- return loading?-(slice>(96ll<<20)?slice:(96ll<<20)):-slice;
+ if(loading)return -(slice>(96ll<<20)?slice:(96ll<<20));
+ return engine?-(slice>(64ll<<20)?slice:(64ll<<20)):-slice;
 }
 uint64_t pg_streaming_resource_memory(uint64_t engineAvailable){
  uint64_t available;
@@ -653,13 +694,17 @@ PGControlHints PGReadControlHints(uint32_t touchContext){
  if(hints.vehicleModel&&pg_context_u64(m,size,vehicle+3216,&driver))hints.passenger=driver!=ped;
  // The taxi ride menu is the story's taxiservice script; Sandbox doesn't run it. Script threads:
  // array at 15409704, count (u16) at 15409712, name at +428 of each thread.
- if(hints.passenger){
+ // The phone's internet app (appinternet) is full screen and scrolls with the right stick; with the swipe
+ // camera the touch controls sent camera swipes there instead, so stores couldn't be scrolled.
+ {
   uint64_t threads;uint16_t count=0;
   if(pg_context_u64(m,size,15409704,&threads)&&threads&&pg_context_u16(m,size,15409712,&count)){
    for(uint16_t i=0;i<count&&i<512;i++){
     uint64_t thread;
     if(!pg_context_u64(m,size,threads+8ull*i,&thread)||!thread||thread+440>size)continue;
-    if(!strncasecmp((const char *)(m+thread+428),"taxiservice",12)){hints.taxiMenu=true;break;}
+    const char *name=(const char *)(m+thread+428);
+    if(hints.passenger&&!strncasecmp(name,"taxiservice",12))hints.taxiMenu=true;
+    if(!strncasecmp(name,"appinternet",12))hints.phoneBrowser=true;
    }
   }
  }
@@ -1125,6 +1170,7 @@ static void pg_test_car(w2c_game *instance) {
   pg_test_leave_script(instance, previous);
   if (getenv("PG_TEST_DRIVE")) driving = atoi(getenv("PG_TEST_DRIVE")) + 1;
   char line[96]; snprintf(line, sizeof line, "TEST: player put in car %u at %.1f, %.1f, %.1f.", vehicle, x, y, z); pg_log(line);
+  pg_mod_test_recheck();
 }
 // Test (PG_TEST_REQUEST_MODELS="name,name"): from about 40 s in, requests those models the way a
 // mission script does (REQUEST_MODEL) and logs when each has loaded, to load one model on demand.
@@ -1344,6 +1390,276 @@ static void pg_keep_weapon_loaded(w2c_game *instance) {
     if (atomic_fetch_add(&logged, 1) < 3) { char line[96]; snprintf(line, sizeof line, "Memory guard: making room for the selected weapon (0x%x).", weapon); pg_log(line); }
   }
   atomic_store(&weaponGrantUntil, timeMS(CLOCK_MONOTONIC) + 2000);
+}
+// MARK: Script Hook V mods (.asi), GTA-69
+// Mods made for Script Hook V on PC run in an x86-64 interpreter (Source/NativeASI.c). Here they get
+// the engine's heap, its game commands by Script Hook V hash (Generated/asi-natives.inc, made by
+// Scripts/prepare_asi_natives.py) and a turn on the main script thread every frame.
+#include "NativeASI.h"
+#include "asi-natives.inc"
+void PG_FN_OPERATOR_DELETE(w2c_game *, u64);
+static w2c_game *pg_asi_game;
+static uint64_t pg_asi_alloc(uint64_t size) { return PG_FN_OPERATOR_NEW(pg_asi_game, size ? size : 16); }
+static void pg_asi_free(uint64_t address) { if (address) PG_FN_OPERATOR_DELETE(pg_asi_game, address); }
+static void pg_asi_log(const char *line) { pg_log(line); }
+// Text boxes for mods: a mod asks for typed text (a car to spawn by name, a search) with the game's
+// on-screen keyboard commands. Those are answered here: the app shows the iPhone keyboard with the mod's
+// title and default text (PGAsiTextRequest), and the mod gets what was typed (PGAsiTextFinish).
+static _Atomic int pg_asi_text_state = 3;   // UPDATE_ONSCREEN_KEYBOARD: 0 typing, 1 done, 2 cancelled, 3 none
+static _Atomic bool pg_asi_text_requested;
+static char pg_asi_text_title[160], pg_asi_text_value[1024]; static int pg_asi_text_max;
+static pthread_mutex_t pg_asi_text_lock = PTHREAD_MUTEX_INITIALIZER;
+bool PGAsiTextRequest(char *title, size_t titleSize, char *text, size_t textSize, int *maxLength) {
+  if (!atomic_exchange(&pg_asi_text_requested, false)) return false;
+  pthread_mutex_lock(&pg_asi_text_lock);
+  snprintf(title, titleSize, "%s", pg_asi_text_title); snprintf(text, textSize, "%s", pg_asi_text_value); *maxLength = pg_asi_text_max;
+  pthread_mutex_unlock(&pg_asi_text_lock);
+  return true;
+}
+void PGAsiTextFinish(const char *text) {
+  pthread_mutex_lock(&pg_asi_text_lock);
+  if (text) snprintf(pg_asi_text_value, sizeof pg_asi_text_value, "%.*s", pg_asi_text_max > 0 && pg_asi_text_max < 1023 ? pg_asi_text_max : 1023, text);
+  pthread_mutex_unlock(&pg_asi_text_lock);
+  atomic_store(&pg_asi_text_state, text ? 1 : 2);
+}
+static bool pg_asi_native(uint64_t hash, uint64_t arguments, uint32_t count, uint64_t result);
+static const char *pg_asi_guest_string(uint64_t address) { return address ? pg_string(&env, address) : ""; }
+static bool pg_asi_text_command(uint64_t hash, uint64_t arguments, uint32_t count, uint64_t result) {
+  const uint64_t *a = count ? pg_pointer(&env, arguments, 8ull * count) : 0;
+  if (hash == 0x00dc833f2568dbf6ull || hash == 0xca78cfa0366592feull) {  // DISPLAY_ONSCREEN_KEYBOARD(_WITH_LONGER_INITIAL_STRING)
+    if (count < 5) return true;
+    // The title is a text label ("FMMC_KEY_TIP8"); its words come from the game's text (_GET_LABEL_TEXT).
+    char title[160]; snprintf(title, sizeof title, "%s", pg_asi_guest_string(a[1]));
+    if (title[0] && !strchr(title, ' ')) {
+      static uint64_t buffer; if (!buffer) buffer = pg_asi_alloc(64);
+      memcpy(pg_pointer(&env, buffer, 8), &a[1], 8); memset(pg_pointer(&env, buffer + 32, 8), 0, 8);
+      if (pg_asi_native(0x7b5280eba9840c72ull, buffer, 1, buffer + 32)) {
+        uint64_t text; memcpy(&text, pg_pointer(&env, buffer + 32, 8), 8);
+        const char *words = pg_asi_guest_string(text);
+        if (words[0] && strcmp(words, "NULL")) snprintf(title, sizeof title, "%s", words);
+      }
+    }
+    pthread_mutex_lock(&pg_asi_text_lock);
+    snprintf(pg_asi_text_title, sizeof pg_asi_text_title, "%s", title);
+    pg_asi_text_value[0] = 0;
+    for (uint32_t i = 3; i + 1 < count && i < 11; i++) {   // the default text, then its continuations
+      size_t used = strlen(pg_asi_text_value);
+      snprintf(pg_asi_text_value + used, sizeof pg_asi_text_value - used, "%s", pg_asi_guest_string(a[i]));
+    }
+    pg_asi_text_max = (int)(uint32_t)a[count - 1];
+    pthread_mutex_unlock(&pg_asi_text_lock);
+    atomic_store(&pg_asi_text_state, 0); atomic_store(&pg_asi_text_requested, true);
+    char line[220]; snprintf(line, sizeof line, "Mods: a script asks for text (%s).", title); pg_log(line);
+    return true;
+  }
+  if (hash == 0x0cf2b696bbf945aeull) {  // UPDATE_ONSCREEN_KEYBOARD
+    uint64_t state = (uint32_t)atomic_load(&pg_asi_text_state); memcpy(pg_pointer(&env, result, 8), &state, 8); return true;
+  }
+  if (hash == 0x8362b09b91893647ull) {  // GET_ONSCREEN_KEYBOARD_RESULT
+    static uint64_t text; if (!text) text = pg_asi_alloc(1024);
+    pthread_mutex_lock(&pg_asi_text_lock);
+    snprintf(pg_pointer(&env, text, 1024), 1024, "%s", atomic_load(&pg_asi_text_state) == 1 ? pg_asi_text_value : "");
+    pthread_mutex_unlock(&pg_asi_text_lock);
+    uint64_t pointer = atomic_load(&pg_asi_text_state) == 1 ? text : 0; memcpy(pg_pointer(&env, result, 8), &pointer, 8); return true;
+  }
+  if (hash == 0x58a39be597ce99cdull) { atomic_store(&pg_asi_text_state, 2); return true; }  // CANCEL_ONSCREEN_KEYBOARD
+  return false;
+}
+static bool pg_asi_native(uint64_t hash, uint64_t arguments, uint32_t count, uint64_t result) {
+  if (pg_asi_text_command(hash, arguments, count, result)) return true;
+  size_t low = 0, high = sizeof pg_asi_natives / sizeof *pg_asi_natives;
+  while (low < high) { size_t middle = (low + high) / 2; if (pg_asi_natives[middle].hash < hash) low = middle + 1; else high = middle; }
+  if (low == sizeof pg_asi_natives / sizeof *pg_asi_natives || pg_asi_natives[low].hash != hash) {
+    // Entity handles are also ped/vehicle/object handles: these only convert between them.
+    if (hash == 0x04a2a40c73395041ull || hash == 0x4b53f92932adfac0ull || hash == 0xd7e3b9735c0f89d6ull) {
+      if (count) memcpy(pg_pointer(&env, result, 8), pg_pointer(&env, arguments, 8), 8);
+      return true;
+    }
+    return false;
+  }
+  // rage::scrThread::Info: result, argument count, arguments, then the Vector3 out-parameters the
+  // command filled (count at +24, destinations at +32, values at +64), which the script VM copies back.
+  static uint64_t context;
+  if (!context) context = pg_asi_alloc(128);
+  uint8_t *info = pg_pointer(&env, context, 128); memset(info, 0, 128);
+  memcpy(info, &result, 8); memcpy(info + 8, &count, 4); memcpy(info + 16, &arguments, 8);
+  pg_asi_natives[low].handler(pg_asi_game, context);
+  uint32_t vectors; memcpy(&vectors, info + 24, 4);
+  for (uint32_t i = 0; i < vectors && i < 4; i++) {
+    uint64_t to; memcpy(&to, info + 32 + 8 * i, 8); if (!to) continue;
+    uint8_t *out = pg_pointer(&env, to, 24); float value[3]; memcpy(value, info + 64 + 16 * i, 12);
+    memset(out, 0, 24); memcpy(out, &value[0], 4); memcpy(out + 8, &value[1], 4); memcpy(out + 16, &value[2], 4);
+  }
+  return true;
+}
+static uint64_t pg_asi_enter_script(w2c_game *instance) {
+  uint64_t *active = pg_pointer(&env, instance->w2c_g1 + 3088, 8), previous = *active;
+  uint64_t threads = *(uint64_t *)pg_pointer(&env, 15409704, 8);
+  uint16_t count = *(uint16_t *)pg_pointer(&env, 15409712, 2);
+  for (uint16_t i = 0; i < count; i++) {
+    uint64_t thread = *(uint64_t *)pg_pointer(&env, threads + 8ull * i, 8);
+    if (thread && !strcmp(pg_string(&env, thread + 428), "main")) { *active = thread; break; }
+  }
+  return previous;
+}
+// Keys for mods: the Mod keys pad (and a hardware keyboard) set them from the main thread; mods read
+// them on the game thread, and keyboard handlers get each change there.
+static _Atomic uint8_t pg_asi_keys[256];
+static _Atomic uint32_t pg_asi_key_events[64]; static _Atomic uint32_t pg_asi_key_head, pg_asi_key_tail;
+void PGAsiSetKey(int virtualKey, bool down) {
+  if (virtualKey <= 0 || virtualKey > 255 || atomic_load(&pg_asi_keys[virtualKey]) == down) return;
+  atomic_store(&pg_asi_keys[virtualKey], down);
+  uint32_t at = atomic_fetch_add(&pg_asi_key_head, 1);
+  atomic_store(&pg_asi_key_events[at % 64], (uint32_t)virtualKey | (down ? 0x100u : 0));
+}
+bool PGAsiModKeys(uint8_t keys[256]) { return pg_asi_polled_keys(keys); }
+void PGAsiGetKeyInfo(PGAsiKeyInfo *info) { pg_asi_key_info(info); }
+static bool pg_asi_key_down(int virtualKey) { return virtualKey > 0 && virtualKey < 256 && atomic_load(&pg_asi_keys[virtualKey]); }
+#if TARGET_OS_SIMULATOR
+// Test (PG_TEST_ASI_KEYS="seconds:key,..."): presses each Windows key for 0.3 s that many seconds after
+// the script mods load, e.g. "20:114" is F3 (Simple Trainer's menu key).
+static void pg_asi_test_keys(double seconds) {
+  const char *list = getenv("PG_TEST_ASI_KEYS"); if (!list) return;
+  char copy[256]; snprintf(copy, sizeof copy, "%s", list);
+  for (char *item = strtok(copy, ","); item; item = strtok(0, ",")) {
+    double at; int key; if (sscanf(item, "%lf:%i", &at, &key) != 2) continue;
+    bool down = seconds >= at && seconds < at + 0.3;
+    if (down != atomic_load(&pg_asi_keys[key & 255])) { PGAsiSetKey(key, down); char line[64]; snprintf(line, sizeof line, "TEST: mod key %d %s.", key, down ? "down" : "up"); pg_log(line); }
+  }
+}
+#endif
+#if TARGET_OS_SIMULATOR
+// Test (PG_TEST_PLAYER_MODEL=name): from about 40 s in, the player becomes that model (default
+// clothes) and the camera turns to face them, to look at skin mods. Calls game commands by their
+// Script Hook V hashes, like a mod.
+static uint64_t pg_test_native(uint64_t hash, const uint64_t *arguments, uint32_t count) {
+  static uint64_t buffer;
+  if (!buffer) buffer = pg_asi_alloc(8 * 40);
+  memcpy(pg_pointer(&env, buffer, 8 * 32), arguments, 8 * count);
+  memset(pg_pointer(&env, buffer + 8 * 32, 64), 0, 64);
+  pg_asi_native(hash, buffer, count, buffer + 8 * 32);
+  uint64_t value; memcpy(&value, pg_pointer(&env, buffer + 8 * 32, 8), 8); return value;
+}
+static void pg_test_player_model(w2c_game *instance) {
+  static int frames, done;
+  const char *name = getenv("PG_TEST_PLAYER_MODEL");
+  if (!name || !*name || done > 1 || (PGGameStatus() & 16) || ++frames < 1200) return;
+  pg_asi_game = instance;
+  uint32_t model = 0; for (const char *c = name; *c; c++) { model += (uint8_t)(*c >= 'A' && *c <= 'Z' ? *c + 32 : *c); model += model << 10; model ^= model >> 6; }
+  model += model << 3; model ^= model >> 11; model += model << 15;
+  uint64_t previous = pg_asi_enter_script(instance);
+  if (!done) {
+    pg_test_native(0x963d27a58df860acull, (uint64_t[]){model}, 1);  // REQUEST_MODEL
+    if (pg_test_native(0x98a4eb5d89a0c952ull, (uint64_t[]){model}, 1) & 1) {  // HAS_MODEL_LOADED
+      uint64_t player = pg_test_native(0x4f8644af03d0e0d6ull, 0, 0) & 0xFFFFFFFF;  // PLAYER_ID
+      pg_test_native(0x00a1cadd00108836ull, (uint64_t[]){player, model}, 2);  // SET_PLAYER_MODEL
+      uint64_t ped = pg_test_native(0xd80958fc74e988a6ull, 0, 0) & 0xFFFFFFFF;  // PLAYER_PED_ID
+      pg_test_native(0x45eee61580806d63ull, (uint64_t[]){ped}, 1);  // SET_PED_DEFAULT_COMPONENT_VARIATION
+      done = 1; char line[96]; snprintf(line, sizeof line, "TEST: player model is now %s.", name); pg_log(line);
+    } else if (frames > 2400) { done = 2; pg_log("TEST: player model did not load."); }
+  }
+  if (done == 1) {  // keep the camera in front of the player, looking slightly down
+    float heading = 180, pitch = -5; uint32_t h, p; memcpy(&h, &heading, 4); memcpy(&p, &pitch, 4);
+    pg_test_native(0xb4ec2312f4e5b1f1ull, (uint64_t[]){h}, 1);
+    pg_test_native(0x6d0858b8edfd2b7dull, (uint64_t[]){p, 0x3f800000}, 2);
+  }
+  *(uint64_t *)pg_pointer(&env, instance->w2c_g1 + 3088, 8) = previous;
+}
+#endif
+#if TARGET_OS_SIMULATOR
+// Test (PG_TEST_TEXT=1): from about 40 s in, asks for text the way a trainer does (title label
+// FMMC_KEY_TIP8, default "a80") and logs what comes back once the app's text box is answered.
+static void pg_test_text(w2c_game *instance) {
+  static int frames, stage;
+  if (!getenv("PG_TEST_TEXT") || !*getenv("PG_TEST_TEXT") || stage > 1 || (PGGameStatus() & 16) || ++frames < 1200) return;
+  pg_asi_game = instance;
+  static uint64_t args; if (!args) args = pg_asi_alloc(8 * 16);
+  uint64_t title = pg_asi_alloc(32), def = pg_asi_alloc(16), empty = pg_asi_alloc(8);
+  if (!stage) {
+    snprintf(pg_pointer(&env, title, 32), 32, "FMMC_KEY_TIP8"); snprintf(pg_pointer(&env, def, 16), 16, "a80"); *(char *)pg_pointer(&env, empty, 1) = 0;
+    uint64_t a[8] = {0, title, empty, def, empty, empty, empty, 30};
+    memcpy(pg_pointer(&env, args, 64), a, 64);
+    pg_asi_text_command(0x00dc833f2568dbf6ull, args, 8, args + 64);
+    stage = 1; return;
+  }
+  pg_asi_text_command(0x0cf2b696bbf945aeull, args, 0, args + 64);
+  uint64_t state; memcpy(&state, pg_pointer(&env, args + 64, 8), 8);
+  if (state == 1 || state == 2) {
+    pg_asi_text_command(0x8362b09b91893647ull, args, 0, args + 64);
+    uint64_t text; memcpy(&text, pg_pointer(&env, args + 64, 8), 8);
+    char line[160]; snprintf(line, sizeof line, "TEST: text box answered (state %llu): \"%s\".", (unsigned long long)state, text ? pg_string(&env, text) : "(none)"); pg_log(line);
+    stage = 2;
+  }
+}
+#endif
+// Loads every .asi in the Mods folder once the player exists, then runs their scripts each frame.
+static void pg_asi_frame(w2c_game *instance) {
+  static int state;  // 0 not loaded yet, 1 running, -1 no script mods
+  if (state < 0 || (PGGameStatus() & 16)) return;
+  pg_asi_game = instance;
+  uint64_t previous = pg_asi_enter_script(instance);
+  if (!state) {
+    state = -1;
+    const char *folder = pg_mods_folder_path();
+    PGAsiHost host = { (uint8_t *)env.memory.data, env.memory.max_pages * env.memory.page_size, pg_asi_alloc, pg_asi_free, pg_asi_log, pg_asi_native, 0, pg_asi_key_down, 0, 2189, folder };
+    // Scripts sit at the top of Mods, or at the top of a mod's own folder (Settings › Mods installs them
+    // so; a folder ending in ".off" is switched off). Each script's folder holds its settings.
+    char places[64][PATH_MAX]; int placeCount = 0;
+    snprintf(places[placeCount++], PATH_MAX, "%s", folder);
+    DIR *top = opendir(folder); struct dirent *entry; int loaded = 0;
+    while (top && (entry = readdir(top)) && placeCount < 64) {
+      size_t n = strlen(entry->d_name);
+      if (entry->d_name[0] == '.' || (n > 4 && !strcasecmp(entry->d_name + n - 4, ".off"))) continue;
+      char path[PATH_MAX]; snprintf(path, sizeof path, "%s/%s", folder, entry->d_name);
+      struct stat info; if (stat(path, &info) || !S_ISDIR(info.st_mode)) continue;
+      snprintf(places[placeCount++], PATH_MAX, "%s", path);
+    }
+    if (top) closedir(top);
+    for (int place = 0; place < placeCount; place++) {
+      DIR *dir = opendir(places[place]);
+      while (dir && (entry = readdir(dir))) {
+        size_t n = strlen(entry->d_name);
+        if (n < 5 || strcasecmp(entry->d_name + n - 4, ".asi")) continue;
+        if (!loaded && !pg_asi_init(&host)) { pg_log("Script mods: the interpreter could not start."); break; }
+        char path[PATH_MAX]; snprintf(path, sizeof path, "%s/%s", places[place], entry->d_name);
+        FILE *file = fopen(path, "rb"); if (!file) continue;
+        fseek(file, 0, SEEK_END); long size = ftell(file); rewind(file);
+        uint8_t *bytes = size > 0 && size < (256l << 20) ? malloc((size_t)size) : 0;
+        if (bytes && fread(bytes, 1, (size_t)size, file) == (size_t)size && pg_asi_load(entry->d_name, places[place], bytes, (uint64_t)size)) loaded++;
+        free(bytes); fclose(file);
+      }
+      if (dir) closedir(dir);
+    }
+    if (loaded) { state = 1; char line[96]; snprintf(line, sizeof line, "Script mods active: %d .asi file%s (Script Hook V layer).", loaded, loaded == 1 ? "" : "s"); pg_log(line); }
+  }
+  if (state > 0) {
+    static double started; if (!started) started = timeMS(CLOCK_MONOTONIC);
+#if TARGET_OS_SIMULATOR
+    pg_asi_test_keys((timeMS(CLOCK_MONOTONIC) - started) / 1000.0);
+#endif
+    while (atomic_load(&pg_asi_key_tail) != atomic_load(&pg_asi_key_head)) {
+      uint32_t event = atomic_load(&pg_asi_key_events[atomic_fetch_add(&pg_asi_key_tail, 1) % 64]);
+      pg_asi_key((int)(event & 255), event & 0x100);
+    }
+    pg_asi_tick();
+    static unsigned frames; static uint64_t micros, instructions;
+    uint64_t us, count; pg_asi_stats(&us, &count); micros += us; instructions += count;
+    if (++frames % 900 == 0) {
+      char line[128]; snprintf(line, sizeof line, "Script mods: %.2f ms and %llu instructions per frame on average.", micros / 900.0 / 1000.0, (unsigned long long)(instructions / 900));
+      pg_log(line); micros = instructions = 0;
+    }
+  }
+  *(uint64_t *)pg_pointer(&env, instance->w2c_g1 + 3088, 8) = previous;
+}
+// The game runs each of its scripts once per frame on the main game thread (scrThread::Run, wrapped by
+// Scripts/prepare_asi_script_tick.py); script mods get their turn just before the "main" script.
+void pg_asi_script_tick(w2c_game *instance, u64 thread) {
+  if (!thread || strcmp(pg_string(&env, thread + 428), "main")) return;
+  pg_asi_frame(instance);
+#if TARGET_OS_SIMULATOR
+  pg_test_text(instance);
+  pg_test_player_model(instance);
+#endif
 }
 void pg_virtual_pad_apply(w2c_game *instance, uint64_t pad) {
   if (pad == 12840656) pg_next_aircraft_weapon(instance);
@@ -1781,9 +2097,14 @@ static void *boot(void *ignored) {
   // Small enough for apps without the extended-address-space entitlement.
   const uint64_t guardBytes=64ull<<20;
   void *allocation=mmap(NULL,capacity+guardBytes,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANON,-1,0);
-  if (allocation==MAP_FAILED&&engineMB>4095) {
-    pg_log("iOS could not reserve that much; using 4095 MB.");
-    env.memory.max_pages=4095ull*1024*1024/wasm2c_game_pagesize_env_memory;capacity=env.memory.max_pages*env.memory.page_size;
+  // Smaller reservations when iOS refuses: iPhones with 3 GB (iPhone 8, 8 Plus, X) on a free Apple ID
+  // couldn't reserve 4095 MB and the game never started. 3392 MB is the 3328 MB starting heap plus a
+  // little room to grow.
+  static const uint64_t fallbackMB[]={4095,3840,3584,3392};
+  for (size_t i=0;allocation==MAP_FAILED&&i<sizeof fallbackMB/sizeof *fallbackMB;i++) {
+    if (fallbackMB[i]>=capacity/1048576) continue;
+    char line[96];snprintf(line,sizeof line,"iOS could not reserve that much; trying %llu MB.",(unsigned long long)fallbackMB[i]);pg_log(line);
+    env.memory.max_pages=fallbackMB[i]*1024*1024/wasm2c_game_pagesize_env_memory;capacity=env.memory.max_pages*env.memory.page_size;
     allocation=mmap(NULL,capacity+guardBytes,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANON,-1,0);
   }
   if (allocation==MAP_FAILED) { pg_log("iOS could not reserve the engine memory."); return NULL; }
@@ -2021,4 +2342,107 @@ u32 pg_scaleform_missing(w2c_game *instance, u64 name) {
   u32 handle = PG_FN_REQUEST_SCALEFORM_MOVIE(instance, name, scaleformFlags[0], scaleformFlags[1]);
   scaleformStandIn = false;
   return handle;
+}
+
+// Mods inside archives (GTA-69, Scripts/prepare_mod_archives.py): called after rage::fiPackfile::Init.
+// The packfile's RPF7 table of contents is decrypted in memory: entries (16 bytes each) at +32, names at
+// +16 (entry name offset << byte at +184). Entry bits: 0-15 name offset, 16-39 stored size, 40-62 offset
+// in 512-byte blocks (0x7FFFFF for a directory), 63 resource; second word: directory first child and
+// count, file uncompressed size and encryption, or resource system and graphics flags.
+static uint32_t pg_rpf_walk(uint64_t entries,uint64_t names,unsigned shift,uint32_t index,char *path,size_t length,int depth,const char *find,uint64_t *found){
+ const uint64_t *e=pg_pointer(&env,entries+16ull*index,16);
+ const char *name=pg_string(&env,names+((uint64_t)(e[0]&0xFFFF)<<shift));
+ size_t n=length;
+ if(index){n+=snprintf(path+length,length<480?512-length:0,"%s%s",length?"/":"",name);}
+ if(((e[0]>>40)&0x7FFFFF)==0x7FFFFF){
+  uint32_t first=(uint32_t)e[1],count=(uint32_t)(e[1]>>32),total=1;
+  if(depth>32||count>200000)return total;
+  for(uint32_t i=0;i<count;i++)total+=pg_rpf_walk(entries,names,shift,first+i,path,n,depth+1,find,found);
+  path[length]=0;return total;
+ }
+ if(find&&!strcasecmp(path,find)&&!*found)*found=entries+16ull*index;
+ path[length]=0;return 1;
+}
+// Mods inside archives (GTA-69): NativeAssets serves each mod file in a slot past the archive's real end;
+// here the archive's entry for that file is pointed at the slot. Resources keep their version and flags
+// from the mod's RSC7 header; other files become plain (unencrypted, uncompressed) data.
+// The game file index for the mod installer (App/ModInstaller.swift): as the engine opens each archive,
+// every file in it is written once per game version, "x64/levels/gta5/vehicles.rpf/oracle.yft"; files in
+// archives inside other archives start with "@" (the mod loader can't change those yet).
+static void pg_index_walk(FILE *out,const char *archive,uint64_t entries,uint64_t names,unsigned shift,uint32_t index,char *path,size_t length,int depth){
+ const uint64_t *e=pg_pointer(&env,entries+16ull*index,16);
+ const char *name=pg_string(&env,names+((uint64_t)(e[0]&0xFFFF)<<shift));
+ size_t n=length;
+ if(index)n+=snprintf(path+length,length<480?512-length:0,"%s%s",length?"/":"",name);
+ if(((e[0]>>40)&0x7FFFFF)==0x7FFFFF){
+  uint32_t first=(uint32_t)e[1],count=(uint32_t)(e[1]>>32);
+  if(depth<32&&count<200000)for(uint32_t i=0;i<count;i++)pg_index_walk(out,archive,entries,names,shift,first+i,path,n,depth+1);
+ }else fprintf(out,"%s/%s\n",archive,path);
+ path[length]=0;
+}
+static void pg_game_index(const char *label,uint64_t packfile){
+ static int state;static FILE *out;static uint64_t seen[4096];static int archives;static char temp[PATH_MAX];
+ if(state<0)return;
+ const char *final=pg_game_index_path();
+ if(!state){
+  char header[160];snprintf(header,sizeof header,"# game file index v1 %s\n",pg_game_files_version());
+  FILE *old=fopen(final,"r");char line[160]={0};
+  if(old){if(!fgets(line,sizeof line,old))line[0]=0;fclose(old);}
+  if(!strcmp(line,header)){state=-1;return;}          // already written for these game files
+  snprintf(temp,sizeof temp,"%s.part",final);
+  if(!(out=fopen(temp,"w"))){state=-1;return;}
+  fputs(header,out);state=1;
+ }
+ uint64_t hash=1469598103934665603ull;for(const char *c=label;*c;c++)hash=(hash^(uint8_t)*c)*1099511628211ull;
+ for(uint64_t i=hash%4096,k=0;k<4096;i=(i+1)%4096,k++){if(seen[i]==hash)return;if(!seen[i]){seen[i]=hash;break;}}
+ uint64_t entries=*(uint64_t *)pg_pointer(&env,packfile+32,8),names=*(uint64_t *)pg_pointer(&env,packfile+16,8);
+ unsigned shift=*(uint8_t *)pg_pointer(&env,packfile+184,1);
+ if(!entries||!names)return;
+ char archive[600],path[512]={0};
+ if(!pg_mods_archive_path(label,archive+1,sizeof archive-1))archive[0]='@';else memmove(archive,archive+1,strlen(archive+1)+1);
+ pg_index_walk(out,archive,entries,names,shift,0,path,0,0);
+ // The game opens about 1300 archives while starting; after that the index is complete enough to use.
+ if(++archives==1000){fflush(out);rename(temp,final);pg_log("Mods: the game's file index is ready for the mod installer.");}
+ else if(archives>1000&&archives%50==0)fflush(out);
+}
+void pg_packfile_mounted(w2c_game *instance,u64 packfile,u64 name,u32 result){
+ (void)instance;
+ if(!result)return;
+ const char *label=pg_string(&env,name);
+ pg_game_index(label,packfile);
+ const PGModPiece *pieces=NULL;int count=pg_mods_for_archive(label,&pieces);
+ if(getenv("PG_TEST_MODS")&&strstr(label,"vehicles.rpf")){char test[400];snprintf(test,sizeof test,"TEST: mounted %.300s, %d mod files.",label,count);pg_log(test);}
+ if(!count)return;
+ uint64_t entries=*(uint64_t *)pg_pointer(&env,packfile+32,8),names=*(uint64_t *)pg_pointer(&env,packfile+16,8);
+ unsigned shift=*(uint8_t *)pg_pointer(&env,packfile+184,1);
+ if(!entries||!names)return;
+ char line[700];int applied=0;
+ for(int i=0;i<count;i++){
+  char path[512]={0};uint64_t found=0;
+  pg_rpf_walk(entries,names,shift,0,path,0,0,pieces[i].inner,&found);
+  uint64_t block=pieces[i].offset/512;
+  if(!found){if(atomic_fetch_add(&pg_mods_reported_missing,1)>=24)continue;snprintf(line,sizeof line,"Mods: %.200s has no %.200s to replace; new files inside game archives aren't supported, ignored.",label,pieces[i].inner);pg_log(line);continue;}
+  if(block>=0x7FFFFF){snprintf(line,sizeof line,"Mods: %.200s is too large to hold %.200s; ignored.",label,pieces[i].inner);pg_log(line);continue;}
+  uint64_t *e=pg_pointer(&env,found,16);
+  uint64_t nameOffset=e[0]&0xFFFF;
+  if(getenv("PG_TEST_MODS")){snprintf(line,sizeof line,"TEST: %s entry was %016llx %016llx (offset %llu).",pieces[i].inner,(unsigned long long)e[0],(unsigned long long)e[1],(unsigned long long)((e[0]>>40)&0x7FFFFF)*512);pg_log(line);}
+  if(pieces[i].resource){
+   e[0]=nameOffset|((pieces[i].length&0xFFFFFF)<<16)|(block<<40)|(1ull<<63);
+   e[1]=(uint64_t)pieces[i].low|((uint64_t)pieces[i].high<<32);
+  } else {
+   e[0]=nameOffset|(block<<40);   // stored size 0: stored as is
+   e[1]=(uint64_t)(uint32_t)pieces[i].length;
+  }
+  applied++;
+  if(getenv("PG_TEST_MODS")){snprintf(line,sizeof line,"TEST: %s entry now %016llx %016llx (slot at %llu, %llu bytes).",pieces[i].inner,(unsigned long long)e[0],(unsigned long long)e[1],(unsigned long long)pieces[i].offset,(unsigned long long)pieces[i].length);pg_log(line);
+   if(i==0){pg_mod_test_entry=found;pg_mod_test_value=e[0];}}
+ }
+ // The streaming system reloads archive tables often (ReInit); the first openings are enough in the log.
+ static _Atomic int reported;
+ if(atomic_fetch_add(&reported,1)<24){snprintf(line,sizeof line,"Mods: %.300s opened with %d of %d mod file%s.",label,applied,count,count==1?"":"s");pg_log(line);}
+}
+static void pg_mod_test_recheck(void){
+ if(!pg_mod_test_entry)return;
+ const uint64_t *e=pg_pointer(&env,pg_mod_test_entry,16);char line[200];
+ snprintf(line,sizeof line,"TEST: first patched entry is %016llx now (%s).",(unsigned long long)e[0],e[0]==pg_mod_test_value?"unchanged":"CHANGED since the patch");pg_log(line);
 }

@@ -11,6 +11,14 @@ struct w2c_env {
 };
 struct w2c_wasi__snapshot__preview1 { struct w2c_env *env; };
 void pg_log(const char *message);
+// Mods inside archives (GTA-69): a file in Mods at <archive>.rpf/<path inside> is served past the archive's
+// real end; when the engine opens that archive, EngineHost points the entry there (pg_packfile_mounted).
+typedef struct { const char *inner; uint64_t offset, length; uint32_t low, high; int resource; } PGModPiece;
+int pg_mods_for_archive(const char *enginePath, const PGModPiece **pieces);
+const char *pg_mods_folder_path(void);
+const char *pg_game_index_path(void);
+const char *pg_game_files_version(void);
+bool pg_mods_archive_path(const char *enginePath, char *out, size_t cap);
 void pg_missing_import(const char *name);
 // A call into the engine through an invoke_* import, which an engine longjmp can end early
 // (Scripts/prepare_longjmp.py). The innermost one on each thread is pg_invoke_top.

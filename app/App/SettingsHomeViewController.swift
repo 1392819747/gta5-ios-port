@@ -19,6 +19,7 @@ final class SettingsHomeViewController: UITableViewController {
         let title: String
         let summary: () -> String
         let sections: Set<SettingsViewController.Section>
+        var page: (() -> UIViewController)? = nil
     }
     private var categories: [Category] {
         let settings = GameSettings.shared, running = engineRunning
@@ -43,6 +44,10 @@ final class SettingsHomeViewController: UITableViewController {
                 AppLanguage.choose("Where the game is, checking and downloading its files")
             }, sections: [.files]))
         }
+        list.append(Category(icon: "shippingbox", title: AppLanguage.choose("Mods"), summary: {
+            let count = ModInstaller.installed().filter(\.enabled).count
+            return count == 0 ? AppLanguage.choose("Install car, skin and script mods") : AppLanguage.interpolate(AppLanguage.choose("{arg0} mods on"), [String(count)])
+        }, sections: [], page: { ModsViewController() }))
         list.append(Category(icon: "iphone", title: AppLanguage.choose("This device"), summary: {
             AppLanguage.choose("Memory, logs and the Telegram group")
         }, sections: [.device]))
@@ -115,6 +120,7 @@ final class SettingsHomeViewController: UITableViewController {
     }
 
     private func open(_ category: Category, animated: Bool) {
+        if let page = category.page { navigationController?.pushViewController(page(), animated: animated); return }
         let page = SettingsViewController(engineRunning: engineRunning, runningMode: runningMode, title: category.title, sections: category.sections)
         page.resolutionChanged = resolutionChanged
         page.controlsChanged = controlsChanged

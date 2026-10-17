@@ -27,7 +27,7 @@ enum ControlStyle {
     static let accent = UIColor(red: 0.365, green: 0.714, blue: 0.898, alpha: 1)
     /// SF Symbols for controls that have no generated icon.
     static let fallbackSymbol: [String: String] = [
-        "radio": "radio", "look_back": "arrow.uturn.backward", "up": "chevron.up", "down": "chevron.down",
+        "radio": "radio", "mods": "puzzlepiece.extension.fill", "look_back": "arrow.uturn.backward", "up": "chevron.up", "down": "chevron.down",
         "left": "chevron.left", "right": "chevron.right", "accept": "checkmark", "back": "arrow.uturn.left",
         "tab_left": "chevron.left.2", "tab_right": "chevron.right.2", "dive": "arrow.down.to.line",
         "surface": "arrow.up.to.line", "crouch": "figure.walk", "pedal": "bicycle",
@@ -284,7 +284,7 @@ final class TouchControlsView: UIView {
     private var fractionalMousePixels = CGPoint.zero
     private var lastCameraMode: GameSettings.CameraTouchMode = .stick
     private var cameraSwipeAvailable: Bool {
-        context != .menu && !phoneDock && !gamePhoneOut && !promptActive && !context.flying
+        context != .menu && !phoneDock && !gamePhoneOut && !promptActive && !context.flying && !hints.phoneBrowser
     }
     private var swipeCameraEnabled: Bool {
         GameSettings.shared.cameraTouchMode != .stick && cameraSwipeAvailable
@@ -433,6 +433,12 @@ final class TouchControlsView: UIView {
     private let phone = ControlButton("phone", icon: "phone", label: AppLanguage.choose("Phone"))
     private let pause = ControlButton("pause", icon: "pause", label: AppLanguage.choose("Pause menu"))
     private let settings = ControlButton("settings", icon: "settings", label: AppLanguage.choose("Settings"))
+    /// Script mods (GTA-69): shown while one runs; opens the mod tray (ModKeysView).
+    private let mods = ControlButton("mods", icon: "mods", label: AppLanguage.choose("Mods"))
+    var modsActive = false { didSet { if modsActive != oldValue { updateVisibility(); setNeedsLayout() } } }
+    var openMods: (() -> Void)?
+    /// Where the Mods control is, for the tray that opens from it.
+    var modsButtonFrame: CGRect? { mods.isHidden || mods.superview == nil ? nil : mods.frame }
     private let lights = ControlButton("lights", icon: "lights", label: AppLanguage.choose("Headlights"))
     private let radio = ControlButton("radio", icon: "radio", label: AppLanguage.choose("Radio"))
     // Menu and phone dock
@@ -475,7 +481,7 @@ final class TouchControlsView: UIView {
     private var lastMissionLog = ""
     /// Called every frame with the engine's poll check (PGInputPolledWithin).
     func updateMissionInputs(_ polled: (Int32) -> Bool) {
-        let next = Set((missionButtons.map(\.input) + missionButtons.compactMap(\.menuInput) + [218, 219, 187, 188, 189, 190]).filter(polled))
+        let next = Set((missionButtons.map(\.input) + missionButtons.compactMap(\.menuInput) + [218, 219, 220, 221, 187, 188, 189, 190]).filter(polled))
         if next != polledMission { polledMission = next; updateVisibility(); setNeedsLayout() }
     }
     /// The mission buttons to show now: polled, and not already covered by a button on screen.
@@ -499,7 +505,7 @@ final class TouchControlsView: UIView {
     private var allButtons: [ControlButton] {
         missionButtons.map(\.button) + [fire, aim, leftFire, jump, sprint, enter, weapons, reload, cover, crouch, switcher, special, interact, detonate, zoomIn, zoomOut,
          weaponPrev, weaponNext, gas, brake, handbrake, steerLeft, steerRight, driveBy, driveAim, duck, horn, lookBack,
-         vehicleWeapon, towHook, towArmUp, towArmDown, roof, dive, surface, airFire, gear, throttleUp, throttleDown, yawLeft, yawRight, camera, phone, pause, settings, lights, radio,
+         vehicleWeapon, towHook, towArmUp, towArmDown, roof, dive, surface, airFire, gear, throttleUp, throttleDown, yawLeft, yawRight, camera, phone, pause, settings, mods, lights, radio,
          up, down, left, right, accept, back, phoneOption, taxiHurry, taxiStop, tabLeft, tabRight, promptOption, bothTriggers]
     }
     /// Refresh accessibility names for the active language without recreating controls.
@@ -544,6 +550,7 @@ final class TouchControlsView: UIView {
             "phone": AppLanguage.choose("Phone"),
             "pause": AppLanguage.choose("Pause menu"),
             "settings": AppLanguage.choose("Settings"),
+            "mods": AppLanguage.choose("Mods"),
             "lights": AppLanguage.choose("Headlights"),
             "radio": AppLanguage.choose("Radio"),
             "up": AppLanguage.choose("Up"),
@@ -600,6 +607,7 @@ final class TouchControlsView: UIView {
 
     private func computeVisible() -> [ControlButton] {
         var list = baseVisible()
+        if (modsActive || editing) && list.contains(settings) { list.append(mods) }
         if !editing { list += shownMissionButtons(besides: list) }
         let playing = !phoneDock && !promptActive && context != .menu
         if characterSwitchEnabled, playing, context != .menu { list.append(switcher) }
@@ -626,7 +634,7 @@ final class TouchControlsView: UIView {
     /// Engine state for the situational buttons; called every frame.
     func updateHints(_ next: PGControlHints) {
         let changed = next.helpShown != hints.helpShown || next.specialShown != hints.specialShown || next.canDetonate != hints.canDetonate || next.helpContext != hints.helpContext
-            || next.vehicleModel != hints.vehicleModel || next.passenger != hints.passenger || next.taxiMenu != hints.taxiMenu
+            || next.vehicleModel != hints.vehicleModel || next.passenger != hints.passenger || next.taxiMenu != hints.taxiMenu || next.phoneBrowser != hints.phoneBrowser
         if changed || next.specialReady != hints.specialReady || next.specialActive != hints.specialActive || next.radioWheelOpen != hints.radioWheelOpen {
             hintsChanged?("Control hints: special \(next.specialShown ? (next.specialActive ? "active" : next.specialReady ? "ready" : "charging") : "none") \(Int(next.specialFill * 100))%, detonate \(next.canDetonate), help \(next.helpShown ? (next.helpContext ? "asks for interact" : "shown") : "none"), radio wheel \(next.radioWheelOpen ? "open" : "closed"), vehicle model 0x\(String(next.vehicleModel, radix: 16))")
         }
@@ -649,7 +657,9 @@ final class TouchControlsView: UIView {
         // A script menu (shops: barber, clothes, Ammu-Nation, Los Santos Customs) reads the frontend D-pad
         // inputs while player control stays on: it gets the menu layout too, or it can't be used (GTA-43).
         if (promptActive || scriptMenu) && !editing {
-            let stick = polledMission.contains(218) || polledMission.contains(219)
+            // A prompt that reads either stick (the yoga poses read both, GTA-37): no D-pad under the left
+            // thumb; an empty spot on the left is the left stick and on the right the right stick.
+            let stick = !polledMission.isDisjoint(with: [218, 219, 220, 221])
             return [camera, pause, settings] + (stick ? [] : [up, down, left, right]) + [accept, back, promptOption]
         }
         // A taxi ride: the destination menu takes D-pad left/right to change and A to choose.
@@ -767,7 +777,7 @@ final class TouchControlsView: UIView {
         rightStick.idleOrigin = planeStickEnabled ? point(0.80, 0.60) : nil
 
         // Utility bar, top centre: rare actions in the hard-to-reach zone.
-        let order = [radio, lights, camera, phone, pause, settings]
+        let order = [radio, lights, camera, phone, pause, settings, mods]
         let bar = order.filter { visible.contains($0) }
         for (i, button) in bar.enumerated() {
             let offset = (CGFloat(i) - CGFloat(bar.count - 1) / 2) * 54 * scale / safe.width
@@ -1002,6 +1012,8 @@ final class TouchControlsView: UIView {
             updateVisibility()
         case settings:
             DispatchQueue.main.async { self.openSettings?() }
+        case mods:
+            DispatchQueue.main.async { self.openMods?() }
         case vehicleWeapon where context.flying:
             // INPUT_VEH_FLY_SELECT_NEXT_WEAPON shares D-pad left with the radio (a tap changes the
             // station), so the weapon is switched directly instead.
@@ -1160,10 +1172,11 @@ final class TouchControlsView: UIView {
             // Sprinting is tapping A, as on a controller: holding it only jogs (simulator: holding A about
             // 4 m/s, taps every 0.3 s 5.8 m/s; GTA-46).
             let sprintTap = { () -> Bool in self.sprintClock += elapsed; return self.sprintClock.truncatingRemainder(dividingBy: 0.3) < 0.13 }
-            if sprintLatched && hypot(moveStick.value.x, moveStick.value.y) > 0.2 {
+            if sprintLatched && !promptActive && hypot(moveStick.value.x, moveStick.value.y) > 0.2 {
                 if sprintTap() { held.insert(.a) }
                 moveStick.sprinting = true
-            } else if hypot(moveStick.value.x, moveStick.value.y) > 0.92 {
+            } else if hypot(moveStick.value.x, moveStick.value.y) > 0.92 && !promptActive {
+                // (Not in a prompt: holding a yoga pose at the stick's edge mustn't tap A.)
                 if sprintSince == nil { sprintSince = now; sprintClock = 0 }
                 if now - (sprintSince ?? now) > 0.25 { if sprintTap() { held.insert(.a) }; moveStick.sprinting = true }
             } else { sprintSince = nil; sprintClock = 0; moveStick.sprinting = false }

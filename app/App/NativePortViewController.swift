@@ -86,6 +86,7 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
     private var metrics: [String: String] = [:]
     private var logFile: URL?
     private let touchControls = TouchControlsView(frame: .zero)
+    private let modKeys = ModKeysView(frame: .zero)
     private let gyro = GyroInput()
     private var engineStarted = false
     private var bootedPreset = GameSettings.shared.graphicsPreset
@@ -258,6 +259,31 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
             self.setNeedsUpdateOfPrefersPointerLocked()
         }
         view.addSubview(touchControls)
+        // Script mods asking for typed text (a car to spawn by name, a search) get the iPhone keyboard.
+        Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in self?.checkModTextRequest() }
+        // Script mods' keys (shows itself only while a script mod runs), above the touch controls.
+        modKeys.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(modKeys)
+        // The 🧩 Mods control lives in the touch controls (it is placed and moved like the others); the
+        // tray it opens, the D-pad and the keyboard are ModKeysView.
+        modKeys.activeChanged = { [weak self] active in self?.touchControls.modsActive = active }
+        modKeys.anchor = { [weak self] in
+            guard let self, let frame = self.touchControls.modsButtonFrame else { return nil }
+            return self.touchControls.convert(frame, to: self.modKeys)
+        }
+        touchControls.openMods = { [weak self] in self?.modKeys.toggleTray() }
+        #if targetEnvironment(simulator)
+        // Test: PG_TEST_MODS_TRAY=<seconds> opens the mod tray that long after launch (screenshots).
+        if let after = ProcessInfo.processInfo.environment["PG_TEST_MODS_TRAY"].flatMap(Double.init) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + after) { [weak self] in self?.modKeys.toggleTray(); self?.appendLog("TEST: mod tray opened") }
+        }
+        #endif
+        NSLayoutConstraint.activate([
+            modKeys.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            modKeys.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            modKeys.topAnchor.constraint(equalTo: view.topAnchor),
+            modKeys.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
         // Diagnostics overlay sits over the transparent gesture surface but
         // cannot intercept touches (isUserInteractionEnabled=false).
         view.bringSubviewToFront(inputTestLabel)
@@ -450,6 +476,12 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             metalView.isPaused = true
         }
+        // The engine couldn't get its memory at all (iPhone 8, 8 Plus and X on a free Apple ID): say so,
+        // instead of a frozen picture that drops back to the home screen.
+        if line == "iOS could not reserve the engine memory." {
+            showEngineStopped(title: AppLanguage.choose("Not enough memory on this iPhone"),
+                              message: AppLanguage.choose("iOS can't give the game the memory it needs on this iPhone. iPhone 8, 8 Plus and X usually can't run it with a free Apple ID; a paid developer account or TrollStore may help. Send the log if your iPhone is newer."))
+        }
         // The engine stopped during play (a trap on one of its threads, or an unported function):
         // the picture freezes or goes black and the pause menu never opens. The touch Settings button
         // may be hidden (it is with a controller), so a panel offers Send log and Settings (GTA-21).
@@ -545,6 +577,8 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         playIntro()
         launchButton.setTitle(AppLanguage.choose("Loading…"), for: .disabled); launchButton.setNeedsUpdateConfiguration()
         appendLog("Native touch controls support held buttons, sprint and weapon selection.")
+        installModsForTest()
+        noticeMods()
         startAudio()
         let (root, rootNote) = EnginePaths.filesRoot()
         if let rootNote { appendLog(rootNote) }
@@ -925,6 +959,70 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         return (scheme == "http" || scheme == "https") && !host.isEmpty
     }
     /// The game files screen: checking, finding, downloading and unpacking.
+    /// A script mod opened the game's on-screen keyboard: the Mod keys keyboard takes the text.
+    private func checkModTextRequest() {
+        var title = [CChar](repeating: 0, count: 160), text = [CChar](repeating: 0, count: 1024), maxLength: Int32 = 0
+        guard PGAsiTextRequest(&title, title.count, &text, text.count, &maxLength) else { return }
+        modKeys.startTextRequest(title: String(cString: title), text: String(cString: text), maxLength: Int(maxLength))
+        appendLog("Mods: a script asks for text: \(String(cString: title))")
+        #if targetEnvironment(simulator)
+        // Test: PG_TEST_TEXT_ANSWER types an answer and presses Done after a few seconds (screenshots first).
+        if let answer = ProcessInfo.processInfo.environment["PG_TEST_TEXT_ANSWER"] {
+            appendLog("TEST: text box shown: \(String(cString: title))")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { self.modKeys.testAnswer(answer) }
+        }
+        #endif
+    }
+
+    /// Simulator test: --install-mod <file> (repeatable) runs the in-app installer on each file before the
+    /// game starts, as if picked in Settings › Mods, and logs what it did.
+    private func installModsForTest() {
+        #if targetEnvironment(simulator)
+        let args = ProcessInfo.processInfo.arguments
+        for (i, arg) in args.enumerated() where arg == "--install-mod" && i + 1 < args.count {
+            let file = URL(fileURLWithPath: args[i + 1])
+            do {
+                let folder = try ModInstaller.unpack(file)
+                let plan = ModInstaller.plan(folder: folder, name: file.lastPathComponent, index: .load(manifest: EnginePaths.manifest))
+                try ModInstaller.install(plan)
+                appendLog("TEST: installed mod \(plan.name): \(plan.items.map { $0.target }.joined(separator: ", ")); skipped \(plan.skipped.map { $0.file + " (" + $0.reason + ")" }.joined(separator: ", "))")
+                try? FileManager.default.removeItem(at: folder)
+            } catch { appendLog("TEST: mod install failed for \(file.lastPathComponent): \(error.localizedDescription)") }
+        }
+        #endif
+    }
+
+    /// Mods (GTA-69): once per set of mod files, says that mods can break things and where mod help is.
+    private func noticeMods() {
+        let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Mods")
+        guard let walk = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey]) else { return }
+        ModInstaller.placeWaitingFiles()
+        // Switched-off mods (folders ending in .off) and files still waiting to be placed don't count.
+        // The signature must be the same on every launch (Swift's hashValue isn't), so it's FNV-1a.
+        var count = 0, signature: UInt64 = 14695981039346656037
+        for case let url as URL in walk {
+            let name = url.lastPathComponent
+            if name.hasSuffix(".off") || name == ".pending" { walk.skipDescendants(); continue }
+            guard name != "README.txt", !name.hasPrefix(".") else { continue }
+            let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+            guard values?.isRegularFile == true else { continue }
+            count += 1
+            // Relative to the Mods folder: the app's own folder path changes with every app update.
+            for byte in url.path.replacingOccurrences(of: folder.path, with: "").utf8 { signature = (signature ^ UInt64(byte)) &* 1099511628211 }
+            signature = (signature ^ UInt64(values?.fileSize ?? 0)) &* 1099511628211
+        }
+        guard count > 0 else { return }
+        appendLog("Mods folder: \(count) file\(count == 1 ? "" : "s").")
+        let key = "modsNoticeSignature", value = "\(count)-\(signature)"
+        guard UserDefaults.standard.string(forKey: key) != value else { return }
+        #if targetEnvironment(simulator)
+        if ProcessInfo.processInfo.environment["PG_TEST_NO_MODS_NOTICE"] != nil { return }
+        #endif
+        UserDefaults.standard.set(value, forKey: key)
+        showWhenFree(title: AppLanguage.choose("Mods are on"),
+                     message: AppLanguage.interpolate(AppLanguage.choose("{arg0} mod files are active. Mods can cause crashes and glitches that we can't fix: ask about them in the Mods topic on Telegram. Send logs only for problems that also happen without mods."), [String(count)]))
+    }
+
     private func showGameFiles() {
         guard !engineStarted, presentedViewController == nil else { return }
         let controller = GameFilesViewController()
@@ -1054,17 +1152,17 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
 
     private var stoppedPanel: UIView?
     /// Shown once the engine has stopped: what happened, Send log and Settings, above everything.
-    private func showEngineStopped() {
+    private func showEngineStopped(title titleText: String? = nil, message: String? = nil) {
         guard stoppedPanel == nil else { return }
         touchControls.reset(publish: false)
         touchControls.isHidden = true
         PGUpdateVirtualPad(PGPadState())
         let title = UILabel()
-        title.text = AppLanguage.choose("The game stopped")
+        title.text = titleText ?? AppLanguage.choose("The game stopped")
         title.font = Theme.display(22, .heavy)
         title.textColor = .white
         let info = UILabel()
-        info.text = AppLanguage.choose("Please send the log so this can be fixed, then close the app and open it again to keep playing.")
+        info.text = message ?? AppLanguage.choose("Please send the log so this can be fixed, then close the app and open it again to keep playing.")
         info.numberOfLines = 0
         info.textAlignment = .center
         info.font = .preferredFont(forTextStyle: .subheadline)
