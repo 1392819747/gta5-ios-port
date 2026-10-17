@@ -15,6 +15,7 @@ The app loads PC mods for GTA V as they are downloaded (from gta5-mods.com, for 
 | Data files (handling, AI, weather...) | Yes | Whole-file replacements, e.g. `vehicleaihandlinginfo.meta` |
 | Script Hook V scripts (`.asi`), trainers | Yes | Simple Trainer and similar; see [Scripts](#scripts-asi) |
 | ScriptHookVDotNet scripts (C# `.dll` in a `scripts` folder) | No | Not supported |
+| RAGE Plugin Hook plugins, like LSPDFR (LSPD First Response) | No | They need RAGE Plugin Hook's PC launcher and .NET |
 | ASI files that patch the PC game (packfile or heap limit adjusters, OpenIV.asi, gameconfig fixes) | Not needed | The port handles those limits itself. They load but do nothing |
 | Replacing files inside an archive that is inside another archive (for example a car in a DLC pack's `vehicles.rpf`) | Not yet | The log says which file was skipped |
 | Adding a brand-new file to one of the game's archives | Not yet | Replacing existing files works. Add-on packs bring their own archive and work |
