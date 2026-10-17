@@ -101,6 +101,15 @@ Script Hook V scripts are Windows files. The app runs them in a built-in interpr
 - A script that crashes or freezes is stopped on its own. The game keeps running, and the log says what happened.
 - Scripts cost a little speed: Simple Trainer takes about 2 to 3 ms per frame.
 
+## Mods that can't work on iPhone
+
+Two kinds of GTA V script mods need things from Windows that don't exist on an iPhone, so the app can't run them:
+
+- **ScriptHookVDotNet scripts** (C# or VB): you can spot them by a `scripts` folder with `.dll`, `.cs` or `.vb` files, and the mod page asks for "ScriptHookVDotNet" (often with "NativeUI" or "LemonUI"). They need Microsoft's .NET runtime inside the game, which iOS can't host. Many popular script mods are this kind.
+- **RAGE Plugin Hook plugins**, including **LSPDFR** (LSPD First Response) and its callout packs: a `plugins` folder and `RAGEPluginHook.exe`. RAGE Plugin Hook is its own PC launcher that starts GTA5.exe and loads .NET plugins into it. Neither the launcher nor .NET can run here.
+
+What does work: Script Hook V scripts (`.asi` files, written in C++), like Simple Trainer. When a mod page lists only "Script Hook V" (and maybe an ASI Loader) as requirements, it's this kind.
+
 ## Removing mods
 
 In **Settings › Mods**, swipe a mod to remove it or switch it off. Files you put in by hand: delete them from the Mods folder. Start the game again afterwards. The game's own files are never changed.
