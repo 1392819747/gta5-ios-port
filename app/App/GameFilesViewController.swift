@@ -18,6 +18,7 @@ final class GameFilesViewController: UIViewController, UIDocumentPickerDelegate,
     private let statusDetail = UILabel()
     private let detailsButton = Theme.glassButton(AppLanguage.choose("Show every problem"), symbol: "list.bullet")
     private let anywayButton = Theme.glassButton(AppLanguage.choose("Play anyway"), symbol: "exclamationmark.triangle")
+    private let continueButton = Theme.glassButton(AppLanguage.choose("Continue the download"), symbol: "arrow.clockwise")
     private let linkField = UITextField()
     private let linkButton = Theme.primaryButton(AppLanguage.choose("Continue"), symbol: "arrow.down.circle.fill")
     private let archivesStack = UIStackView()
@@ -73,6 +74,20 @@ final class GameFilesViewController: UIViewController, UIDocumentPickerDelegate,
         if install.isRunning { installChanged() } else { refresh(recheck: true) }
         // Automation: --install-link <url> starts a link install; --install-cancel-after <s> cancels it.
         let arguments = ProcessInfo.processInfo.arguments
+        // Automation: --game-files-scroll-bottom shows the end of the screen (the archive card's notes).
+        if arguments.contains("--game-files-scroll-bottom") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                guard let scroll = self.stack.superview as? UIScrollView else { return }
+                scroll.setContentOffset(CGPoint(x: 0, y: max(0, scroll.contentSize.height - scroll.bounds.height + scroll.adjustedContentInset.bottom)), animated: false)
+            }
+        }
+        // Automation: --install-continue taps Continue the download after a few seconds (GTA-93 test).
+        if arguments.contains("--install-continue") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
+                GameFolder.log("Automation: Continue the download (\(self.continueButton.isHidden ? "hidden" : "shown"))")
+                if !self.continueButton.isHidden { self.continueInstall() }
+            }
+        }
         if let i = arguments.firstIndex(of: "--install-link"), i + 1 < arguments.count {
             linkField.text = arguments[i + 1]
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.useLink() }
@@ -113,7 +128,9 @@ final class GameFilesViewController: UIViewController, UIDocumentPickerDelegate,
         check.addAction(UIAction { [weak self] _ in self?.refresh(recheck: true) }, for: .touchUpInside)
         anywayButton.addAction(UIAction { [weak self] _ in self?.confirmPlayAnyway() }, for: .touchUpInside)
         anywayButton.isHidden = true
-        let buttons = UIStackView(arrangedSubviews: [check, detailsButton, anywayButton, UIView()])
+        continueButton.addAction(UIAction { [weak self] _ in self?.continueInstall() }, for: .touchUpInside)
+        continueButton.isHidden = true
+        let buttons = UIStackView(arrangedSubviews: [continueButton, check, detailsButton, anywayButton, UIView()])
         buttons.spacing = 10
         return card(nil, [row, buttons])
     }
@@ -168,6 +185,8 @@ final class GameFilesViewController: UIViewController, UIDocumentPickerDelegate,
         let buttons = UIStackView(arrangedSubviews: [pick, UIView()])
         return card(AppLanguage.choose("From an archive in Files"), [
             note(AppLanguage.choose("Got a .zip or .rar of the game (or all parts of a multi-part one) in Files? The app unpacks it straight into its own folder and checks every file. No separate unzip app needed.")),
+            // GTA-62: the two reasons players found for a picker that does nothing.
+            note(AppLanguage.choose("Can't pick it? A cloud icon next to the file means it's still in iCloud Drive: move it to On My iPhone first. In LiveContainer, turn on its Fix file selection setting.")),
             archivesStack, buttons
         ])
     }
@@ -228,6 +247,16 @@ final class GameFilesViewController: UIViewController, UIDocumentPickerDelegate,
             setStatus(nil, title: AppLanguage.choose("No game files yet"), detail: AppLanguage.choose("Use one of the ways below. Whichever you choose, the app checks every file before you play."))
         }
         lookedAgain = false
+        // An install that stopped (lost connection, app closed): it continues where it stopped (GTA-93).
+        let resumable = found || install.isRunning ? nil : GameInstaller.resumableInstall(at: Self.installFolder.resolvingSymlinksInPath())
+        continueButton.isHidden = resumable == nil
+        if let resumable {
+            let percent = String(Int((resumable.fraction * 100).rounded(.down)))
+            setStatus(false, title: AppLanguage.interpolate(AppLanguage.choose("The download stopped at {arg0}%"), [percent]),
+                      detail: resumable.urls.isEmpty
+                        ? AppLanguage.choose("Tap Continue the download and pick the same archive: files already unpacked aren't unpacked again.")
+                        : AppLanguage.choose("Tap Continue the download: it picks up where it stopped instead of starting again."))
+        }
         detailsButton.isHidden = lastReport?.isComplete ?? true
         anywayButton.isHidden = found || !(lastReport.map(GameFolder.playAnywayAllowed) ?? false)
         showArchives()
@@ -256,6 +285,19 @@ final class GameFilesViewController: UIViewController, UIDocumentPickerDelegate,
             archivesStack.addArrangedSubview(button)
         }
         archivesStack.isHidden = GameFolder.archivesFound.isEmpty
+    }
+
+    /// Continues a stopped install (GTA-93): from its link at the saved byte, or from the same archive.
+    private func continueInstall() {
+        guard let resumable = GameInstaller.resumableInstall(at: Self.installFolder.resolvingSymlinksInPath()) else { refresh(recheck: false); return }
+        GameFolder.log("Continuing the stopped install at \(Int(resumable.fraction * 100))% (\(resumable.format), continues download: \(resumable.continuesDownload))")
+        if let url = resumable.urls.first {
+            startInstall(.url(url))
+        } else if let name = resumable.fileNames.first, let archive = GameFolder.archivesFound.first(where: { $0.lastPathComponent == name }) {
+            startInstall(.file(archive, ownedByApp: true), confirmed: true)
+        } else {
+            pickArchive()
+        }
     }
 
     private func confirmPlayAnyway() {
@@ -497,6 +539,7 @@ final class GameFilesViewController: UIViewController, UIDocumentPickerDelegate,
                 progressDetail.text = message
                 cancelButton.isHidden = true
                 setStatus(false, title: AppLanguage.choose("Couldn't get the game files"), detail: message)
+                continueButton.isHidden = GameInstaller.resumableInstall(at: Self.installFolder.resolvingSymlinksInPath()) == nil
             case let .webPage(url):
                 progressPanel.isHidden = true
                 openBrowser(url)

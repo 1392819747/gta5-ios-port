@@ -14,8 +14,15 @@ final class SettingsViewController: UITableViewController {
     var targetingChanged: (() -> Void)?
     var gameModeChanged: (() -> Void)?
     var cheatSelected: ((StoryCheat) -> Void)?
-    /// Story cheats › Set money: the amount the player typed.
+    /// Cheats › Set money: the amount the player typed.
     var moneyEntered: ((Int32) -> Void)?
+    /// Cheats › Spawn vehicle: the vehicle picked, and whether to get in.
+    var vehicleSelected: ((SpawnVehicle, Bool) -> Void)?
+    /// Cheats › an action row (repair, time, weather...): run once Settings closes.
+    var nativeCheatSelected: ((NativeCheatAction) -> Void)?
+
+    /// Cheats rows: Spawn vehicle, Set money, the NativeCheatGroup rows, then the controller story cheats.
+    private var storyCheatStart: Int { 2 + NativeCheatGroup.all.count }
 
     enum Section: Int, CaseIterable { case language, mode, graphics, controls, cheats, gyro, files, device }
     /// The sections this page shows (SettingsHomeViewController opens one page per category).
@@ -70,13 +77,21 @@ final class SettingsViewController: UITableViewController {
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Automation: --settings-scroll-bottom shows the end of the page (screenshots of the last rows).
+        if ProcessInfo.processInfo.arguments.contains("--settings-scroll-bottom"), tableView.numberOfSections > 0 {
+            let section = tableView.numberOfSections - 1, rows = tableView.numberOfRows(inSection: section)
+            if rows > 0 { tableView.scrollToRow(at: IndexPath(row: rows - 1, section: section), at: .bottom, animated: false) }
+        }
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: AppLanguage.choose("Done"), primaryAction: UIAction { [weak self] _ in self?.dismiss(animated: true) })
         navigationItem.rightBarButtonItem?.tintColor = Theme.accent
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
-        tableView.backgroundView = Theme.dimmedBackdrop(image: "SettingsBackground")
-        tableView.separatorColor = UIColor(white: 1, alpha: 0.1)
+        Theme.styleSettingsTable(tableView)
         fileRows = makeFileRows()
         NotificationCenter.default.addObserver(self, selector: #selector(preloadChanged), name: .assetPreloadChanged, object: nil)
         preloader.refresh()
@@ -87,6 +102,11 @@ final class SettingsViewController: UITableViewController {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 self.tableView.scrollToRow(at: IndexPath(row: row, section: self.indexOf(section)), at: .middle, animated: false)
             }
+        }
+        // Automation: --settings-section spawn goes on to Cheats › Spawn vehicle.
+        if let i = arguments.firstIndex(of: "--settings-section"), i + 1 < arguments.count, arguments[i + 1] == "spawn",
+           engineRunning, sections.contains(.cheats) {
+            DispatchQueue.main.async { self.tableView(self.tableView, didSelectRowAt: IndexPath(row: 0, section: self.indexOf(.cheats))) }
         }
     }
 
@@ -123,9 +143,9 @@ final class SettingsViewController: UITableViewController {
         switch sectionKind(section) {
         // While the game runs, settings that only take effect at the next start are hidden.
         case .mode: return engineRunning ? 0 : GameMode.allCases.count + (settings.gameModeChoice == .sandbox ? 1 : 0)
-        case .graphics: return engineRunning ? Self.liveGraphicsRows.count : settings.tier.allowed.count + 7
+        case .graphics: return engineRunning ? Self.liveGraphicsRows.count : settings.tier.allowed.count + 7 + GraphicsDetail.all.count
         case .controls: return controlsRows.count
-        case .cheats: return engineRunning ? StoryCheats.all.count + 1 : 0   // row 0: Set money
+        case .cheats: return engineRunning ? StoryCheats.all.count + storyCheatStart : 0
         case .gyro: return (settings.gyroAim == .off ? 1 : 3) + (settings.tiltSteer == .off ? 1 : 2)
         case .files: return engineRunning ? 0 : fileRows.count
         case .device: return 4
@@ -143,7 +163,7 @@ final class SettingsViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
         if sectionKind(section) == .cheats, !engineRunning { return nil }
         if engineRunning, [.mode, .files].contains(sectionKind(section)) { return nil }
-        return [AppLanguage.choose("Language"), AppLanguage.choose("Game mode"), AppLanguage.choose("Graphics"), AppLanguage.choose("Touch controls"), AppLanguage.choose("Story cheats"), AppLanguage.choose("Gyro"), AppLanguage.choose("Game files"), AppLanguage.choose("This device")][sectionKind(section).rawValue]
+        return [AppLanguage.choose("Language"), AppLanguage.choose("Game mode"), AppLanguage.choose("Graphics"), AppLanguage.choose("Touch controls"), AppLanguage.choose("Cheats"), AppLanguage.choose("Gyro"), AppLanguage.choose("Game files"), AppLanguage.choose("This device")][sectionKind(section).rawValue]
     }
 
     /// Graphics rows that act during play: resolution, fill the screen, FPS counter, steady when hot,
@@ -170,7 +190,7 @@ final class SettingsViewController: UITableViewController {
             return AppLanguage.choose("Switching tabs changes the camera control and the settings below. It does not force GTA V's in-game button prompt icons.")
         case .cheats:
             return engineRunning
-                ? AppLanguage.choose("The game's own story cheats. This screen closes and the buttons are pressed for you, which takes a few seconds; the controls don't respond meanwhile. Stand still, not in a cutscene or the pause menu. Works in Story mode and Sandbox.")
+                ? AppLanguage.choose("Switches and actions take effect when you're back in the game. Turn God mode and Never wanted off for missions that need damage or a police chase. The game's own cheats close this screen and press the buttons for you, which takes a few seconds. Works in Story mode and Sandbox.")
                 : nil
         case .gyro:
             return AppLanguage.choose("Move the phone to fine-tune your aim; turning your body turns the camera. Tilt steering turns the phone like a steering wheel: Assist adds fine control on top of the touch steering, Tilt to steer replaces it. The straight-ahead angle is however you hold the phone when you get in.")
@@ -246,6 +266,27 @@ final class SettingsViewController: UITableViewController {
                     cell.accessoryView = toggle(settings.matchScreenShape, label: AppLanguage.choose("Fill the screen")) { [weak self] in
                         self?.settings.matchScreenShape = $0; self?.resolutionChanged?(); self?.tableView.reloadData()
                     }
+                } else if row >= 7, row - 7 < GraphicsDetail.all.count {
+                    // The player's own details over the preset (GTA-84): kept when the preset changes.
+                    let detail = GraphicsDetail.all[row - 7]
+                    let presetValue = detail.presetValue(settings.graphicsPreset)
+                    let own = settings.graphicsOverrides[detail.option]
+                    content.text = detail.title
+                    content.secondaryText = own == nil ? AppLanguage.choose("As the preset · applies when you press Play") : AppLanguage.choose("Your own setting · applies when you press Play")
+                    let button = UIButton(type: .system)
+                    button.setTitle((own.map(detail.name(of:)) ?? AppLanguage.interpolate(AppLanguage.choose("Preset ({arg0})"), [detail.name(of: presetValue)])) + " ▾", for: .normal)
+                    button.showsMenuAsPrimaryAction = true
+                    button.accessibilityLabel = detail.title
+                    let presetChoice = UIAction(title: AppLanguage.interpolate(AppLanguage.choose("Preset ({arg0})"), [detail.name(of: presetValue)]), state: own == nil ? .on : .off) { [weak self] _ in
+                        self?.settings.graphicsOverrides[detail.option] = nil; self?.tableView.reloadData()
+                    }
+                    button.menu = UIMenu(children: [presetChoice] + zip(detail.values, detail.names).map { value, name in
+                        UIAction(title: name, state: own == value ? .on : .off) { [weak self] _ in
+                            self?.settings.graphicsOverrides[detail.option] = value; self?.tableView.reloadData()
+                        }
+                    })
+                    button.sizeToFit()
+                    cell.accessoryView = button
                 } else if row == 6 {
                     content.text = AppLanguage.choose("Sharper upscaling")
                     content.secondaryText = AppLanguage.choose("MetalFX brings the picture to the screen's resolution with sharpening instead of stretching it. Uses a little more battery.")
@@ -424,10 +465,24 @@ final class SettingsViewController: UITableViewController {
                 content.secondaryText = AppLanguage.interpolate(AppLanguage.choose("{arg0} [{arg1}] · Aim mode: {arg2}"), [kind, String(device), String(PGTargetingMode())])
             }
         case .cheats where indexPath.row == 0:
+            content.text = AppLanguage.choose("Spawn vehicle")
+            content.secondaryText = AppLanguage.choose("Search all vehicles available in this game")
+            cell.accessoryType = .disclosureIndicator
+        case .cheats where indexPath.row == 1:
             content.text = AppLanguage.choose("Set money")
             content.secondaryText = AppLanguage.choose("Type an amount for the character you're playing. Handy if the old $0 bug took yours.")
+        case .cheats where indexPath.row < storyCheatStart:
+            let group = NativeCheatGroup.all[indexPath.row - 2]
+            content.text = AppLanguage.choose(group.title)
+            content.secondaryText = AppLanguage.choose(group.detail)
+            if let cheat = group.toggle {
+                cell.selectionStyle = .none
+                cell.accessoryView = toggle(PGCheatEnabled(cheat), label: AppLanguage.choose(group.title)) {
+                    _ = PGSetPersistentCheatEnabled(cheat, $0)
+                }
+            } else if group.actions.count > 1 { cell.accessoryType = .disclosureIndicator }
         case .cheats:
-            let cheat = StoryCheats.all[indexPath.row - 1]
+            let cheat = StoryCheats.all[indexPath.row - storyCheatStart]
             content.text = AppLanguage.choose(cheat.title)
             content.secondaryText = AppLanguage.choose(cheat.detail)
         case .gyro:
@@ -536,6 +591,26 @@ final class SettingsViewController: UITableViewController {
         return cell
     }
 
+    /// An action row: one action runs right away (Settings closes first); several open a list to pick from.
+    private func selectNativeCheat(_ group: NativeCheatGroup, at indexPath: IndexPath) {
+        guard group.toggle == nil else { return }
+        let run: (NativeCheatAction) -> Void = { [weak self] action in
+            guard let self else { return }
+            let selected = self.nativeCheatSelected
+            self.navigationController?.dismiss(animated: true) { selected?(action) }
+        }
+        if group.actions.count == 1 { run(group.actions[0]); return }
+        let sheet = UIAlertController(title: AppLanguage.choose(group.title), message: AppLanguage.choose(group.detail), preferredStyle: .actionSheet)
+        for action in group.actions {
+            sheet.addAction(UIAlertAction(title: AppLanguage.choose(action.title), style: .default) { _ in run(action) })
+        }
+        sheet.addAction(UIAlertAction(title: AppLanguage.choose("Cancel"), style: .cancel))
+        guard let anchor: UIView = tableView.cellForRow(at: indexPath) ?? tableView else { return }
+        sheet.popoverPresentationController?.sourceView = anchor
+        sheet.popoverPresentationController?.sourceRect = anchor.bounds
+        present(sheet, animated: true)
+    }
+
     /// Set money: a number field; the money changes once Settings closes and the game runs a frame.
     private func askForMoney() {
         let alert = UIAlertController(title: AppLanguage.choose("Set money"),
@@ -562,9 +637,19 @@ final class SettingsViewController: UITableViewController {
         if sectionKind(indexPath.section) == .device, indexPath.row == 3 { UIApplication.shared.open(Theme.telegramURL); return }
         if sectionKind(indexPath.section) == .controls,
            controlsRows[indexPath.row] == .editLayout { editLayout?(); return }
-        if sectionKind(indexPath.section) == .cheats, indexPath.row == 0 { askForMoney(); return }
+        if sectionKind(indexPath.section) == .cheats, indexPath.row == 0 {
+            let page = VehicleSpawnViewController()
+            page.vehicleSelected = vehicleSelected
+            navigationController?.pushViewController(page, animated: true)
+            return
+        }
+        if sectionKind(indexPath.section) == .cheats, indexPath.row == 1 { askForMoney(); return }
+        if sectionKind(indexPath.section) == .cheats, indexPath.row < storyCheatStart {
+            selectNativeCheat(NativeCheatGroup.all[indexPath.row - 2], at: indexPath)
+            return
+        }
         if sectionKind(indexPath.section) == .cheats {
-            let cheat = StoryCheats.all[indexPath.row - 1]
+            let cheat = StoryCheats.all[indexPath.row - storyCheatStart]
             dismiss(animated: true) { self.cheatSelected?(cheat) }
             return
         }

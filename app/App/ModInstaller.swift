@@ -18,6 +18,9 @@ enum ModInstaller {
         var items: [Item] = []
         var skipped: [(file: String, reason: String)] = []
         var kinds = Set<String>()
+        /// Something was left out because it can't work on iPhone (Windows .NET, another game version).
+        var unsupported = false
+        mutating func leaveOut(_ file: String, unsupported reason: String) { skipped.append((file, reason)); unsupported = true }
     }
     struct Installed { let name: String; let enabled: Bool; let files: Int; let url: URL; let waiting: Int }
 
@@ -119,7 +122,26 @@ enum ModInstaller {
     /// PC files that only raise the PC game's limits or list DLC packs; the port manages those itself, and an
     /// old copy (some mods ship one) would break the game.
     private static let pcOnlyFiles: Set<String> = ["gameconfig.xml", "dlclist.xml", "extratitleupdatedata.meta", "heapsizes.xml"]
-    private static let loaderFiles: Set<String> = ["scripthookv.dll", "dinput8.dll", "dsound.dll", "version.dll", "scripthookvdotnet.dll", "scripthookvdotnet2.dll", "scripthookvdotnet3.dll", "openiv.asi"]
+    private static let loaderFiles: Set<String> = ["scripthookv.dll", "dinput8.dll", "dsound.dll", "version.dll", "openiv.asi"]
+    /// What a mod needs that can't run on iPhone (docs/MODS.md, "Mods that can't work on iPhone").
+    private static func unsupportedReason(_ rel: String) -> String? {
+        let lower = rel.lowercased(), name = (lower as NSString).lastPathComponent, ext = (name as NSString).pathExtension
+        if name.hasPrefix("scripthookvdotnet") || ["cs", "vb"].contains(ext) { return AppLanguage.choose("C# script (ScriptHookVDotNet): not supported") }
+        if name.hasPrefix("rageplugin") || name == "lspdfr.dll" || (ext == "dll" && lower.split(separator: "/").contains("plugins")) {
+            return AppLanguage.choose("RAGE Plugin Hook plugin (like LSPDFR): not supported")
+        }
+        if ext == "dll" { return AppLanguage.choose("C# script (ScriptHookVDotNet): not supported") }
+        return nil
+    }
+    /// A model, texture or add-on pack made for GTA V Enhanced (the 2025 PC edition): the game here stops on it.
+    private static func versionReason(_ url: URL) -> String? {
+        guard ["yft", "ytd", "ydd", "ydr", "rpf"].contains(url.pathExtension.lowercased()) else { return nil }
+        var why = [CChar](repeating: 0, count: 200)
+        guard PGModFileProblem(url.path, &why, why.count) else { return nil }
+        return String(cString: why).contains("Enhanced")
+            ? AppLanguage.choose("made for GTA V Enhanced; use the mod's Legacy (original PC) version")
+            : AppLanguage.choose("made for another version of the game")
+    }
 
     /// Decides where each file of an unpacked mod goes.
     static func plan(folder: URL, name: String, index: GameIndex) -> Plan {
@@ -157,6 +179,7 @@ enum ModInstaller {
         // Script Hook V scripts: the .asi with its settings next to it, at the mod's top level.
         for file in files where file.url.pathExtension.lowercased() == "asi" && !done.contains(file.rel) {
             let lower = file.url.lastPathComponent.lowercased()
+            if let reason = unsupportedReason(file.rel) { plan.leaveOut(file.rel, unsupported: reason); done.insert(file.rel); continue }
             if loaderFiles.contains(lower) { plan.skipped.append((file.rel, AppLanguage.choose("not needed on iPhone"))); done.insert(file.rel); continue }
             let dir = (file.rel as NSString).deletingLastPathComponent
             let assetTypes: Set<String> = ["yft", "ytd", "ydd", "ydr", "ymt", "rpf", "oiv"]
@@ -187,9 +210,8 @@ enum ModInstaller {
             if loaderFiles.contains(lower) || pcOnlyFiles.contains(lower) { plan.skipped.append((file.rel, AppLanguage.choose("not needed on iPhone"))); continue }
             // The mod also has an OpenIV package: that is the install; loose copies are the manual way.
             if plan.kinds.contains("oiv") && gameExtensions.contains(ext) { plan.skipped.append((file.rel, AppLanguage.choose("installed by the mod's OpenIV package"))); continue }
-            if ext == "dll" {
-                plan.skipped.append((file.rel, AppLanguage.choose("C# script (ScriptHookVDotNet): not supported"))); continue
-            }
+            if let reason = unsupportedReason(file.rel) { plan.leaveOut(file.rel, unsupported: reason); continue }
+            if let reason = versionReason(file.url) { plan.leaveOut(file.rel, unsupported: reason); continue }
             // Already laid out like the game (x64e.rpf/..., update/x64/dlcpacks/..., common.rpf/...).
             if let path = gameAnchor(file.rel) {
                 plan.items.append(Item(source: file.url, target: path, note: AppLanguage.choose("game path from the mod")))

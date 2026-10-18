@@ -7,6 +7,9 @@ python3 Scripts/prepare_memory_pressure.py
 python3 Scripts/prepare_virtual_pad.py
 python3 Scripts/prepare_movie_wait.py
 python3 Scripts/prepare_tv_without_video.py
+python3 Scripts/prepare_bink_queue.py
+python3 Scripts/prepare_menu_shadow.py
+python3 Scripts/prepare_missing_text.py
 python3 Scripts/prepare_missing_txd.py
 python3 Scripts/prepare_missing_scaleform.py
 python3 Scripts/prepare_mod_archives.py

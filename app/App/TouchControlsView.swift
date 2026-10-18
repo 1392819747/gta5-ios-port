@@ -57,7 +57,12 @@ enum ControlStyle {
     /// Model name hashes (joaat) from the game's vehicles.meta: tow trucks, whose hook releases
     /// with INPUT_VEH_GRAPPLING_HOOK, and cars with an animated convertible roof (animConvRoofDictName).
     static let towTrucks: Set<UInt32> = [0xB12314E0 /* towtruck */, 0xE5A2D6C6 /* towtruck2 */]
+    /// Vehicles with an arm on the left stick up/down (INPUT_VEH_MOVE_UD): the tow trucks and the dock Handler of
+    /// Scouting the Port, whose arm a thumb on the steering stick could raise but hardly lower (GTA-97).
+    static let armVehicles: Set<UInt32> = towTrucks.union([0x1A7FCEFA /* handler */])
     static let taxi: UInt32 = 0xC703DB5F
+    /// The player as Chop (a_c_chop), in the missions that switch from Franklin to him.
+    static let chop: UInt32 = 0x14EC17EA
     static let convertibles: Set<UInt32> = [
         0xA8E38B01 /* ninef2 */, 0x7B8AB45F /* carbonizzare */, 0x13B57D8A /* cogcabrio */, 0xFAAD85EE /* felon2 */,
         0xB9CB3B69 /* issi2 */, 0x679450AF /* rapidgt2 */, 0x3412AE2D /* sentinel2 */, 0xB8E2AE18 /* zion2 */,
@@ -284,7 +289,7 @@ final class TouchControlsView: UIView {
     private var fractionalMousePixels = CGPoint.zero
     private var lastCameraMode: GameSettings.CameraTouchMode = .stick
     private var cameraSwipeAvailable: Bool {
-        context != .menu && !phoneDock && !gamePhoneOut && !promptActive && !context.flying && !hints.phoneBrowser
+        context != .menu && !phoneDock && !gamePhoneOut && !promptActive && !context.flying && !hints.phoneBrowser && !helpAsksRightStick
     }
     private var swipeCameraEnabled: Bool {
         GameSettings.shared.cameraTouchMode != .stick && cameraSwipeAvailable
@@ -341,7 +346,7 @@ final class TouchControlsView: UIView {
             let dx = Int32(total.x.rounded(.towardZero))
             let dy = Int32(total.y.rounded(.towardZero))
             fractionalMousePixels = CGPoint(x: total.x - CGFloat(dx), y: total.y - CGFloat(dy))
-            if dx != 0 || dy != 0 { PGMouseInput(dx, dy, 0) }
+            if dx != 0 || dy != 0 { PGMouseInput(dx, dy, mouseButtons) }
         }
     }
 
@@ -476,13 +481,35 @@ final class TouchControlsView: UIView {
         MissionButton(input: 230, button: ControlButton("script_ls", icon: "script_ls", label: AppLanguage.choose("Left stick click")), pad: .l3, trigger: 0),
         MissionButton(input: 231, button: ControlButton("script_rs", icon: "script_rs", label: AppLanguage.choose("Right stick click")), pad: .r3, trigger: 0)]
     private var polledMission: Set<Int32> = []
-    /// A script polls the frontend D-pad (INPUT_FRONTEND_UP/DOWN/LEFT/RIGHT, 187-190): a shop or script menu is open.
-    private var scriptMenu: Bool { !polledMission.isDisjoint(with: [187, 188, 189, 190]) && context != .menu && !phoneDock }
+    /// A script polls the frontend D-pad up and down (INPUT_FRONTEND_UP/DOWN, 188/187): a shop or script menu is
+    /// open (the barber reads both). Down alone isn't a menu: after swipe-camera mouse movement a game script reads
+    /// it every frame on foot, and the layout used to switch to the menu one (GTA-86).
+    private var scriptMenu: Bool { polledMission.isSuperset(of: [187, 188]) && context != .menu && !phoneDock }
     private var lastMissionLog = ""
+    /// Inputs the help message on screen names (PGControlHints.helpInputs, bit n is input 218 + n): a mission asks for
+    /// a button in its help ("Hold RT to grip a tooth" in By the Book) even when it reads the button in a way the poll
+    /// check misses, so the help counts as asking (GTA-94).
+    private var helpAsked: Set<Int32> {
+        hints.helpShown ? Set((0..<14).filter { hints.helpInputs & (1 << UInt32($0)) != 0 }.map { Int32(218 + $0) }) : []
+    }
+    /// The help asks for the right stick ("Rotate R to pull it out"): the right side is a stick then, also with the
+    /// swipe camera, whose mouse movement the mission doesn't read as the stick (GTA-94).
+    private var helpAsksRightStick: Bool { !helpAsked.isDisjoint(with: [220, 221]) }
+    /// Mission triggers latched on (see padState): asked for together with the right stick.
+    private var latchedTriggers: Set<Int32> = [], triggerWasPressed: Set<Int32> = []
+    private var rightStickWasAsked = false
     /// Called every frame with the engine's poll check (PGInputPolledWithin).
     func updateMissionInputs(_ polled: (Int32) -> Bool) {
-        let next = Set((missionButtons.map(\.input) + missionButtons.compactMap(\.menuInput) + [218, 219, 220, 221, 187, 188, 189, 190]).filter(polled))
-        if next != polledMission { polledMission = next; updateVisibility(); setNeedsLayout() }
+        let next = Set((missionButtons.map(\.input) + missionButtons.compactMap(\.menuInput) + [218, 219, 220, 221, 187, 188, 189, 190]).filter(polled)).union(helpAsked)
+        if helpAsksRightStick != rightStickWasAsked {
+            rightStickWasAsked = helpAsksRightStick
+            GameFolder.log("Touch layout: the right side is \(rightStickWasAsked ? "the right stick (the help asks for it)" : "the camera again")")
+        }
+        if next != polledMission {
+            let menuWas = scriptMenu
+            polledMission = next; updateVisibility(); setNeedsLayout()
+            if scriptMenu != menuWas { GameFolder.log("Touch layout: script menu \(scriptMenu ? "on" : "off") (inputs \(next.sorted().map(String.init).joined(separator: ",")))") }
+        }
     }
     /// The mission buttons to show now: polled, and not already covered by a button on screen.
     private func shownMissionButtons(besides list: [ControlButton]) -> [ControlButton] {
@@ -610,7 +637,10 @@ final class TouchControlsView: UIView {
         if (modsActive || editing) && list.contains(settings) { list.append(mods) }
         if !editing { list += shownMissionButtons(besides: list) }
         let playing = !phoneDock && !promptActive && context != .menu
-        if characterSwitchEnabled, playing, context != .menu { list.append(switcher) }
+        // As Chop the game reports player control off, so the prompt layout shows, and it had no way back to Franklin
+        // but D-pad down; it gets the switch button too (GTA-81).
+        let asChop = promptActive && hints.pedModel == ControlStyle.chop && !phoneDock
+        if characterSwitchEnabled, playing || asChop, context != .menu { list.append(switcher) }
         // In the layout editor every situational button shows, so it can be placed.
         if editing && !context.flying {
             list += context == .onFoot ? [special, interact, detonate, zoomIn, zoomOut, weaponPrev, weaponNext] : [special, interact, detonate, towHook, towArmUp, towArmDown, roof]
@@ -625,7 +655,8 @@ final class TouchControlsView: UIView {
             if context == .onFoot && aimActive { list += [zoomIn, zoomOut] }
             if context == .onFoot && has(isWeaponWheel) { list += [weaponPrev, weaponNext] }
             // The hook and the roof are D-pad right like the headlights, so they get their own buttons.
-            if context == .car && ControlStyle.towTrucks.contains(hints.vehicleModel) { list += [towHook, towArmUp, towArmDown] }
+            if context == .car && ControlStyle.towTrucks.contains(hints.vehicleModel) { list.append(towHook) }
+            if context == .car && ControlStyle.armVehicles.contains(hints.vehicleModel) { list += [towArmUp, towArmDown] }
             if context == .car && ControlStyle.convertibles.contains(hints.vehicleModel) { list.append(roof) }
         }
         return list
@@ -635,6 +666,7 @@ final class TouchControlsView: UIView {
     func updateHints(_ next: PGControlHints) {
         let changed = next.helpShown != hints.helpShown || next.specialShown != hints.specialShown || next.canDetonate != hints.canDetonate || next.helpContext != hints.helpContext
             || next.vehicleModel != hints.vehicleModel || next.passenger != hints.passenger || next.taxiMenu != hints.taxiMenu || next.phoneBrowser != hints.phoneBrowser
+            || next.pedModel != hints.pedModel
         if changed || next.specialReady != hints.specialReady || next.specialActive != hints.specialActive || next.radioWheelOpen != hints.radioWheelOpen {
             hintsChanged?("Control hints: special \(next.specialShown ? (next.specialActive ? "active" : next.specialReady ? "ready" : "charging") : "none") \(Int(next.specialFill * 100))%, detonate \(next.canDetonate), help \(next.helpShown ? (next.helpContext ? "asks for interact" : "shown") : "none"), radio wheel \(next.radioWheelOpen ? "open" : "closed"), vehicle model 0x\(String(next.vehicleModel, radix: 16))")
         }
@@ -659,8 +691,14 @@ final class TouchControlsView: UIView {
         if (promptActive || scriptMenu) && !editing {
             // A prompt that reads either stick (the yoga poses read both, GTA-37): no D-pad under the left
             // thumb; an empty spot on the left is the left stick and on the right the right stick.
-            let stick = !polledMission.isDisjoint(with: [218, 219, 220, 221])
-            return [camera, pause, settings] + (stick ? [] : [up, down, left, right]) + [accept, back, promptOption]
+            // A shop menu (barber, Los Santos Customs) reads the sticks too, but it moves with the frontend D-pad:
+            // it keeps the arrows, or it can't be scrolled on touch (GTA-75).
+            let stick = !polledMission.isDisjoint(with: [218, 219, 220, 221]) && !scriptMenu
+            // A prompt that asks for INPUT_CONTEXT gets the interact button: D-pad right sends it too, but nothing
+            // says so, and without the D-pad there was no way at all, e.g. standing up from a safehouse couch where the
+            // stick changes the TV channel (GTA-82), or drinking more whiskey at Trevor's (log 602).
+            let contextButton: [ControlButton] = hints.helpContext ? [interact] : []
+            return [camera, pause, settings] + (stick ? [] : [up, down, left, right]) + contextButton + [accept, back, promptOption]
         }
         // A taxi ride: the destination menu takes D-pad left/right to change and A to choose.
         if taxiRide && !editing {
@@ -695,12 +733,14 @@ final class TouchControlsView: UIView {
         let phoneOut = status & 2 != 0
         if phoneOut != gamePhoneOut {
             gamePhoneOut = phoneOut
-            // A phone the player didn't open (an incoming call) leaves the driving and flying controls
-            // in place, so the vehicle stays under control; the Phone button then opens the dock.
+            // A phone the player didn't open (an incoming call) leaves the play controls in place, so the
+            // player keeps driving, flying or walking through the call; the Phone button then opens the dock.
+            // On foot it used to open the dock by itself, which left no move stick until the call ended (GTA-80).
             let dockWas = phoneDock
-            if phoneOut { if phoneDock || !(context.driving || context.flying) { phoneDock = true }; phoneRequestedAt = nil; lastDockInput = now }
+            if phoneOut { phoneRequestedAt = nil; lastDockInput = now }
             else if phoneDock { phoneDock = false }
             if context != .menu && phoneDock != dockWas { reset(publish: false) }
+            GameFolder.log("Touch layout: phone \(phoneOut ? "out" : "away"), dock \(phoneDock ? "open" : "closed")")
             updateVisibility()
         }
         // Accept/Back prompt: player control off outside cutscenes (Mission failed and similar
@@ -713,8 +753,18 @@ final class TouchControlsView: UIView {
             hintsChanged?("Touch layout: " + (show ? "prompt (Accept/Back)" : "play"))
             reset(publish: false)
             updateVisibility()
+            promptInputsLogged = false
+        }
+        // Diagnostics: a prompt that stays up 3 s logs every input scripts read, so a screen whose buttons do
+        // nothing (the street race result screen's Retry/Continue) shows in the log what it waits for.
+        if promptActive, !promptInputsLogged, let since = promptSince, now - since > 3 {
+            promptInputsLogged = true
+            let read = (0..<360).filter { PGInputPolledWithin(Int32($0), 1500) != 0 }.map(String.init)
+            GameFolder.log("Prompt: scripts read inputs \(read.isEmpty ? "none" : read.joined(separator: ","))")
         }
     }
+    private var promptInputsLogged = false
+    private var promptButtonsDown: [String] = []
     var showingPrompt: Bool { promptActive }
 
     /// The saved-layout group for the current controls: on foot, or any vehicle.
@@ -994,7 +1044,7 @@ final class TouchControlsView: UIView {
             exitHoldStart = now
         case phone:
             if gamePhoneOut && !phoneDock {
-                // A call came in while driving: the dock (answer, hang up) opens on request.
+                // A phone the player didn't open (a call): the dock (answer, hang up) opens on request.
                 phoneDock = true
                 phoneOpensDock = true
             } else if gamePhoneOut {
@@ -1109,6 +1159,8 @@ final class TouchControlsView: UIView {
 
     func reset(publish: Bool = true, keepStickFinger: Bool = false) {
         clearCameraTravel()
+        if mouseButtons != 0 { mouseButtons = 0; PGMouseInput(0, 0, 0) }
+        if shiftHeld { shiftHeld = false; PGSetKey(0x10, false); PGSetKey(0xA0, false) }
         rightStick.end()
         planeThrottle = 0
         for (id, role) in roles {
@@ -1142,6 +1194,25 @@ final class TouchControlsView: UIView {
 
     /// The current controller state. `elapsed` turns finger travel into a
     /// stick deflection, so the camera turns about as far as the finger moves.
+    #if targetEnvironment(simulator)
+    /// Test (PG_TEST_PRESS="driveAim@50-70,driveBy@72-74"): holds named buttons in those windows (seconds after
+    /// WORLD_READY), as a finger would, to check what a button does in the game.
+    func applyTestPresses(sinceWorld seconds: Double) {
+        guard let spec = ProcessInfo.processInfo.environment["PG_TEST_PRESS"] else { return }
+        // A button may be listed more than once ("script_rt@46-46.4,script_rt@77-77.4"): it's down while any entry is.
+        var down: [String: Bool] = [:]
+        for item in spec.split(separator: ",") {
+            let parts = item.split(separator: "@"), times = parts.count == 2 ? parts[1].split(separator: "-").compactMap { Double($0) } : []
+            guard times.count == 2 else { continue }
+            down[String(parts[0]), default: false] = down[String(parts[0]), default: false] || (seconds >= times[0] && seconds < times[1])
+        }
+        for (name, on) in down {
+            guard let button = allButtons.first(where: { $0.name == name }) else { continue }
+            if button.pressed != on { button.setPressed(on); GameFolder.log("TEST: \(button.name) \(on ? "pressed" : "released") at \(Int(seconds)) s") }
+        }
+    }
+    #endif
+
     func padState(elapsed: Double) -> PGPadState {
         var state = PGPadState()
         var held = PadButtons()
@@ -1317,15 +1388,36 @@ final class TouchControlsView: UIView {
         }
         if accept.pressed { held.insert(.a) }
         if back.pressed { held.insert(.b) }
+        if promptActive {
+            let down = [accept, back, promptOption].filter(\.pressed).map(\.name)
+            if down != promptButtonsDown { promptButtonsDown = down; if !down.isEmpty { GameFolder.log("Prompt: pressed \(down.joined(separator: ", "))") } }
+        }
         if phoneOption.pressed { held.insert(.x) }
         if taxiHurry.pressed { held.insert(.x) }
         if taxiStop.pressed { held.insert(.b) }
         if tabLeft.pressed { held.insert(.l1) }
         if tabRight.pressed { held.insert(.r1) }
         if promptOption.pressed { held.insert(.x) }
+        // A trigger asked for together with the right stick latches (By the Book's tooth: hold RT to grip, then rotate
+        // the right stick to pull, GTA-94): a tap holds it, so the right thumb is free for the stick, and the next tap
+        // lets go; it lets go by itself once the mission stops asking for it or for the stick.
+        let stickToo = !polledMission.isDisjoint(with: [220, 221])
+        for mission in missionButtons where mission.trigger != 0 {
+            let pressed = mission.button.pressed, asked = polledMission.contains(mission.input) || (mission.menuInput.map(polledMission.contains) ?? false)
+            if stickToo && pressed && !triggerWasPressed.contains(mission.input) {
+                let on = latchedTriggers.remove(mission.input) == nil
+                if on { latchedTriggers.insert(mission.input) }
+                GameFolder.log("Mission button \(mission.button.name) \(on ? "held (tap again to let go)" : "let go")")
+            }
+            if pressed { triggerWasPressed.insert(mission.input) } else { triggerWasPressed.remove(mission.input) }
+            if !stickToo || !asked { latchedTriggers.remove(mission.input) }
+            mission.button.active = latchedTriggers.contains(mission.input)
+            if latchedTriggers.contains(mission.input) || (pressed && !stickToo) {
+                if mission.trigger == 1 { state.leftTrigger = 1 } else { state.rightTrigger = 1 }
+            }
+        }
         for mission in missionButtons where mission.button.pressed {
             if let pad = mission.pad { held.insert(pad) }
-            if mission.trigger == 1 { state.leftTrigger = 1 } else if mission.trigger == 2 { state.rightTrigger = 1 }
         }
         // LT+RT: a tap (the press starts) latches both triggers, the next releases them; it lets go by
         // itself once the mission stops asking.
@@ -1356,7 +1448,35 @@ final class TouchControlsView: UIView {
         }
         lastHeld = raw
         state.padButtons = held
+        sendKeyboardMouseEquivalents(state)
         return state
+    }
+
+    /// Swipe camera (mouse): once the game has seen mouse movement it takes keyboard-and-mouse input, and
+    /// in that mode it ignores some controller buttons the touch controls press: aiming from a vehicle (LB)
+    /// did nothing (GTA-83) and sprinting by tapping A stopped (GTA-79). While the swipe camera moves the
+    /// mouse, the same actions also go to the mouse and keyboard, as a PC player would press them:
+    /// aim = right mouse button, shoot = left mouse button, sprint = Shift.
+    private var mouseButtons: Int32 = 0
+    private var shiftHeld = false
+    private func sendKeyboardMouseEquivalents(_ state: PGPadState) {
+        var buttons: Int32 = 0
+        var shift = false
+        if experimentalMouseLookActive {
+            switch context {
+            case .onFoot:
+                if state.leftTrigger > 0.5 { buttons |= 2 }
+                if state.rightTrigger > 0.5 { buttons |= 1 }
+                shift = moveStick.sprinting || sprint.pressed
+            case .car, .boat, .bike, .bicycle, .sub:
+                if driveAim.pressed || driveBy.pressed { buttons |= 2 }
+                if driveBy.pressed, let started = fireStartedAt, CACurrentMediaTime() - started > 0.12 { buttons |= 1 }
+            default: break
+            }
+        }
+        if buttons != mouseButtons || buttons != 0 { PGMouseInput(0, 0, buttons) }
+        mouseButtons = buttons
+        if shift != shiftHeld { shiftHeld = shift; PGSetKey(0x10, shift); PGSetKey(0xA0, shift) }
     }
 
     /// Thumb offset (-1...1) to the engine's right stick. A small inner dead

@@ -115,6 +115,56 @@ static NSString *modsFolder(void){
   if(test&&*test)return @(test);
   return [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"Mods"];
 }
+// Mods made for GTA V Enhanced (the 2025 PC edition, GTA-87) keep their models and textures in newer resource
+// versions, and the game here (the original PC version) stops on them: "Code is expecting version 162 but
+// file adder.yft has version 171". Checked before the game starts and by the installer: a loose resource by
+// its RSC7 header, an archive (add-on pack dlc.rpf, also the archives inside it) by its table of contents
+// when it isn't encrypted, as OpenIV saves them (OPEN). An encrypted archive can't be checked and passes.
+static const struct {const char *ext;uint32_t legacy,enhanced;} pgResourceVersions[]={{"yft",162,171},{"ydr",165,159},{"ydd",165,159},{"ytd",13,5}};
+static bool pg_resource_version_problem(const char *name,uint32_t version,char *why,size_t n){
+  const char *dot=strrchr(name,'.');if(!dot)return false;
+  for(size_t i=0;i<sizeof pgResourceVersions/sizeof *pgResourceVersions;i++){
+    if(strcasecmp(dot+1,pgResourceVersions[i].ext)||version==pgResourceVersions[i].legacy)continue;
+    const char *base=strrchr(name,'/');base=base?base+1:name;
+    if(version==pgResourceVersions[i].enhanced)snprintf(why,n,"made for GTA V Enhanced (%s is version %u, this game reads %u)",base,version,pgResourceVersions[i].legacy);
+    else snprintf(why,n,"made for another game version (%s is version %u, this game reads %u)",base,version,pgResourceVersions[i].legacy);
+    return true;
+  }
+  return false;
+}
+static bool pg_rpf_version_problem(FILE *file,uint64_t base,int depth,char *why,size_t n){
+  uint32_t header[4];
+  if(fseeko(file,(off_t)base,SEEK_SET)||fread(header,4,4,file)!=4||header[0]!=0x52504637)return false;
+  if(header[3]&&header[3]!=0x4E45504F)return false;                  // encrypted: can't be read here
+  uint32_t count=header[1],namesLength=header[2];
+  if(!count||count>500000||namesLength>64u<<20)return false;
+  uint64_t *entries=malloc(16ull*count);char *names=malloc(namesLength+1);bool problem=false;
+  if(entries&&names&&fread(entries,16,count,file)==count&&fread(names,1,namesLength,file)==namesLength){
+    names[namesLength]=0;
+    for(uint32_t i=1;i<count&&!problem;i++){
+      uint64_t e=entries[2*i];uint32_t offset=(uint32_t)((e>>40)&0x7FFFFF),nameAt=(uint32_t)(e&0xFFFF);
+      if(offset==0x7FFFFF||nameAt>=namesLength)continue;
+      const char *name=names+nameAt;
+      if(e>>63){
+        uint32_t system=(uint32_t)entries[2*i+1],graphics=(uint32_t)(entries[2*i+1]>>32);
+        problem=pg_resource_version_problem(name,(((system>>28)&0xF)<<4)|((graphics>>28)&0xF),why,n);
+      }else if(depth<4){
+        size_t length=strlen(name);
+        if(length>4&&!strcasecmp(name+length-4,".rpf"))problem=pg_rpf_version_problem(file,base+512ull*offset,depth+1,why,n);
+      }
+    }
+  }
+  free(entries);free(names);return problem;
+}
+bool PGModFileProblem(const char *path,char *why,size_t n){
+  FILE *file=fopen(path,"rb");if(!file)return false;
+  uint32_t header[4]={0};bool problem=false;
+  if(fread(header,4,4,file)==4){
+    if(header[0]==0x37435352)problem=pg_resource_version_problem(path,header[1],why,n);
+    else if(header[0]==0x52504637)problem=pg_rpf_version_problem(file,0,0,why,n);
+  }
+  fclose(file);return problem;
+}
 // The game's file index for the mod installer (App/ModInstaller.swift): every file inside the archives,
 // written by the engine as it opens them (EngineHost.c), with the game files' version on its first line.
 const char *pg_game_index_path(void){
@@ -235,6 +285,10 @@ static NSArray *applyMods(NSArray *files,NSDictionary *manifest){
   NSUInteger modCount=0;
   for(NSArray *candidate in candidates){
     NSString *original=candidate[0],*full=candidate[1];NSNumber *size=candidate[2];
+    char why[200];
+    if(PGModFileProblem(full.fileSystemRepresentation,why,sizeof why)){
+      char line[PATH_MAX+300];snprintf(line,sizeof line,"Mods: %s is %s; ignored, or the game would stop. Install the mod's Legacy (original PC) version.",original.UTF8String,why);pg_log(line);continue;
+    }
     modCount++;
     NSString *relative=modTranslate(original),*lower=relative.lowercaseString;
     NSNumber *identity=ids[lower];
@@ -676,12 +730,49 @@ static void controlMetaOverlay(uint32_t id,uint64_t offset,uint8_t *destination,
   if(rewritten.length&&offset<rewritten.length)
     memcpy(destination,(const uint8_t *)rewritten.bytes+offset,(size_t)MIN((uint64_t)count,rewritten.length-offset));
 }
+// Add-on cars bring their own handling entries, and the game stopped with "CHandlingObject Pool Full, Size == 560"
+// once a few were installed (10 player logs on v1.4.1). PC players raise the pool in gameconfig.xml; the game's own
+// file gets that as it's read: HandlingData becomes at least 1500 entries (816 bytes each, about 1.2 MB). The XML is
+// compacted (whitespace between tags) to make room and padded back to its size, as for the control files.
+static NSData *gameConfig;
+NSData *PGGameConfigRewrite(NSData *original,NSString *pool,long minimum,long *was){
+  NSString *text=[[NSString alloc] initWithData:original encoding:NSUTF8StringEncoding];
+  if(!text)return nil;
+  NSRegularExpression *entry=[NSRegularExpression regularExpressionWithPattern:[NSString stringWithFormat:@"(<PoolName>%@</PoolName>\\s*<PoolSize value=\")(\\d+)(\"\\s*/>)",pool] options:0 error:nil];
+  NSTextCheckingResult *match=[entry firstMatchInString:text options:0 range:NSMakeRange(0,text.length)];
+  if(!match)return nil;
+  long current=[[text substringWithRange:[match rangeAtIndex:2]] integerValue];if(was)*was=current;
+  if(current>=minimum)return nil;
+  NSMutableString *changed=[text mutableCopy];
+  [changed replaceCharactersInRange:[match rangeAtIndex:2] withString:[NSString stringWithFormat:@"%ld",minimum]];
+  NSRegularExpression *gaps=[NSRegularExpression regularExpressionWithPattern:@">\\s+<" options:0 error:nil];
+  NSString *compact=[gaps stringByReplacingMatchesInString:changed options:0 range:NSMakeRange(0,changed.length) withTemplate:@"><"];
+  NSMutableData *out=[[compact dataUsingEncoding:NSUTF8StringEncoding] mutableCopy];
+  if(out.length>original.length)return nil;
+  while(out.length<original.length)[out appendBytes:" " length:1];
+  return out;
+}
+static void gameConfigOverlay(uint32_t id,uint64_t offset,uint8_t *destination,int64_t count){
+  if(count<=0||![assetFiles[id][0] isEqualToString:@"common/data/gameconfig.xml"])return;
+  @synchronized([NSNumber class]) {
+    if(!gameConfig){
+      uint64_t size=[assetFiles[id][1] unsignedLongLongValue];
+      NSMutableData *original=[NSMutableData dataWithLength:(NSUInteger)size];long was=0;
+      NSData *rewritten=readAssetImpl(id,0,original.mutableBytes,(uint32_t)size)==(int64_t)size?PGGameConfigRewrite(original,@"HandlingData",1500,&was):nil;
+      gameConfig=rewritten?:[NSData data];
+      char line[160];snprintf(line,sizeof line,rewritten?"Game config: room for %ld vehicle handling entries (was %ld), for add-on cars.":"Game config: vehicle handling entries %ld (was %ld), unchanged.",rewritten?1500L:was,was);pg_log(line);
+    }
+    if(gameConfig.length&&offset<gameConfig.length)
+      memcpy(destination,(const uint8_t *)gameConfig.bytes+offset,(size_t)MIN((uint64_t)count,gameConfig.length-offset));
+  }
+}
 static int64_t readAsset(uint32_t id,uint64_t offset,uint8_t *destination,uint32_t length){
   assetReadNetworkMS=assetReadLockMS=0;assetReadNetworkBytes=0;assetReadSource=2;
   double healthStart=assetNowMS();
   double start=assetTimingFD>=0?healthStart:0;int64_t result=readAssetImpl(id,offset,destination,length);
   envTestMetaOverlay(id,offset,destination,result);
   controlMetaOverlay(id,offset,destination,result);
+  gameConfigOverlay(id,offset,destination,result);
   double took=assetNowMS()-healthStart;
   atomic_fetch_add(&healthReads,1);atomic_fetch_add(&healthReadMicros,(uint64_t)(took*1000));
   if(result<0)atomic_fetch_add(&healthReadErrors,1);

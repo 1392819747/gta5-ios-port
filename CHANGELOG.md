@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.4.2
+- **Cheats menu** (Settings › Cheats, [docs/CHEATS.md](docs/CHEATS.md)), contributed by [@gfejer](https://github.com/gfejer) ([#22](https://github.com/kevinerikjs/gta5-ios-port/pull/22)): a searchable vehicle spawner with the game's own vehicle names (it keeps your last two spawned vehicles, so they don't pile up), God mode and Never wanted switches that last until you turn them off, repair and clean, time of day and weather, next to Set money and the game's own story cheats. Everything runs on the game's main script thread.
+- **Game files download continues**: a dropped connection is retried for 30 minutes (iOS pauses the app while the phone is locked); after the app was closed, Game files offers "Continue the download", which resumes from the saved byte. Normal (non-solid, single-volume) RAR5 archives continue in the middle too, not only zip.
+- **TVs no longer crash the game**: every TV switched on or channel change queued a video command for a thread this build doesn't run, and after about 30 the game stopped with "bwMovie command queue flood". Those commands are now dropped.
+- **Add-on cars**: room for 1500 vehicle handling entries instead of 560, so installing several add-on cars no longer stops the game with "CHandlingObject Pool Full". Add-on cars that ship their own engine sounds (`.rel` audio files) load instead of stopping at "Failed to find ..._game.dat151".
+- **Mods made for GTA V Enhanced** stopped the game ("Code is expecting version 162"). The loader checks every mod file before the game starts and leaves those out; the installer says to use the mod's Legacy version, and names ScriptHookVDotNet scripts and RAGE Plugin Hook plugins (LSPDFR) as not supported.
+- **Swipe camera**: the touch controls no longer switch to the menu layout after a swipe, and aiming from a vehicle works (mouse movement put the game in keyboard-and-mouse mode, where the touch controls' controller presses were ignored; aim and shoot now also press the mouse buttons).
+- **Missions get the buttons they ask for**: the buttons a help message names (for example "Hold RT") now appear however the mission reads them; while the help asks for the right stick, the right side of the screen is a stick, even with the swipe camera, and a trigger asked for together with the right stick latches (tap to hold, tap to let go). Prompts that ask for the context input get the hand button (standing up from a couch, drinking at Trevor's), and playing as Chop keeps the Switch character button to get back to Franklin.
+- **Scouting the Port**: the Handler gets Raise and Lower arm buttons; on the steering stick the arm could be raised but hardly lowered.
+- **Calls while walking** no longer take away the walking controls; the Phone button opens the phone to answer.
+- **Friend Request**: the Lifeinvader presentation plays about 3 minutes on a black TV (the game files have no TV videos); a note shows its progress.
+- **Settings › Graphics**: Textures, Shadows, Reflections, Draw distance, Grass, and Traffic and people can be set apart from the preset.
+- **Pause menu**: no more "You made changes but did not apply them" on every tab change (the menu's lowest shadow setting is above the lighter presets'; "Yes" raised the shadows). Help boxes for text the game files don't have no longer show raw labels like "HELP_DCK missing".
+- **Shop menus on touch** (barber, Los Santos Customs) keep their arrows.
+- Other bug fixes and improvements.
+
 ## v1.4.1
 - **Mods work as downloaded** (see [docs/MODS.md](docs/MODS.md)): replacement cars and characters (files inside the game's archives, like `x64e.rpf/levels/gta5/vehicles.rpf/oracle.yft`), add-on cars (`dlc.rpf` packs, added to the game's pack list automatically), OpenIV packages (`.oiv` files and unpacked packages, with their text and XML edits) and data files. PC/OpenIV paths work; names match regardless of case.
 - **Script Hook V scripts and trainers** (`.asi`): the app runs them in a built-in x86-64 interpreter (Blink, ISC license), with the Windows functions they use and the Script Hook V API, so the same file from gta5-mods.com works. Simple Trainer runs at about 2 to 3 ms per frame. Features that patch the PC game's memory stay off; a script that crashes or freezes is stopped on its own. ScriptHookVDotNet (C#) scripts aren't supported.

@@ -81,7 +81,14 @@ final class GameSettings {
     var cameraTouchMode: CameraTouchMode {
         // Swipe always drives the game's mouse: the controller swipe felt choppy, worst on the
         // vertical axis, because a finger can only tilt the stick up to the game's max turn speed.
-        get { (CameraTouchMode(rawValue: defaults.integer(forKey: "cameraTouchMode")) ?? .stick) == .stick ? .stick : .swipeMouse }
+        get {
+            #if targetEnvironment(simulator)
+            // Tests: --test-camera-mode <0 stick, 2 swipe> for this run only.
+            let arguments = ProcessInfo.processInfo.arguments
+            if let i = arguments.firstIndex(of: "--test-camera-mode"), i + 1 < arguments.count { return arguments[i + 1] == "0" ? .stick : .swipeMouse }
+            #endif
+            return (CameraTouchMode(rawValue: defaults.integer(forKey: "cameraTouchMode")) ?? .stick) == .stick ? .stick : .swipeMouse
+        }
         set {
             defaults.set(newValue.rawValue, forKey: "cameraTouchMode")
             // Remember the chosen swipe variant while the user switches to the
@@ -184,6 +191,12 @@ final class GameSettings {
     var memoryCapMB: Int {
         get { defaults.integer(forKey: "memoryCapMB") }
         set { defaults.set(max(0, newValue), forKey: "memoryCapMB") }
+    }
+    /// The player's own graphics details over the preset (GTA-84): engine option name -> value, e.g.
+    /// "textureQuality": "2". A detail not listed follows the preset. Kept when the preset changes.
+    var graphicsOverrides: [String: String] {
+        get { (defaults.dictionary(forKey: "graphicsOverrides") as? [String: String]) ?? [:] }
+        set { defaults.set(newValue, forKey: "graphicsOverrides") }
     }
     /// A Sprint button on foot (sprinting also works by holding the move stick at its edge). Off by default.
     var sprintButton: Bool {
