@@ -1,0 +1,33 @@
+workflows:
+  gta5port:
+    name: GTA V Port IPA
+    instance_type: mac_mini_m2
+    max_build_time: 120
+    environment:
+      xcode: latest
+    scripts:
+      - name: Install xcodegen
+        script: brew install xcodegen
+      - name: Download game files
+        script: |
+          mkdir -p "$HOME/game" && cd "$HOME/game"
+          for i in 01 02 03 04 05 06 07 08 09 10 11 12 13 14; do
+            curl -fL --retry 3 -O "https://github.com/alihammoud21/playgta5/releases/download/full-game-v1/playgta5-part-${i}-of-14.zip"
+          done
+      - name: Extract all parts
+        script: |
+          cd "$HOME/game"
+          for z in playgta5-part-*.zip; do ditto -x -k --rsrc --extattr "$z" .; done
+          rm -f playgta5-part-*.zip
+      - name: Build IPA
+        script: |
+          cd "$CM_BUILD_DIR"
+          ./build_ipa.sh --mirror "$HOME/game"
+      - name: Stage artifacts
+        script: |
+          cp -f GTA5Port.ipa "$CM_BUILD_DIR/GTA5Port.ipa" || true
+          cp -f app/Build/xcodebuild.log "$CM_BUILD_DIR/xcodebuild.log" || true
+    artifacts:
+      - GTA5Port.ipa
+      - xcodebuild.log
+
