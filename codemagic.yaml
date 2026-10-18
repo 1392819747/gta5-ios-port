@@ -25,7 +25,9 @@ workflows:
       - name: Build IPA (wasm2c + Metal shaders + xcodebuild)
         script: |
           cd "$CM_BUILD_DIR"
-          ./build_ipa.sh --mirror "$HOME/game"
+          ls -la "$HOME/game" | head -8
+          ls -d "$HOME/game/mirror/playgta5.com" 2>/dev/null || echo "WARN: mirror/playgta5.com not found"
+          ./build_ipa.sh --mirror "$HOME/game/mirror/playgta5.com"
       - name: Stage artifacts
         script: |
           cd "$CM_BUILD_DIR"
