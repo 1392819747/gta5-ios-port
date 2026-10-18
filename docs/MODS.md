@@ -94,12 +94,18 @@ Script Hook V scripts are Windows files. The app runs them in a built-in interpr
 
 - Put the `.asi` file and its settings (`.ini`) at the top of the Mods folder, for example `Mods/TrainerV.asi` and `Mods/trainerv.ini`.
 - You don't need `ScriptHookV.dll`, `dinput8.dll` or an ASI loader. If they're in the folder, they're ignored.
-- **Keys:** PC scripts use the keyboard (Simple Trainer opens with F3). While a script mod runs, a **Mod keys** button appears at the top of the screen. It opens a keypad with exactly the keys your mods use. Hold a key to press it. A long press pins the key next to the button, so the key that opens your trainer is one tap away. Shift, Ctrl and Alt stay down after a tap until you press the next key, for combinations like Alt + A.
-- **Typing:** when a script asks for text (spawn a car by name, a search box), the iPhone keyboard opens with the script's question. Type and tap OK; the script gets the text.
+- **Keys:** PC scripts use the keyboard. While a script mod runs, a **🧩 Mods** button shows in the touch controls (top row, next to Settings). It lists the keys your mods use, with the key that opens the menu first, learned from the mod or read from its settings (Simple Trainer: F3 opens the menu; if nothing shows, press F4, which shows or hides it). While a mod's menu is open, a D-pad appears to move through it, and Enter selects.
+- **Typing:** tap **Type** in the 🧩 Mods keys to send the iPhone keyboard to the mod (spawn a car by name, a search box); **Done** sends it. When a script asks with the game's own text box, the same keyboard opens by itself.
 - Controller shortcuts work through the touch controls and Bluetooth controllers too (Simple Trainer: RB + X opens the menu, D-pad and A/B to move around). A keyboard connected to an iPad works as well.
 - Features that change the PC game's memory directly (some trainer options) stay off. The rest of the script keeps working.
 - A script that crashes or freezes is stopped on its own. The game keeps running, and the log says what happened.
 - Scripts cost a little speed: Simple Trainer takes about 2 to 3 ms per frame.
+
+## Mods made for GTA V Enhanced
+
+GTA V Enhanced (the 2025 PC edition) stores cars and textures in newer file versions that this game can't read. Many mods ship both versions, in "Legacy" and "Enhanced" folders or with "LegEnh" in the name: use the **Legacy** (original PC) files. In v1.4.1 an Enhanced car stops the game at start (the log says "Code is expecting version 162 but file <car>.yft has version 171"); switch the mod off in Settings › Mods. From the next update the installer leaves Enhanced files out and says why.
+
+In v1.4.1 an add-on car that brings its own engine sound also stops the game at start (the log ends after "Failed to find …_game.dat151"). Switch it off for now; the next update loads those sounds.
 
 ## Mods that can't work on iPhone
 
