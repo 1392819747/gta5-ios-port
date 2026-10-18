@@ -22,6 +22,10 @@ workflows:
           rm -f playgta5-part-*.zip
           echo "=== game folder contents ==="
           ls -la
+      - name: Install Metal toolchain (Xcode 26 lacks it by default)
+        script: |
+          xcodebuild -downloadComponent MetalToolchain
+          xcrun -sdk iphoneos metal --version || echo "metal check done"
       - name: Build IPA (wasm2c + Metal shaders + xcodebuild)
         script: |
           cd "$CM_BUILD_DIR"
