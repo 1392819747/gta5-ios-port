@@ -10,6 +10,11 @@ python3 Scripts/prepare_tv_without_video.py
 python3 Scripts/prepare_bink_queue.py
 python3 Scripts/prepare_menu_shadow.py
 python3 Scripts/prepare_missing_text.py
+python3 Scripts/prepare_handler_frame.py
+python3 Scripts/prepare_netlog_flush.py
+python3 Scripts/prepare_input_exclusive.py
+python3 Scripts/prepare_restore_flush.py
+python3 Scripts/prepare_script_request_guard.py
 python3 Scripts/prepare_missing_txd.py
 python3 Scripts/prepare_missing_scaleform.py
 python3 Scripts/prepare_mod_archives.py
@@ -29,6 +34,7 @@ python3 Scripts/prepare_render_list_guard.py
 python3 Scripts/prepare_stale_texture_slots.py
 python3 Scripts/prepare_control_trace.py
 python3 Scripts/prepare_pause_ready.py
+python3 Scripts/prepare_streaming_health.py
 python3 Scripts/prepare_heap_return.py
 python3 Scripts/prepare_memory_file_create.py
 python3 Scripts/prepare_longjmp.py

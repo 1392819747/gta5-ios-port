@@ -1,73 +1,60 @@
 import Foundation
 
-/// Player-selectable locales corresponding to Rockstar's 13 official GTA V languages.
-/// The native UI can use built-in translations; untranslated text falls back to English.
+/// Player-selectable languages for the app's own text: Rockstar's 13 official GTA V languages, which
+/// also set the game's language, plus community translations (docs/TRANSLATING.md). A community
+/// language is any other language in Localizable.xcstrings; it shows up here by itself and the game's
+/// own text stays English. Untranslated lines fall back to English.
 /// The WebAssembly game may ignore the locale even when its resource archive contains it.
-enum AppLanguage: String, CaseIterable {
-    case english = "en-US"
-    case french = "fr-FR"
-    case italian = "it-IT"
-    case german = "de-DE"
-    case spanishSpain = "es-ES"
-    case japanese = "ja-JP"
-    case korean = "ko-KR"
-    case polish = "pl-PL"
-    case portugueseBrazil = "pt-BR"
-    case russian = "ru-RU"
-    case simplifiedChinese = "zh-CN"
-    case spanishLatinAmerica = "es-MX"
-    case traditionalChinese = "zh-TW"
+struct AppLanguage: Equatable {
+    /// What Settings saves and the engine reads (PGSelectedGameLanguage): a game locale like "fr-FR",
+    /// or a community language's catalog code like "tr", which the engine treats as English.
+    let rawValue: String
+    let name: String
+    /// Use Apple's compiled String Catalog for every selected language ("fr" → fr.lproj).
+    /// App language selection is independent of the phone's system locale.
+    private let catalogIdentifier: String
+
+    static let english = AppLanguage(rawValue: "en-US", name: "English", catalogIdentifier: "en")
+    static let gameLanguages = [
+        english,
+        AppLanguage(rawValue: "fr-FR", name: "Français", catalogIdentifier: "fr"),
+        AppLanguage(rawValue: "it-IT", name: "Italiano", catalogIdentifier: "it"),
+        AppLanguage(rawValue: "de-DE", name: "Deutsch", catalogIdentifier: "de"),
+        AppLanguage(rawValue: "es-ES", name: "Español (España)", catalogIdentifier: "es"),
+        AppLanguage(rawValue: "ja-JP", name: "日本語", catalogIdentifier: "ja"),
+        AppLanguage(rawValue: "ko-KR", name: "한국어", catalogIdentifier: "ko"),
+        AppLanguage(rawValue: "pl-PL", name: "Polski", catalogIdentifier: "pl"),
+        AppLanguage(rawValue: "pt-BR", name: "Português (Brasil)", catalogIdentifier: "pt-BR"),
+        AppLanguage(rawValue: "ru-RU", name: "Русский", catalogIdentifier: "ru"),
+        AppLanguage(rawValue: "zh-CN", name: "简体中文", catalogIdentifier: "zh-Hans"),
+        AppLanguage(rawValue: "es-MX", name: "Español (Latinoamérica)", catalogIdentifier: "es-419"),
+        AppLanguage(rawValue: "zh-TW", name: "繁體中文", catalogIdentifier: "zh-Hant"),
+    ]
+
+    /// The catalog's other languages, each named in its own language.
+    static let community: [AppLanguage] = {
+        let taken = Set(gameLanguages.map(\.catalogIdentifier) + ["Base"])
+        return Bundle.main.localizations.filter { !taken.contains($0) }.map { code in
+            let locale = Locale(identifier: code)
+            let name = locale.localizedString(forIdentifier: code) ?? code
+            return AppLanguage(rawValue: code, name: name.prefix(1).uppercased(with: locale) + name.dropFirst(), catalogIdentifier: code)
+        }.sorted { $0.name < $1.name }
+    }()
+
+    static var allCases: [AppLanguage] { gameLanguages + community }
 
     static let changed = Notification.Name("GTA5PortLanguageChanged")
     private static let storageKey = "gtaPortAppLanguage"
 
     static var current: AppLanguage {
         let saved = UserDefaults.standard.string(forKey: storageKey) ?? english.rawValue
-        return AppLanguage(rawValue: saved) ?? .english
+        return allCases.first { $0.rawValue == saved } ?? .english
     }
 
     static func select(_ language: AppLanguage) {
         guard current != language else { return }
         UserDefaults.standard.set(language.rawValue, forKey: storageKey)
         NotificationCenter.default.post(name: changed, object: nil)
-    }
-
-    var name: String {
-        switch self {
-        case .english: return "English"
-        case .french: return "Français"
-        case .italian: return "Italiano"
-        case .german: return "Deutsch"
-        case .spanishSpain: return "Español (España)"
-        case .japanese: return "日本語"
-        case .korean: return "한국어"
-        case .polish: return "Polski"
-        case .portugueseBrazil: return "Português (Brasil)"
-        case .russian: return "Русский"
-        case .simplifiedChinese: return "简体中文"
-        case .spanishLatinAmerica: return "Español (Latinoamérica)"
-        case .traditionalChinese: return "繁體中文"
-        }
-    }
-
-    /// Use Apple's compiled String Catalog for every selected language.
-    /// App language selection is independent of the phone's system locale.
-    private var catalogIdentifier: String {
-        switch self {
-        case .english: return "en"
-        case .french: return "fr"
-        case .italian: return "it"
-        case .german: return "de"
-        case .spanishSpain: return "es"
-        case .japanese: return "ja"
-        case .korean: return "ko"
-        case .polish: return "pl"
-        case .portugueseBrazil: return "pt-BR"
-        case .russian: return "ru"
-        case .simplifiedChinese: return "zh-Hans"
-        case .spanishLatinAmerica: return "es-419"
-        case .traditionalChinese: return "zh-Hant"
-        }
     }
 
     private static func bundle(for identifier: String) -> Bundle? {

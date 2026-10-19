@@ -109,6 +109,10 @@ PC mods work as downloaded: car and character replacements, add-on cars, OpenIV 
 
 **Settings › Cheats** has a vehicle spawner (search any vehicle the game has, it appears in front of you), God mode and Never wanted switches, repair and clean, time of day and weather, Set money and the game's own story cheats. See [docs/CHEATS.md](docs/CHEATS.md).
 
+## Translate the app
+
+Anyone can add a language to the app or finish one with the Translate page on the builder website. Vietnamese and Arabic are the first community translations. See [docs/TRANSLATING.md](docs/TRANSLATING.md).
+
 ## Community and help
 
 **[Five Star Port on Telegram](https://t.me/fivestarport)** has everything: every new release as it comes out, help with installs and builds, and a community that has solved most problems before. Please ask there instead of by email or DM.
@@ -204,4 +208,6 @@ This port is better because of people outside the project:
 - **Players who opened issues** that shaped v1.3.4: [@aliiscoding2122](https://github.com/aliiscoding2122) (Story money reset to $0, [#10](https://github.com/kevinerikjs/gta5-ios-port/issues/10)), [@k49kg9xmsd-prog](https://github.com/k49kg9xmsd-prog) (pause when leaving the app, [#11](https://github.com/kevinerikjs/gta5-ios-port/issues/11)) and [@phakamaec](https://github.com/phakamaec) (the builder handing out the old version, [#14](https://github.com/kevinerikjs/gta5-ios-port/issues/14)).
 - **Players who opened issues** that shaped v1.4: [@k49kg9xmsd-prog](https://github.com/k49kg9xmsd-prog) (aim and duck while driving, [#15](https://github.com/kevinerikjs/gta5-ios-port/issues/15)), [@abtastic-hub](https://github.com/abtastic-hub) (five bugs from the barber to Set money, [#19](https://github.com/kevinerikjs/gta5-ios-port/issues/19)), [@mmts7hrnb5-jpg](https://github.com/mmts7hrnb5-jpg) (the photo crash, [#16](https://github.com/kevinerikjs/gta5-ios-port/issues/16)), [@Blue7366](https://github.com/Blue7366) (mods, [#3](https://github.com/kevinerikjs/gta5-ios-port/issues/3)) and [@sonubhutani1979-afk](https://github.com/sonubhutani1979-afk) (the builder sign-in, [#18](https://github.com/kevinerikjs/gta5-ios-port/issues/18)).
 - **Players who opened issues** that shaped v1.4.2: [@abtastic-hub](https://github.com/abtastic-hub) (the Handler in Scouting the Port, calls while walking, switching back from Chop, aiming while driving and more, [#20](https://github.com/kevinerikjs/gta5-ios-port/issues/20)).
+- **Players who opened issues** that shaped v1.4.3: [@abtastic-hub](https://github.com/abtastic-hub) (the trailer, the Handler, switching back from Chop and the engine sounds, [#20](https://github.com/kevinerikjs/gta5-ios-port/issues/20)).
+- **Translators**: @lekhoi2811 (Vietnamese) and @uk9_v (Arabic), the first community translations from the Translate page.
 - **Everyone who sent logs** from Settings › Send log to the developer, especially those who described exactly what failed and added their own analysis. Those reports found the Story mode bugs fixed in v1.3.3: the crash at the end of Marriage Counseling, the lock-ups after long sessions, and the lag with stuck buttons.

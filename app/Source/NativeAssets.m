@@ -730,23 +730,41 @@ static void controlMetaOverlay(uint32_t id,uint64_t offset,uint8_t *destination,
   if(rewritten.length&&offset<rewritten.length)
     memcpy(destination,(const uint8_t *)rewritten.bytes+offset,(size_t)MIN((uint64_t)count,rewritten.length-offset));
 }
-// Add-on cars bring their own handling entries, and the game stopped with "CHandlingObject Pool Full, Size == 560"
-// once a few were installed (10 player logs on v1.4.1). PC players raise the pool in gameconfig.xml; the game's own
-// file gets that as it's read: HandlingData becomes at least 1500 entries (816 bytes each, about 1.2 MB). The XML is
-// compacted (whitespace between tags) to make room and padded back to its size, as for the control files.
+// Pools the game stops on when they fill ("<Pool> Pool Full, Size == N"): PC players raise them in gameconfig.xml, and
+// the game's own file gets that as it's read. The XML is compacted (whitespace between tags) to make room and padded
+// back to its size, as for the control files.
+// - HandlingData (CHandlingObject): add-on cars bring their own handling entries; 560 filled with a few (10 player
+//   logs on v1.4.1), and 1500 with 87 mod files (log 957). 3000 entries of 816 bytes are about 2.4 MB.
+// - ScriptStore: players' own game files differ; in some it is 900, and the game stopped while registering script.rpf
+//   at slot 899 (logs 619, 716, 721, 882). The files this was tested with say 1400 and register about 1030.
+// - CScenarioInfo: 220, filled by add-on packs with scenarios (log 948).
+// - phInstGta: physics instances; the pc section's 8192 filled with no mods at all, driving in a mission (log 895).
+static const struct { const char *pool, *what; long minimum; } pgGamePools[] = {
+  {"HandlingData", "vehicle handling entries", 3000}, {"ScriptStore", "scripts", 1500},
+  {"CScenarioInfo", "scenario types", 400}, {"phInstGta", "physics instances", 12288},
+};
 static NSData *gameConfig;
 NSData *PGGameConfigRewrite(NSData *original,NSString *pool,long minimum,long *was){
   NSString *text=[[NSString alloc] initWithData:original encoding:NSUTF8StringEncoding];
   if(!text)return nil;
+  // Every entry: the file has an "Any" platform section and per-platform overrides (the pc one is what this game
+  // uses: phInstGta is 2214 under Any and 8192 under pc), so each entry below the minimum is raised. `was` is the
+  // largest size found.
   NSRegularExpression *entry=[NSRegularExpression regularExpressionWithPattern:[NSString stringWithFormat:@"(<PoolName>%@</PoolName>\\s*<PoolSize value=\")(\\d+)(\"\\s*/>)",pool] options:0 error:nil];
-  NSTextCheckingResult *match=[entry firstMatchInString:text options:0 range:NSMakeRange(0,text.length)];
-  if(!match)return nil;
-  long current=[[text substringWithRange:[match rangeAtIndex:2]] integerValue];if(was)*was=current;
-  if(current>=minimum)return nil;
-  NSMutableString *changed=[text mutableCopy];
-  [changed replaceCharactersInRange:[match rangeAtIndex:2] withString:[NSString stringWithFormat:@"%ld",minimum]];
+  NSArray<NSTextCheckingResult *> *matches=[entry matchesInString:text options:0 range:NSMakeRange(0,text.length)];
+  if(!matches.count)return nil;
+  NSMutableString *changed=[text mutableCopy];bool raised=false;long largest=0;
+  for(NSTextCheckingResult *match in matches.reverseObjectEnumerator){
+    long current=[[text substringWithRange:[match rangeAtIndex:2]] integerValue];largest=MAX(largest,current);
+    if(current>=minimum)continue;
+    [changed replaceCharactersInRange:[match rangeAtIndex:2] withString:[NSString stringWithFormat:@"%ld",minimum]];raised=true;
+  }
+  if(was)*was=largest;
+  if(!raised)return nil;
   NSRegularExpression *gaps=[NSRegularExpression regularExpressionWithPattern:@">\\s+<" options:0 error:nil];
-  NSString *compact=[gaps stringByReplacingMatchesInString:changed options:0 range:NSMakeRange(0,changed.length) withTemplate:@"><"];
+  // Trailing padding from an earlier rewrite counts as room too.
+  NSString *compact=[[gaps stringByReplacingMatchesInString:changed options:0 range:NSMakeRange(0,changed.length) withTemplate:@"><"]
+                     stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
   NSMutableData *out=[[compact dataUsingEncoding:NSUTF8StringEncoding] mutableCopy];
   if(out.length>original.length)return nil;
   while(out.length<original.length)[out appendBytes:" " length:1];
@@ -757,13 +775,108 @@ static void gameConfigOverlay(uint32_t id,uint64_t offset,uint8_t *destination,i
   @synchronized([NSNumber class]) {
     if(!gameConfig){
       uint64_t size=[assetFiles[id][1] unsignedLongLongValue];
-      NSMutableData *original=[NSMutableData dataWithLength:(NSUInteger)size];long was=0;
-      NSData *rewritten=readAssetImpl(id,0,original.mutableBytes,(uint32_t)size)==(int64_t)size?PGGameConfigRewrite(original,@"HandlingData",1500,&was):nil;
-      gameConfig=rewritten?:[NSData data];
-      char line[160];snprintf(line,sizeof line,rewritten?"Game config: room for %ld vehicle handling entries (was %ld), for add-on cars.":"Game config: vehicle handling entries %ld (was %ld), unchanged.",rewritten?1500L:was,was);pg_log(line);
+      NSMutableData *original=[NSMutableData dataWithLength:(NSUInteger)size];
+      NSData *current=readAssetImpl(id,0,original.mutableBytes,(uint32_t)size)==(int64_t)size?original:nil;bool changed=false;
+#if TARGET_OS_SIMULATOR
+      // Test (PG_TEST_DUMP_GAMECONFIG=path): the game's own gameconfig.xml, as read, for checking pool entries.
+      const char *dump=getenv("PG_TEST_DUMP_GAMECONFIG");if(dump&&current)[current writeToFile:@(dump) atomically:YES];
+#endif
+      for(size_t i=0;current&&i<sizeof pgGamePools/sizeof *pgGamePools;i++){
+        long was=-1;NSData *rewritten=PGGameConfigRewrite(current,@(pgGamePools[i].pool),pgGamePools[i].minimum,&was);
+        char line[160];
+        if(rewritten)snprintf(line,sizeof line,"Game config: room for %ld %s (was %ld).",pgGamePools[i].minimum,pgGamePools[i].what,was);
+        else if(was<0)snprintf(line,sizeof line,"Game config: no %s pool in the file; unchanged.",pgGamePools[i].pool);
+        else snprintf(line,sizeof line,"Game config: %s %ld, unchanged.",pgGamePools[i].what,was);
+        pg_log(line);
+        if(rewritten){current=rewritten;changed=true;}
+      }
+      gameConfig=changed?current:[NSData data];
     }
     if(gameConfig.length&&offset<gameConfig.length)
       memcpy(destination,(const uint8_t *)gameConfig.bytes+offset,(size_t)MIN((uint64_t)count,gameConfig.length-offset));
+  }
+}
+// Minimap place and size (GTA-131): the game reads them from common/data/ui/frontend.xml, <minimap><data name=
+// "minimap" alignX="L" alignY="B" posX=... posY=... sizeX=... sizeY=.../> with its mask and blur, and the same
+// three for the expanded map ("bigmap"). The app moves and scales each set as the file is read, keeping the
+// pieces' places relative to each other: offsets in the game's HUD units (fractions of the screen; with
+// alignY="B" a negative posY is higher up) and a size factor around the minimap's own corner. The expanded
+// map moves with it but stays on screen. A Mods replacement of the file is moved too. Same compact-and-pad as gameconfig.
+static double minimapDX, minimapDY, minimapScale = 1;
+static NSData *frontendLayout;
+void PGSetMinimapLayout(double dx, double dy, double scale) {
+  minimapDX = dx; minimapDY = dy; minimapScale = scale > 0.4 && scale < 2.5 ? scale : 1;
+}
+NSData *PGFrontendRewrite(NSData *original, double dx, double dy, double scale) {
+  NSString *text = [[NSString alloc] initWithData:original encoding:NSUTF8StringEncoding];
+  if (!text) return nil;
+  NSRegularExpression *entry = [NSRegularExpression regularExpressionWithPattern:
+    @"(<data name=\"(minimap|bigmap)(_mask|_blur)?\"[^>]*?posX=\")([-\\d.]+)(\"[^>]*?posY=\")([-\\d.]+)(\"[^>]*?sizeX=\")([-\\d.]+)(\"[^>]*?sizeY=\")([-\\d.]+)(\")"
+    options:0 error:nil];
+  NSArray<NSTextCheckingResult *> *matches = [entry matchesInString:text options:0 range:NSMakeRange(0, text.length)];
+  // Each set scales around its main piece's corner (posX, posY of "minimap" / "bigmap").
+  double cornerX[2] = {0, 0}, cornerY[2] = {0, 0}, top[2] = {0, 0}; bool found[2] = {false, false};
+  for (NSTextCheckingResult *m in matches) {
+    int set = [[text substringWithRange:[m rangeAtIndex:2]] isEqualToString:@"bigmap"];
+    double y = [[text substringWithRange:[m rangeAtIndex:6]] doubleValue], h = [[text substringWithRange:[m rangeAtIndex:10]] doubleValue];
+    if ([m rangeAtIndex:3].location == NSNotFound) {
+      cornerX[set] = [[text substringWithRange:[m rangeAtIndex:4]] doubleValue]; cornerY[set] = y; found[set] = true;
+    }
+    top[set] = MAX(top[set], -y + h);	// highest edge above the bottom
+  }
+  if (!found[0]) return nil;
+  NSMutableString *changed = [text mutableCopy];
+  for (NSTextCheckingResult *m in matches.reverseObjectEnumerator) {
+    int set = [[text substringWithRange:[m rangeAtIndex:2]] isEqualToString:@"bigmap"];
+    double x = [[text substringWithRange:[m rangeAtIndex:4]] doubleValue], y = [[text substringWithRange:[m rangeAtIndex:6]] doubleValue];
+    double w = [[text substringWithRange:[m rangeAtIndex:8]] doubleValue], h = [[text substringWithRange:[m rangeAtIndex:10]] doubleValue];
+    // The expanded map is taller: moving up by -dy raises its top edge, which stops at the screen's top.
+    double s = set ? 1 : scale, moveY = set ? MAX(dy, -(0.98 - top[1])) : dy;
+    NSString *values[4] = {
+      [NSString stringWithFormat:@"%.5f", cornerX[set] + dx + (x - cornerX[set]) * s],
+      [NSString stringWithFormat:@"%.5f", cornerY[set] + moveY + (y - cornerY[set]) * s],
+      [NSString stringWithFormat:@"%.5f", w * s], [NSString stringWithFormat:@"%.5f", h * s]};
+    NSUInteger groups[4] = {10, 8, 6, 4};	// right to left, so earlier ranges stay valid
+    for (int i = 0; i < 4; i++) [changed replaceCharactersInRange:[m rangeAtIndex:groups[i]] withString:values[3 - i]];
+  }
+  // The notification feed sits over the minimap and "MUST match" its place: it follows sideways.
+  NSRegularExpression *feed = [NSRegularExpression regularExpressionWithPattern:@"(<GameStream>\\s*<position\\s+alignX=\"L\"\\s+alignY=\"B\"\\s+posX=\")([-\\d.]+)(\")" options:0 error:nil];
+  NSTextCheckingResult *f = [feed firstMatchInString:changed options:0 range:NSMakeRange(0, changed.length)];
+  if (f) [changed replaceCharactersInRange:[f rangeAtIndex:2] withString:[NSString stringWithFormat:@"%.5f", [[changed substringWithRange:[f rangeAtIndex:2]] doubleValue] + dx]];
+  NSRegularExpression *gaps = [NSRegularExpression regularExpressionWithPattern:@">\\s+<" options:0 error:nil];
+  NSString *compact = [[gaps stringByReplacingMatchesInString:changed options:0 range:NSMakeRange(0, changed.length) withTemplate:@"><"]
+                       stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+  NSMutableData *out = [[compact dataUsingEncoding:NSUTF8StringEncoding] mutableCopy];
+  if (out.length > original.length) return nil;
+  while (out.length < original.length) [out appendBytes:" " length:1];
+  return out;
+}
+static void frontendOverlay(uint32_t id, uint64_t offset, uint8_t *destination, int64_t count) {
+  if (count <= 0 || ![assetFiles[id][0] isEqualToString:@"common/data/ui/frontend.xml"]) return;
+  @synchronized([NSNumber class]) {
+    if (!frontendLayout) {
+#if TARGET_OS_SIMULATOR
+      // Test (PG_MINIMAP="dx,dy,scale"): a layout without the app's Settings, for calibrating the editor.
+      double tx, ty, ts; const char *test = getenv("PG_MINIMAP");
+      if (test && sscanf(test, "%lf,%lf,%lf", &tx, &ty, &ts) == 3) PGSetMinimapLayout(tx, ty, ts);
+#endif
+      // A mod's frontend.xml is moved too: the player chose the place, and the default changes nothing.
+      // (A leftover copy of the game's own file in Mods kept the setting from working, GTA-131.)
+      NSData *rewritten = nil;
+      if (minimapDX != 0 || minimapDY != 0 || minimapScale != 1) {
+        uint64_t size = [assetFiles[id][1] unsignedLongLongValue];
+        NSMutableData *original = [NSMutableData dataWithLength:(NSUInteger)size];
+        if (readAssetImpl(id, 0, original.mutableBytes, (uint32_t)size) == (int64_t)size)
+          rewritten = PGFrontendRewrite(original, minimapDX, minimapDY, minimapScale);
+        char line[160];
+        snprintf(line, sizeof line, rewritten ? "Minimap: moved by %.3f, %.3f, size %.2f%s." : "Minimap: frontend.xml not as expected; position %.3f, %.3f, size %.2f not applied%s.",
+                 minimapDX, minimapDY, minimapScale, modFiles[@(id)] ? " (in a mod's frontend.xml)" : "");
+        pg_log(line);
+      }
+      frontendLayout = rewritten ?: [NSData data];
+    }
+    if (frontendLayout.length && offset < frontendLayout.length)
+      memcpy(destination, (const uint8_t *)frontendLayout.bytes + offset, (size_t)MIN((uint64_t)count, frontendLayout.length - offset));
   }
 }
 static int64_t readAsset(uint32_t id,uint64_t offset,uint8_t *destination,uint32_t length){
@@ -773,6 +886,7 @@ static int64_t readAsset(uint32_t id,uint64_t offset,uint8_t *destination,uint32
   envTestMetaOverlay(id,offset,destination,result);
   controlMetaOverlay(id,offset,destination,result);
   gameConfigOverlay(id,offset,destination,result);
+  frontendOverlay(id,offset,destination,result);
   double took=assetNowMS()-healthStart;
   atomic_fetch_add(&healthReads,1);atomic_fetch_add(&healthReadMicros,(uint64_t)(took*1000));
   if(result<0)atomic_fetch_add(&healthReadErrors,1);

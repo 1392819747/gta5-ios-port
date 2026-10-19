@@ -176,6 +176,9 @@ extern bool gASTCBC1;
 // Lite build: the game's loaded textures go to the GPU without their largest mip level (a quarter
 // of the memory; at phone render resolutions that level is rarely sampled), as consoles shipped them.
 extern bool gSkipTopMip;
+// The same for big textures only (GTA-122): at least this many texels (512×512 by default; PG_BIG_MIP_SKIP=N, 0 = off),
+// on GPUs that decode BC, where those textures take the most memory. 0 = off.
+extern uint64_t gSkipBigTopMip;
 FormatInfo mapFormat(uint32_t dxgi, uint32_t bind);
 MTLPixelFormat viewFormat(uint32_t dxgi, MTLPixelFormat textureFormat);
 bool isDepthFormat(MTLPixelFormat f);

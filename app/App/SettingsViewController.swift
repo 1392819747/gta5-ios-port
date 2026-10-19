@@ -33,7 +33,7 @@ final class SettingsViewController: UITableViewController {
     private enum ControlsTab: Int { case stick = 0, swipe = 1 }
     private enum ControlsRow {
         case tab, swipeLook, swipeAim, stickLook, stickAim
-        case targeting, fireAlsoAims, sprintButton, steeringButtons, airplaneRightStick, buttonSize, buttonOpacity, editLayout
+        case targeting, fireAlsoAims, sprintButton, steeringButtons, airplaneRightStick, buttonSize, buttonOpacity, editLayout, minimap
         case hideTouchWithController, keyboardMouse, inputState
     }
     private var controlsTab: ControlsTab {
@@ -43,7 +43,7 @@ final class SettingsViewController: UITableViewController {
     private var controlsRows: [ControlsRow] {
         let camera: [ControlsRow] = controlsTab == .stick ? [.stickLook, .stickAim] : [.swipeLook, .swipeAim]
         return [.tab] + camera + [.targeting, .fireAlsoAims, .sprintButton, .steeringButtons, .airplaneRightStick, .buttonSize, .buttonOpacity,
-                                  .editLayout, .hideTouchWithController, .keyboardMouse]
+                                  .editLayout, .minimap, .hideTouchWithController, .keyboardMouse]
     }
 
     @objc private func controlsTabChanged(_ sender: UISegmentedControl) {
@@ -115,6 +115,12 @@ final class SettingsViewController: UITableViewController {
     private lazy var shown: [Section] = Section.allCases.filter { sections.contains($0) }
     private func sectionKind(_ index: Int) -> Section { shown[index] }
     private func indexOf(_ section: Section) -> Int { shown.firstIndex(of: section) ?? 0 }
+    private func editMinimap() {
+        let editor = MinimapEditorController()
+        editor.modalPresentationStyle = .fullScreen
+        editor.onDone = { [weak self] in self?.reload(.controls) }
+        present(editor, animated: true)
+    }
     private func reload(_ section: Section) {
         if let index = shown.firstIndex(of: section) { tableView.reloadSections([index], with: .none) }
     }
@@ -148,7 +154,7 @@ final class SettingsViewController: UITableViewController {
         case .cheats: return engineRunning ? StoryCheats.all.count + storyCheatStart : 0
         case .gyro: return (settings.gyroAim == .off ? 1 : 3) + (settings.tiltSteer == .off ? 1 : 2)
         case .files: return engineRunning ? 0 : fileRows.count
-        case .device: return 4
+        case .device: return 7
         case .language: return 1
         }
     }
@@ -413,7 +419,7 @@ final class SettingsViewController: UITableViewController {
                 cell.accessoryView = toggle(settings.fireAlsoAims, label: AppLanguage.choose("Fire also aims")) { [weak self] in self?.settings.fireAlsoAims = $0 }
             case .sprintButton:
                 content.text = AppLanguage.choose("Sprint button")
-                content.secondaryText = AppLanguage.choose("Tap it while moving to sprint until you let go of the stick; hold it to open a parachute. Holding the stick at its edge sprints too.")
+                content.secondaryText = AppLanguage.choose("Tap it while moving to sprint until you let go of the stick; hold it to open a parachute. The stick alone never sprints while this is on.")
                 cell.accessoryView = toggle(settings.sprintButton, label: AppLanguage.choose("Sprint button")) { [weak self] in
                     self?.settings.sprintButton = $0; self?.controlsChanged?()
                 }
@@ -439,6 +445,23 @@ final class SettingsViewController: UITableViewController {
                 cell.accessoryView = slider(settings.controlOpacity, 0.2, 1, label: AppLanguage.choose("Button opacity")) { [weak self] in
                     self?.settings.controlOpacity = $0; self?.controlsChanged?()
                 }
+            case .minimap:
+                // Where the game's minimap sits (GTA-131): the game reads it when it starts.
+                content.text = AppLanguage.choose("Minimap")
+                content.secondaryText = AppLanguage.choose("Where the map sits. Changes apply the next time the game starts.")
+                let button = UIButton(type: .system)
+                button.setTitle(settings.minimapPlace.title + " ▾", for: .normal)
+                button.accessibilityLabel = AppLanguage.choose("Minimap")
+                button.showsMenuAsPrimaryAction = true
+                button.menu = UIMenu(children: GameSettings.MinimapPlace.allCases.map { place in
+                    UIAction(title: place.title, state: place == settings.minimapPlace ? .on : .off) { [weak self] _ in
+                        guard let self else { return }
+                        if place == .custom { self.editMinimap() } else { self.settings.minimapPlace = place; self.reload(.controls) }
+                    }
+                })
+                button.sizeToFit()
+                cell.accessoryView = button
+                cell.selectionStyle = .none
             case .editLayout:
                 content.text = AppLanguage.choose("Edit controls layout")
                 content.secondaryText = ControlsLayout.isCustomized ? AppLanguage.choose("Customized") : AppLanguage.choose("Move, resize or hide buttons")
@@ -576,6 +599,18 @@ final class SettingsViewController: UITableViewController {
                 content.text = AppLanguage.choose("Share log")
                 content.secondaryText = AppLanguage.choose("Save or send this run's log and the previous one yourself")
                 content.textProperties.color = .systemBlue
+            } else if indexPath.row >= 4 {
+                // Experimental (v1.4.3): on by default; turning one off applies the next time the app starts.
+                let rows: [(String, String, ReferenceWritableKeyPath<GameSettings, Bool>)] = [
+                    (AppLanguage.choose("Smarter texture loading"), AppLanguage.choose("Experimental. Keeps the ground and roads from turning grey after long play. Turn off if the game runs out of memory."), \.smarterTextureLoading),
+                    (AppLanguage.choose("Lighter big textures"), AppLanguage.choose("Experimental. The largest textures use a quarter of the memory on iPhones before the 15 Pro, so more of the world stays sharp. Turn off for the sharpest close-ups."), \.lighterBigTextures),
+                    (AppLanguage.choose("Faster engine threads"), AppLanguage.choose("Experimental. Keeps the game on the fast processor cores for steadier FPS. Turn off if your iPhone gets too hot."), \.fastEngineThreads),
+                ]
+                let (title, detail, key) = rows[indexPath.row - 4]
+                content.text = title
+                content.secondaryText = detail + " " + AppLanguage.choose("Applies the next time the app starts.")
+                cell.accessoryView = toggle(settings[keyPath: key], label: title) { [weak self] in self?.settings[keyPath: key] = $0 }
+                cell.selectionStyle = .none
             } else {
                 content.text = AppLanguage.choose("Five Star Port on Telegram")
                 content.secondaryText = AppLanguage.choose("Official updates, help and the latest version")

@@ -41,6 +41,12 @@ static struct TextureStats {
 // What the textures hold on the GPU (an estimate in the simulator). On an iPhone that memory counts
 // against the app's limit; the simulator's GPU is the Mac's, so the simulated limit adds it (EngineHost.c).
 extern "C" uint64_t PGGPUTextureBytes(void) { int64_t v = gTextureStats.gpuBytes.load(); return v > 0 ? (uint64_t)v : 0; }
+// GPU time per frame for the Health line (GTA-116): FPS alone can't tell a busy GPU from a busy CPU.
+static std::atomic<uint64_t> gGPUMicros{0}, gGPUFrames{0};
+extern "C" double PGGPUFrameMilliseconds(void) {
+	uint64_t frames = gGPUFrames.exchange(0), micros = gGPUMicros.exchange(0);
+	return frames ? micros / 1000.0 / frames : 0;
+}
 // GPU buffers, for the report: how many, what they hold, and what iOS charges (whole 16 KB pages each).
 static struct BufferStats { std::atomic<int64_t> count{0}, bytes{0}, pages{0}, meshCount{0}, meshBytes{0}, cbCount{0}, cbBytes{0}, cbWritten{0}; } gBufferStats;
 static uint64_t pageRound(uint64_t n) { return (n + 16383) & ~16383ull; }
@@ -329,6 +335,8 @@ static void commit(CommitReason reason, id<CAMetalDrawable> drawable = nil) {
 	Renderer *r = R;
 	[cb addCompletedHandler:^(id<MTLCommandBuffer> done) {
 		if (done.status == MTLCommandBufferStatusError) logOnce("cmderr" + std::to_string(done.error.code), "Metal renderer: command buffer failed: %s", done.error.localizedDescription.UTF8String);
+		double gpu = done.GPUEndTime - done.GPUStartTime;
+		if (gpu > 0 && gpu < 1) { gGPUMicros += (uint64_t)(gpu * 1e6); gGPUFrames++; }
 		for (auto &f : *callbacks) f();
 		delete callbacks;
 		uint64_t prev = r->completed.load();
@@ -495,8 +503,9 @@ static void createTexture(const uint32_t *p) {
 	// Lite: only plain sampled 2D textures the game loads (shader resource only, so no render targets,
 	// staging or dynamic textures, which have one mip) with mips to spare. Small ones (lookup tables,
 	// and the ones the game may read back, which keep CPU block copies) stay whole.
-	if (gSkipTopMip && bind == BIND_SRV && dim == 2 && samples == 1 && mips >= 2 && !t->isDepth && !m.a8 && !isFloat32(m.format) &&
-	    (uint64_t)w * h > 128 * 128 && (w >> 1) >= 4 && (h >> 1) >= 4)
+	const bool skippable = bind == BIND_SRV && dim == 2 && samples == 1 && mips >= 2 && !t->isDepth && !m.a8 && !isFloat32(m.format) &&
+	    (w >> 1) >= 4 && (h >> 1) >= 4;
+	if (skippable && ((gSkipTopMip && (uint64_t)w * h > 128 * 128) || (gSkipBigTopMip && (uint64_t)w * h >= gSkipBigTopMip)))
 		t->skip = 1;
 	MTLTextureDescriptor *desc = [MTLTextureDescriptor new];
 	desc.pixelFormat = m.format;
@@ -2375,7 +2384,7 @@ static void report() {
 	logf("[metal] buffers: %lld (%.0f MB, %.0f MB in whole pages), meshes %lld (%.0f MB), %zu slabs; frame ring %.0f MB + %.0f MB large",
 	     (long long)gBufferStats.count.load(), gBufferStats.bytes / MB, gBufferStats.pages / MB, (long long)gBufferStats.meshCount.load(),
 	     gBufferStats.meshBytes / MB, gSlabs.size(), ring / MB, ringBig / MB);
-	if (gSkipTopMip) logf("[metal] Lite: %lld textures without their largest level; %llu copies or readbacks needed one", (long long)gTextureStats.halfSize.load(), (unsigned long long)gTextureStats.missingLevel.load());
+	if (gSkipTopMip || gSkipBigTopMip) logf("[metal] %s: %lld textures without their largest level; %llu copies or readbacks needed one", gSkipTopMip ? "Lite" : "Big textures", (long long)gTextureStats.halfSize.load(), (unsigned long long)gTextureStats.missingLevel.load());
 	memset(R->commitReasons, 0, sizeof R->commitReasons); memset(R->skipReasons, 0, sizeof R->skipReasons);
 	R->statT = now; R->statDraws = R->draws; R->statPresents = R->presents; R->statSkips = R->skipped; R->statPending = R->pendingSkips; R->statCommits = R->commits; R->busyMs = 0;
 }
@@ -2401,8 +2410,10 @@ static void loop() {
 			if (head == tail) {
 				// nobody is producing: queries the engine may be polling must reach the GPU
 				// (at most every 2 ms: the engine issues dozens of occlusion queries per frame between short ring gaps)
+				// PG_QUERY_COMMIT_MS=0 sends them at once (GTA-92 A/B: idle-query buffers separate 60-FPS from 35-FPS windows).
+				static double queryCommitMs = getenv("PG_QUERY_COMMIT_MS") ? atof(getenv("PG_QUERY_COMMIT_MS")) : 0;	// 0 since v1.4.3; 2 was the old wait
 				bool waiting = !R->pendingQueries.empty();
-				if (waiting && nowMs() - R->lastCommitMs >= 2) { commit(CIdle); waiting = false; }
+				if (waiting && nowMs() - R->lastCommitMs >= queryCommitMs) { commit(CIdle); waiting = false; }
 				hdr[5].store(1);
 				double i0 = nowMs();
 				if (hdr[0].load() == tail) PGGraphicsWait(R->ring, tail, (waiting ? 2 : 100) * 1000000ll);
@@ -2470,6 +2481,10 @@ static bool setup() {
 	gASTCBC1 = !gNativeBC && !getenv("PG_NO_ASTC_BC1") && [R->device supportsFamily:MTLGPUFamilyApple2];
 	// Lite build (the app sets PG_LITE from its Info.plist); PG_LITE_TEXTURES=0 keeps textures whole there.
 	gSkipTopMip = getenv("PG_LITE") && strcmp(getenv("PG_LITE"), "0") && !(getenv("PG_LITE_TEXTURES") && !strcmp(getenv("PG_LITE_TEXTURES"), "0"));
+	// Textures of at least 512×512 texels lose their largest level where BC is decoded, a quarter of their
+	// memory (GTA-122; simulator: GPU textures −16%).
+	// On by default since v1.4.3 at 512×512 (Kevin, 2026-10-20); PG_BIG_MIP_SKIP=0 turns it off, another size changes it.
+	{ const char *v = getenv("PG_BIG_MIP_SKIP"); long side = v ? atol(v) : 512; if (side >= 256 && side <= 8192 && !gNativeBC) gSkipBigTopMip = (uint64_t)side * side; }
 	R->borderColors = [R->device supportsFamily:MTLGPUFamilyApple7];
 	if (!loadShaderLibrary(R->device)) return false;
 	R->zeroBuffer = [R->device newBufferWithLength:65536 options:MTLResourceStorageModeShared];
@@ -2510,6 +2525,7 @@ static bool setup() {
 	logf("Metal renderer: %s, 32-bit float filtering %s, border colours %s, BC textures %s.", R->device.name.UTF8String, R->float32Filtering ? "yes" : "no (nearest fallback)",
 	     R->borderColors ? "yes" : "no", gNativeBC ? "native" : gASTCBC1 ? "decoded on the CPU (BC1 as ASTC)" : gPackedBC1 ? "decoded on the CPU (BC1 as 16-bit)" : "decoded on the CPU");
 	if (gSkipTopMip) logf("Metal renderer: Lite: the game's textures go to the GPU without their largest level.");
+	else if (gSkipBigTopMip) logf("Metal renderer: textures of %llu texels or more go to the GPU without their largest level (PG_BIG_MIP_SKIP).", (unsigned long long)gSkipBigTopMip);
 	return true;
 }
 
