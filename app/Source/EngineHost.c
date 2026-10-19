@@ -672,6 +672,8 @@ PGControlHints PGReadControlHints(uint32_t touchContext){
   }
  }
  hints.canDetonate=pg_can_detonate(m,size,ped);
+ uint64_t pedInfo;
+ if(pg_context_u64(m,size,ped+32,&pedInfo)&&pedInfo)pg_context_u32(m,size,pedInfo+24,&hints.pedModel);
  // Help messages (CMessages, 3 slots of 600 bytes; "is help showing" is the first byte).
  uint8_t first=0;
  if(pg_context_u8(m,size,25477136,&first)&&first&&size>25477136+1800){
@@ -679,9 +681,17 @@ PGControlHints PGReadControlHints(uint32_t touchContext){
   const char *text=(const char *)(m+25477136);
   static const char *const tokens[]={"INPUT_CONTEXT","INPUT_TALK"};
   for(int t=0;t<2&&!hints.helpContext;t++)if(memmem(text,1800,tokens[t],strlen(tokens[t])))hints.helpContext=true;
+  // The script inputs the help names (GTA-94): "Hold ~INPUT_SCRIPT_RT~ to grip a tooth" asks for RT however the
+  // script then reads it, which the poll check doesn't always see; the right stick by its group or either axis.
+  static const struct{const char *token;int input;}named[]={{"~INPUT_SCRIPT_RIGHT_AXIS_X~",220},{"~INPUT_SCRIPT_RIGHT_AXIS_Y~",221},
+    {"~INPUTGROUP_SCRIPT_RSTICK_ALL~",220},{"~INPUT_SCRIPT_RUP~",222},{"~INPUT_SCRIPT_RDOWN~",223},{"~INPUT_SCRIPT_RLEFT~",224},
+    {"~INPUT_SCRIPT_RRIGHT~",225},{"~INPUT_SCRIPT_LB~",226},{"~INPUT_SCRIPT_RB~",227},{"~INPUT_SCRIPT_LT~",228},{"~INPUT_SCRIPT_RT~",229},
+    {"~INPUT_SCRIPT_LS~",230},{"~INPUT_SCRIPT_RS~",231}};
+  const size_t length=strnlen(text,1800);
+  for(size_t t=0;t<sizeof named/sizeof named[0];t++)if(memmem(text,length,named[t].token,strlen(named[t].token)))hints.helpInputs|=1u<<(named[t].input-218);
   // Logged once per new message, so the prompts' button tokens can be checked in logs.
-  static char last[96];char now[96];size_t n=strnlen(text,95);memcpy(now,text,n);now[n]=0;
-  if(strcmp(now,last)){memcpy(last,now,sizeof last);char line[160];snprintf(line,sizeof line,"Help message: %s",now);pg_log(line);}
+  static char last[320];char now[320];size_t n=strnlen(text,319);memcpy(now,text,n);now[n]=0;
+  if(strcmp(now,last)){memcpy(last,now,sizeof last);char line[360];snprintf(line,sizeof line,"Help message: %s",now);pg_log(line);}
  }
  uint32_t wheel=0;
  if(pg_context_u32(m,size,19480044,&wheel))hints.radioWheelOpen=wheel&1;
@@ -996,6 +1006,9 @@ static void pg_test_outfit(w2c_game *instance) {
 void PG_FN_GIVE_WEAPON(w2c_game*, u32, u32, u32, u32, u32); // weapon_commands::CommandGiveWeaponToPed
 u32 PG_FN_WEAPON_ENTITY(w2c_game*, u32, u32); // weapon_commands::CommandGetCurrentPedWeaponEntityIndex
 u32 PG_FN_SELECTED_WEAPON(w2c_game*, u32); // weapon_commands::CommandGetSelectedPedWeapon
+static uint64_t pg_test_enter_script(w2c_game *instance);
+static void pg_test_leave_script(w2c_game *instance, uint64_t previous);
+static uint64_t pg_test_call(w2c_game *instance, uint64_t hash, int count, const uint64_t *arguments);
 // Test (PG_TEST_WEAPON=1): 30 s after the world is ready, gives the player a pistol in hand, then logs
 // every 5 s whether its weapon object exists (the gun is visible and usable) (GTA-55).
 static void pg_test_weapon(w2c_game *instance) {
@@ -1007,6 +1020,16 @@ static void pg_test_weapon(w2c_game *instance) {
   if (frames > 900 && frames % 150 == 0 && frames < 900 + 150 * 12) {
     char line[120]; snprintf(line, sizeof line, "TEST: selected weapon 0x%x, weapon object %u.", PG_FN_SELECTED_WEAPON(instance, ped), PG_FN_WEAPON_ENTITY(instance, ped, 0));
     pg_log(line);
+  }
+  // Aiming (GTA-83): IS_PED_DOING_DRIVEBY from a vehicle, IS_PLAYER_FREE_AIMING on foot, logged when it changes.
+  if (frames > 900 && frames % 15 == 0) {
+    static int last = -1;
+    uint64_t previous = pg_test_enter_script(instance);
+    const uint64_t pedArg[1] = {ped}, playerArg[1] = {0};
+    int driveby = (int)(pg_test_call(instance, 0xb2c086cc1bf8f2bfull, 1, pedArg) & 1);
+    int aiming = (int)(pg_test_call(instance, 0x2e397fd2ecd37c87ull, 1, playerArg) & 1);
+    pg_test_leave_script(instance, previous);
+    if (driveby * 2 + aiming != last) { last = driveby * 2 + aiming; char line[96]; snprintf(line, sizeof line, "TEST: aiming from a vehicle %d, on foot %d (frame %d).", driveby, aiming, frames); pg_log(line); }
   }
 }
 // Test (PG_TEST_SPEED=1): logs the player's speed (m/s) twice a second when it changes, to compare
@@ -1036,6 +1059,77 @@ static void pg_test_tv(w2c_game *instance) {
   char line[64]; snprintf(line, sizeof line, "TEST: TV on channel %d.", channel); pg_log(line);
   PG_FN_SET_TV_CHANNEL(instance, (u32)channel);
 }
+#endif
+// Text the game files don't have (Scripts/prepare_missing_text.py): CTextFile::Get's "<LABEL> missing" becomes
+// empty text, so help boxes from later updates stay away instead of showing a raw label. The simulator test
+// PG_TEST_MISSING_TEXT_OLD=1 keeps the old answer for comparison.
+void pg_missing_text(u64 buffer) {
+#if TARGET_OS_SIMULATOR
+  if (getenv("PG_TEST_MISSING_TEXT_OLD")) return;
+#endif
+  if (buffer) *(char *)pg_pointer(&env, buffer, 1) = 0;
+}
+// GTA-96 (Scripts/prepare_menu_shadow.py): in the pause menu's "graphics changed" check, a shadow quality below the
+// menu's lowest choice (Normal, 1) counts as that choice. The check's frame holds the settings in use at +576 and
+// the menu's at +128, shadow quality at +16 in each; only the frame's copy changes.
+void pg_menu_shadow_floor(w2c_game *instance, u64 frame) {
+  (void)instance;
+  int32_t *used = pg_pointer(&env, frame + 576 + 16, 4);
+  if (*used < 1 && *(int32_t *)pg_pointer(&env, frame + 128 + 16, 4) == 1) *used = 1;
+}
+// GTA-72 (Scripts/prepare_bink_queue.py): video commands are dropped, since no AsyncBink thread reads their
+// queue; 1 keeps them (the old behaviour, PG_TEST_BINK_QUEUE_OLD in the simulator).
+u32 pg_bink_queue_kept(void) {
+#if TARGET_OS_SIMULATOR
+  return getenv("PG_TEST_BINK_QUEUE_OLD") != NULL;
+#else
+  return 0;
+#endif
+}
+#if TARGET_OS_SIMULATOR
+void PG_FN_UI_SETTINGS(w2c_game*, u64); // CSettingsManager::GetUISettings (returns a CSettings)
+void PG_FN_MENU_GRAPHICS_SETTINGS(w2c_game*, u64, u32); // CPauseMenu::GetMenuGraphicsSettings
+u32 PG_FN_RESOLUTION_INDEX(w2c_game*); // CSettingsManager::GetResolutionIndex
+u32 PG_FN_DIRTY_GFX_SETTINGS(w2c_game*); // CPauseMenu::DirtyGfxSettings
+u32 PG_FN_DIRTY_ADV_GFX_SETTINGS(w2c_game*); // CPauseMenu::DirtyAdvGfxSettings
+// Test (PG_TEST_GFX_DIRTY=1, GTA-96): every 20 s, whether the pause menu counts its graphics as changed (it then
+// asks "You made changes but did not apply them" on every tab change), the resolution index against the menu's,
+// and each 4-byte slot where the applied settings (GetUISettings) and the menu's copy differ.
+static void pg_test_gfx_dirty(w2c_game *instance) {
+  static int frames;
+  if (!getenv("PG_TEST_GFX_DIRTY") || ++frames % 600) return;
+  static uint64_t ui, menu;
+  if (!ui) { ui = PG_FN_OPERATOR_NEW(instance, 1024); menu = PG_FN_OPERATOR_NEW(instance, 1024); }
+  memset(pg_pointer(&env, ui, 1024), 0, 1024); memset(pg_pointer(&env, menu, 1024), 0, 1024);
+  PG_FN_UI_SETTINGS(instance, ui); PG_FN_MENU_GRAPHICS_SETTINGS(instance, menu, 0);
+  const uint8_t *a = pg_pointer(&env, ui, 1024), *b = pg_pointer(&env, menu, 1024);
+  char line[2048]; int at = snprintf(line, sizeof line, "TEST: gfx dirty %u, advanced dirty %u, resolution index %u (menu %d); differ:",
+    PG_FN_DIRTY_GFX_SETTINGS(instance), PG_FN_DIRTY_ADV_GFX_SETTINGS(instance), PG_FN_RESOLUTION_INDEX(instance), *(int32_t *)pg_pointer(&env, 19566336, 4));
+  for (int k = 0; k < 288 && at < (int)sizeof line - 64; k += 4) {
+    if (k == 280 || !memcmp(a + k, b + k, 4)) continue;
+    int32_t x, y; float fx, fy; memcpy(&x, a + k, 4); memcpy(&y, b + k, 4); memcpy(&fx, a + k, 4); memcpy(&fy, b + k, 4);
+    at += snprintf(line + at, sizeof line - at, " +%d %d/%d (%.3g/%.3g)", k, x, y, fx, fy);
+  }
+  pg_log(line);
+}
+// Test (PG_TEST_POSITION=1): every 5 s, the player's position (an entity's position is at +144).
+static void pg_test_position(void) {
+  static int frames;
+  if (!getenv("PG_TEST_POSITION") || ++frames % 150) return;
+  const uint8_t *m = (const uint8_t *)(void *)env.memory.data; uint64_t info, ped;
+  if (!pg_context_u64(m, env.memory.size, 20159720, &info) || !info || !pg_context_u64(m, env.memory.size, info + 8, &ped) || !ped) return;
+  const float *position = pg_pointer(&env, ped + 144, 12);
+  char line[96]; snprintf(line, sizeof line, "TEST: player at %.1f, %.1f, %.1f.", position[0], position[1], position[2]); pg_log(line);
+}
+// Test (PG_TEST_TV_FLOOD=1, GTA-72): from about 45 s in, changes the TV channel every 10 frames, 80 times,
+// as players flicking through channels do; each change queues video commands.
+static void pg_test_tv_flood(w2c_game *instance) {
+  static int frames;
+  if (!getenv("PG_TEST_TV_FLOOD") || ++frames < 1350 || (frames - 1350) % 10 || (frames - 1350) / 10 >= 80) return;
+  int change = (frames - 1350) / 10;
+  if (change % 10 == 0) { char line[64]; snprintf(line, sizeof line, "TEST: TV channel change %d.", change); pg_log(line); }
+  PG_FN_SET_TV_CHANNEL(instance, (u32)(change % 3));
+}
 // Test (PG_TEST_VIDEO=1): about a minute in, loads and plays a video that doesn't exist, the way a
 // TV switching on does, and logs how long the engine was held up.
 static void pg_test_video(w2c_game *instance) {
@@ -1050,11 +1144,39 @@ static void pg_test_video(w2c_game *instance) {
   PG_FN_PLAY_MOVIE(instance, handle);
   char line[120]; snprintf(line, sizeof line, "TEST: video handle %u, the engine was held up %.0f ms.", handle, timeMS(CLOCK_MONOTONIC) - start); pg_log(line);
 }
+#endif
 void PG_FN_TV_SETUP_LESTER1(w2c_game*); // CTVPlaylistManager::SetupLester1CB
 f32 PG_FN_TV_SCALE_TO_REAL_TIME(w2c_game*, f32); // CTVPlaylistManager::ScaleToRealTime
 u32 PG_FN_TV_CURRENT_SHOW_HASH(w2c_game*); // CTVPlaylistManager::GetCurrentShowNameHash
 void PG_FN_TV_SHOW_PLAY_TIME(w2c_game*, u64); // scrWrapped_GET_CURRENT_TV_SHOW_PLAY_TIME
 void PG_FN_TV_SHOW_DURATION(w2c_game*, u64); // scrWrapped_GET_CURRENT_TV_SHOW_DURATION
+// Friend Request (GTA-73): the Lifeinvader presentation (show 0x0cdfba8a, set up by SetupLester1CB) plays
+// on Michael's TV for about 3 minutes with no picture (the game files have no TV videos), and the mission
+// waits for the moment Jay Norris takes out the phone. Players gave up after a minute of a black TV, so the
+// app shows how far it is (PGTVPresentation). Read on the game thread every 15 frames, like a script would.
+static _Atomic int32_t pg_presentation_ms = -1, pg_presentation_duration_ms;
+static void pg_tv_presentation_update(w2c_game *instance) {
+  static int frames;
+  if (++frames % 15) return;
+  const int32_t channel = *(int32_t *)pg_pointer(&env, 28444788, 4);
+  if (channel < 0 || PG_FN_TV_CURRENT_SHOW_HASH(instance) != 0x0cdfba8au) { atomic_store(&pg_presentation_ms, -1); return; }
+  static uint64_t call; if (!call) call = PG_FN_OPERATOR_NEW(instance, 64);
+  uint64_t *info = pg_pointer(&env, call, 64); int32_t answers[2];
+  for (int k = 0; k < 2; k++) {
+    memset(info, 0, 64); info[0] = call + 32; info[2] = call + 40;
+    if (k == 0) PG_FN_TV_SHOW_PLAY_TIME(instance, call); else PG_FN_TV_SHOW_DURATION(instance, call);
+    answers[k] = *(int32_t *)pg_pointer(&env, call + 32, 4);
+  }
+  atomic_store(&pg_presentation_duration_ms, answers[1]);
+  atomic_store(&pg_presentation_ms, answers[1] > 0 ? answers[0] : -1);
+}
+bool PGTVPresentation(int32_t *playMs, int32_t *durationMs) {
+  int32_t at = atomic_load(&pg_presentation_ms);
+  if (at < 0) return false;
+  *playMs = at; *durationMs = atomic_load(&pg_presentation_duration_ms);
+  return true;
+}
+#if TARGET_OS_SIMULATOR
 u32 PG_FN_BEGIN_TAKE_HIGH_QUALITY_PHOTO(w2c_game*); // graphics_commands::CommandBeginTakeHighQualityPhoto
 u32 PG_FN_TAKE_HIGH_QUALITY_PHOTO_STATUS(w2c_game*); // graphics_commands::CommandGetStatusOfTakeHighQualityPhoto
 u32 PG_FN_BEGIN_LOW_QUALITY_PHOTO_COPY(w2c_game*, u32); // graphics_commands::CommandBeginCreateLowQualityCopyOfPhoto
@@ -1144,6 +1266,17 @@ static void pg_test_leave_script(w2c_game *instance, uint64_t previous) {
   *(uint64_t *)pg_pointer(&env, instance->w2c_g1 + 3088, 8) = previous;
 }
 // Test (PG_TEST_CAR="x,y,z,heading"): from about 35 s in, puts the player in a car (a Sultan) there.
+// GTA-76: whether the test truck still has its trailer (IS_VEHICLE_ATTACHED_TO_TRAILER), logged when it changes.
+static uint32_t pg_test_trailer_truck;
+static void pg_test_trailer_monitor(w2c_game *instance) {
+  static int frames, last = -1;
+  if (!pg_test_trailer_truck || ++frames % 15) return;
+  uint64_t previous = pg_test_enter_script(instance);
+  const uint64_t truck[1] = {pg_test_trailer_truck};
+  int attached = (int)(pg_test_call(instance, 0xe7cf3c4f9f489f0cull, 1, truck) & 1);
+  pg_test_leave_script(instance, previous);
+  if (attached != last) { last = attached; char line[80]; snprintf(line, sizeof line, "TEST: trailer attached %d (frame %d).", attached, frames); pg_log(line); }
+}
 static void pg_test_car(w2c_game *instance) {
   static int frames, driving;
   // PG_TEST_DRIVE=<frames>: then holds the accelerator at half for that many frames.
@@ -1154,19 +1287,34 @@ static void pg_test_car(w2c_game *instance) {
   }
   const char *target = getenv("PG_TEST_CAR");
   float x, y, z, heading;
-  if (frames < 0 || !target || ++frames < 1050 || sscanf(target, "%f,%f,%f,%f", &x, &y, &z, &heading) != 4) return;
+  const char *carAfter = getenv("PG_TEST_CAR_AFTER");   // seconds before the car (default about 35)
+  if (frames < 0 || !target || ++frames < (carAfter ? atoi(carAfter) * 30 : 1050) || sscanf(target, "%f,%f,%f,%f", &x, &y, &z, &heading) != 4) return;
   // PG_TEST_CAR_MODEL=<name> picks the vehicle (joaat of the model name), "sultan" by default.
   uint32_t model = 970598228u; // joaat("sultan")
   const char *name = getenv("PG_TEST_CAR_MODEL");
   if (name && *name) { uint32_t h = 0; for (const char *c = name; *c; c++) { h += (uint8_t)(*c >= 'A' && *c <= 'Z' ? *c + 32 : *c); h += h << 10; h ^= h >> 6; } h += h << 3; h ^= h >> 11; h += h << 15; model = h; }
   uint64_t previous = pg_test_enter_script(instance);
   PG_FN_REQUEST_MODEL(instance, model);
-  if (!PG_FN_HAS_MODEL_LOADED(instance, model) && frames < 1650) { pg_test_leave_script(instance, previous); return; }
+  // PG_TEST_TRAILER=1 (GTA-76): a trailer ("trailers") is attached behind the vehicle (use a truck: phantom).
+  const uint32_t trailerModel = 3417488910u; // joaat("trailers")
+  bool trailer = getenv("PG_TEST_TRAILER") != NULL;
+  if (trailer) PG_FN_REQUEST_MODEL(instance, trailerModel);
+  if ((!PG_FN_HAS_MODEL_LOADED(instance, model) || (trailer && !PG_FN_HAS_MODEL_LOADED(instance, trailerModel))) && frames < (carAfter ? atoi(carAfter) * 30 : 1050) + 600) { pg_test_leave_script(instance, previous); return; }
   frames = -1;
   uint64_t vector = PG_FN_OPERATOR_NEW(instance, 32);
   float *v = pg_pointer(&env, vector, 24); v[0] = x; v[2] = y; v[4] = z;
   uint32_t vehicle = PG_FN_CREATE_VEHICLE(instance, model, vector, heading, 0, 0, 1);
   if (vehicle) PG_FN_SET_PED_INTO_VEHICLE(instance, PG_FN_PLAYER_PED_ID(instance), vehicle, (uint32_t)-1);
+  if (trailer && vehicle) {
+    float radians = heading * 3.14159265f / 180.0f;   // heading 0 faces north (+y); behind is minus forward
+    v = pg_pointer(&env, vector, 24); v[0] = x + 11.0f * sinf(radians); v[2] = y - 11.0f * cosf(radians); v[4] = z;
+    uint32_t towed = PG_FN_CREATE_VEHICLE(instance, trailerModel, vector, heading, 0, 0, 1);
+    float radius = 15.0f; uint32_t radiusBits; memcpy(&radiusBits, &radius, 4);
+    const uint64_t attach[3] = {vehicle, towed, radiusBits};
+    pg_test_call(instance, 0x3c7d42d58f770b54ull, 3, attach);   // ATTACH_VEHICLE_TO_TRAILER
+    pg_test_trailer_truck = vehicle;
+    char line[96]; snprintf(line, sizeof line, "TEST: trailer %u attached behind vehicle %u.", towed, vehicle); pg_log(line);
+  }
   pg_test_leave_script(instance, previous);
   if (getenv("PG_TEST_DRIVE")) driving = atoi(getenv("PG_TEST_DRIVE")) + 1;
   char line[96]; snprintf(line, sizeof line, "TEST: player put in car %u at %.1f, %.1f, %.1f.", vehicle, x, y, z); pg_log(line);
@@ -1492,6 +1640,22 @@ static bool pg_asi_native(uint64_t hash, uint64_t arguments, uint32_t count, uin
   }
   return true;
 }
+// Tests: calls a game command by its hash through the script-mod table (Generated/asi-natives.inc), from
+// the game thread inside a script (pg_test_enter_script). Returns its first result word, or -1 if unknown.
+// Settings › Cheats uses it too, to look up the names the game shows for vehicles.
+static uint64_t pg_test_buffer;   // pg_test_call's arguments, then its result words from +8 * 32
+static uint64_t pg_test_call(w2c_game *instance, uint64_t hash, int count, const uint64_t *arguments) {
+  if (!pg_asi_game) pg_asi_game = instance;
+  if (!pg_test_buffer) pg_test_buffer = pg_asi_alloc(8 * 40);
+  const uint64_t buffer = pg_test_buffer;
+  if (count > 32) count = 32;
+  if (count) memcpy(pg_pointer(&env, buffer, 8ull * count), arguments, 8ull * count);
+  memset(pg_pointer(&env, buffer + 8 * 32, 64), 0, 64);
+  if (!pg_asi_native(hash, buffer, (uint32_t)count, buffer + 8 * 32)) return (uint64_t)-1;
+  uint64_t result; memcpy(&result, pg_pointer(&env, buffer + 8 * 32, 8), 8); return result;
+}
+// Game commands that create or own things need a running script: lends them the game's "main" script
+// (the active script is per engine thread, at g1 + 3088). Returns the previous one for pg_asi_leave_script.
 static uint64_t pg_asi_enter_script(w2c_game *instance) {
   uint64_t *active = pg_pointer(&env, instance->w2c_g1 + 3088, 8), previous = *active;
   uint64_t threads = *(uint64_t *)pg_pointer(&env, 15409704, 8);
@@ -1502,6 +1666,13 @@ static uint64_t pg_asi_enter_script(w2c_game *instance) {
   }
   return previous;
 }
+static void pg_asi_leave_script(w2c_game *instance, uint64_t previous) {
+  *(uint64_t *)pg_pointer(&env, instance->w2c_g1 + 3088, 8) = previous;
+}
+// Settings › Cheats: spawn vehicle, God mode, Never wanted, repair, time and weather. Run each frame by
+// pg_cheats_menu_tick from pg_asi_script_tick below.
+#include "NativeCheats.inc"
+#include "NativeVehicleSpawn.inc"
 // Keys for mods: the Mod keys pad (and a hardware keyboard) set them from the main thread; mods read
 // them on the game thread, and keyboard handlers get each change there.
 static _Atomic uint8_t pg_asi_keys[256];
@@ -1555,6 +1726,8 @@ static void pg_test_player_model(w2c_game *instance) {
       pg_test_native(0x00a1cadd00108836ull, (uint64_t[]){player, model}, 2);  // SET_PLAYER_MODEL
       uint64_t ped = pg_test_native(0xd80958fc74e988a6ull, 0, 0) & 0xFFFFFFFF;  // PLAYER_PED_ID
       pg_test_native(0x45eee61580806d63ull, (uint64_t[]){ped}, 1);  // SET_PED_DEFAULT_COMPONENT_VARIATION
+      // PG_TEST_PLAYER_CONTROL_OFF=1: player control off too, as the game reports it while playing as Chop (GTA-81).
+      if (getenv("PG_TEST_PLAYER_CONTROL_OFF")) pg_test_native(0x8d32347d6d4c40a2ull, (uint64_t[]){player, 0, 0}, 3);  // SET_PLAYER_CONTROL
       done = 1; char line[96]; snprintf(line, sizeof line, "TEST: player model is now %s.", name); pg_log(line);
     } else if (frames > 2400) { done = 2; pg_log("TEST: player model did not load."); }
   }
@@ -1592,6 +1765,266 @@ static void pg_test_text(w2c_game *instance) {
   }
 }
 #endif
+#if TARGET_OS_SIMULATOR
+// Test (PG_TEST_REQUEST_SCRIPT=<name>): about 40 s in, requests a script the way the phone does for its apps
+// (REQUEST_SCRIPT), then logs every 2 s for 40 s whether it has loaded (HAS_SCRIPT_LOADED). The Trackify app's
+// script (apptrackify) never finished loading for players, and the game froze waiting for it.
+static void pg_test_request_script(w2c_game *instance) {
+  static int frames, killFrames; static uint64_t name;
+  const char *wanted = getenv("PG_TEST_REQUEST_SCRIPT");
+  // PG_TEST_KILL_AT=<seconds>: the player dies then, while the script is still requested, as when the submarine
+  // goes past crush depth; the respawn waits for every requested file.
+  const char *killAt = getenv("PG_TEST_KILL_AT");
+  if (wanted && killAt && killFrames >= 0 && !(PGGameStatus() & 16) && ++killFrames == atoi(killAt) * 30) {
+    killFrames = -1; pg_asi_game = instance;
+    const uint64_t previous = pg_asi_enter_script(instance);
+    const uint64_t ped = pg_test_call(instance, 0xd80958fc74e988a6ull, 0, NULL) & 0xffffffff;   // PLAYER_PED_ID
+    pg_test_call(instance, 0x6b76dc1f3ae6e6a3ull, 3, (uint64_t[]){ped, 0, 0});                  // SET_ENTITY_HEALTH
+    pg_asi_leave_script(instance, previous);
+    pg_log("TEST: player killed while the script is requested.");
+  }
+  if (!wanted || !*wanted || (PGGameStatus() & 16) || frames > 2400 || ++frames < 1200 || (frames - 1200) % 60) return;
+  pg_asi_game = instance;
+  if (!name) { name = pg_asi_alloc(64); snprintf(pg_pointer(&env, name, 64), 64, "%s", wanted); }
+  // Script commands need a script to run in: "main" is lent, as for script mods.
+  const uint64_t previous = pg_asi_enter_script(instance);
+  if (frames == 1200) {
+    pg_test_call(instance, 0x6eb5f71aa68f2e8eull, 1, (uint64_t[]){name});
+    pg_asi_leave_script(instance, previous);
+    char line[96]; snprintf(line, sizeof line, "TEST: requested script %s.", wanted); pg_log(line); return;
+  }
+  const uint64_t loaded = pg_test_call(instance, 0xe6cc9f3ba0fb9ef1ull, 1, (uint64_t[]){name}) & 0xff;
+  pg_asi_leave_script(instance, previous);
+  char line[96]; snprintf(line, sizeof line, "TEST: script %s loaded %llu after %d s.", wanted, (unsigned long long)loaded, (frames - 1200) / 30); pg_log(line);
+  if (loaded && !killAt) frames = 9999;
+}
+// Test (PG_TEST_MISSING_TEXT=1): from about 40 s to 60 s, a help box with a label the game files don't have
+// (AM_H_DRIVEBY, the drive-by help from a later update), shown every frame as a script does.
+static void pg_test_missing_text(w2c_game *instance) {
+  static int frames; static uint64_t label;
+  if (!getenv("PG_TEST_MISSING_TEXT") || (PGGameStatus() & 16) || frames > 1800 || ++frames < 1200) return;
+  pg_asi_game = instance;
+  if (!label) { label = pg_asi_alloc(16); snprintf(pg_pointer(&env, label, 16), 16, "AM_H_DRIVEBY"); }
+  if (frames == 1200) pg_log("TEST: help box with the missing label AM_H_DRIVEBY.");
+  const uint64_t begin[1] = {label}, end[4] = {0, 0, 0, (uint64_t)-1};
+  pg_test_call(instance, 0x8509b634fbe7da11ull, 1, begin);   // BEGIN_TEXT_COMMAND_DISPLAY_HELP
+  pg_test_call(instance, 0x238ffe5c7b0498a6ull, 4, end);     // END_TEXT_COMMAND_DISPLAY_HELP
+}
+// Test (PG_TEST_TOOTH=1, GTA-94, GTA-82): mission prompts without the missions, each shown every frame as a script
+// shows help (BEGIN/ADD/END_TEXT_COMMAND_DISPLAY_HELP). From about 40 s in, player control off and "Hold
+// ~INPUT_SCRIPT_RT~ to grip a tooth." (By the Book, the prompt layout); from about 70 s, control on and RT named with
+// the right stick, as the scene polls both while pulling (the play layout); from about 100 s, control off and a stick
+// with ~INPUT_CONTEXT~, as at a safehouse couch (GTA-82); from about 130 s, control off and Trevor's whiskey prompt
+// (~INPUT_CONTEXT~ and ~INPUT_SCRIPT_RUP~, log 602); from about 160 s, control on and nothing.
+static void pg_test_tooth(w2c_game *instance) {
+  static int frames; static uint64_t label, texts[4];
+  static const char *const prompts[4] = {"Hold ~INPUT_SCRIPT_RT~ to grip a tooth.",
+    "Keep ~INPUT_SCRIPT_RT~ held and rotate ~INPUTGROUP_SCRIPT_RSTICK_ALL~ to pull it out.",
+    "Use ~INPUT_SCRIPT_RIGHT_AXIS_X~ to change the channel. Press ~INPUT_CONTEXT~ to stand up.",
+    "Press ~INPUT_CONTEXT~ to drink more whiskey.~n~Press ~INPUT_SCRIPT_RUP~ to stop drinking.~n~"};
+  if (!getenv("PG_TEST_TOOTH") || (PGGameStatus() & 16) || frames > 4800 || ++frames < 1200) return;
+  pg_asi_game = instance;
+  if (!label) {
+    label = pg_asi_alloc(16); snprintf(pg_pointer(&env, label, 16), 16, "STRING");
+    for (int k = 0; k < 4; k++) { texts[k] = pg_asi_alloc(128); snprintf(pg_pointer(&env, texts[k], 128), 128, "%s", prompts[k]); }
+  }
+  const int phase = (frames - 1200) / 900;
+  if ((frames - 1200) % 900 == 0) {
+    const uint64_t control[3] = {pg_test_call(instance, 0x4f8644af03d0e0d6ull, 0, NULL), phase == 1 || phase == 4, 0};
+    pg_test_call(instance, 0x8d32347d6d4c40a2ull, 3, control);   // SET_PLAYER_CONTROL(PLAYER_ID(), ...)
+    char line[160]; snprintf(line, sizeof line, "TEST: prompt phase %d, control %s: %s", phase, control[1] ? "on" : "off", phase < 4 ? prompts[phase] : "(none)"); pg_log(line);
+  }
+  if (phase >= 4) return;
+  // While RT is named with the right stick, what the game reads for INPUT_SCRIPT_RT (GET_CONTROL_NORMAL, frontend
+  // control as the story scripts use it) every 2 s: 1 while the touch RT is latched.
+  if (phase == 1 && (frames - 1200) % 60 == 0) {
+    const uint64_t rt[2] = {2, 229}; const uint64_t read = pg_test_call(instance, 0xec3c9b8d5327b563ull, 2, rt);
+    float value; uint32_t bits = (uint32_t)read; memcpy(&value, &bits, 4);
+    char line[80]; snprintf(line, sizeof line, "TEST: the game reads INPUT_SCRIPT_RT as %.2f.", value); pg_log(line);
+  }
+  const uint64_t begin[1] = {label}, text[1] = {texts[phase]}, end[4] = {0, 0, 0, (uint64_t)-1};
+  pg_test_call(instance, 0x8509b634fbe7da11ull, 1, begin);   // BEGIN_TEXT_COMMAND_DISPLAY_HELP
+  pg_test_call(instance, 0x6c188be134e074aaull, 1, text);    // ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME
+  pg_test_call(instance, 0x238ffe5c7b0498a6ull, 4, end);     // END_TEXT_COMMAND_DISPLAY_HELP
+}
+#endif
+#if TARGET_OS_SIMULATOR
+// Test (PG_TEST_PHONE=1, GTA-80): from about 40 s in, the game brings the phone out by itself for 15 s, as an
+// incoming call does (CREATE_MOBILE_PHONE, then DESTROY_MOBILE_PHONE).
+static void pg_test_phone(w2c_game *instance) {
+  static int frames;
+  if (!getenv("PG_TEST_PHONE") || (PGGameStatus() & 16) || frames > 1650 || ++frames < 1200) return;
+  if (frames == 1200) { pg_test_call(instance, 0xa4e8e696c532fbc7ull, 1, (uint64_t[]){0}); pg_log("TEST: phone out by the game."); }
+  if (frames == 1650) { pg_test_call(instance, 0x3bc861df703e5097ull, 0, NULL); pg_log("TEST: phone put away by the game."); }
+}
+#endif
+#if TARGET_OS_SIMULATOR
+// Test (PG_TEST_BLIPS=1): about 60 s in, every blip within 3 km of the player (sprite, colour, position), once.
+static void pg_test_blips(w2c_game *instance) {
+  static int frames;
+  if (!getenv("PG_TEST_BLIPS") || (PGGameStatus() & 16) || frames < 0 || ++frames < 1800) return;
+  frames = -1;
+  uint64_t info, me; const uint8_t *m = (const uint8_t *)(void *)env.memory.data;
+  if (!pg_context_u64(m, env.memory.size, 20159720, &info) || !info || !pg_context_u64(m, env.memory.size, info + 8, &me) || !me) return;
+  const float *position = pg_pointer(&env, me + 144, 12); int found = 0;
+  for (uint64_t sprite = 1; sprite < 830; sprite++) {
+    for (uint64_t blip = pg_test_call(instance, 0x1bede233e6cd2a1full, 1, (uint64_t[]){sprite}) & 0xffffffff; blip;
+         blip = pg_test_call(instance, 0x14f96aa50d6fbea7ull, 1, (uint64_t[]){sprite}) & 0xffffffff) {
+      pg_test_call(instance, 0xfa7c7f0aadf25d09ull, 1, (uint64_t[]){blip});
+      const uint8_t *r = pg_pointer(&env, pg_test_buffer + 8 * 32, 24); float c[3]; memcpy(&c[0], r, 4); memcpy(&c[1], r + 8, 4); memcpy(&c[2], r + 16, 4);
+      if ((c[0] - position[0]) * (c[0] - position[0]) + (c[1] - position[1]) * (c[1] - position[1]) > 3000.f * 3000.f) continue;
+      const uint32_t colour = (uint32_t)pg_test_call(instance, 0xdf729e8d20cf7327ull, 1, (uint64_t[]){blip});
+      char line[120]; snprintf(line, sizeof line, "TEST: blip sprite %llu colour %u at %.1f, %.1f, %.1f.", (unsigned long long)sprite, colour, c[0], c[1], c[2]); pg_log(line);
+      if (++found > 200) return;
+    }
+  }
+}
+// Test (PG_TEST_RACE=1): a race autopilot. Every 1.5 s while the player drives with control on, the vehicle is
+// moved to the nearest yellow blip (a race checkpoint; colours other than yellow are skipped), so a street race
+// finishes in a minute and its result screen can be checked. Every blip is logged once.
+static void pg_test_race(w2c_game *instance) {
+  static int frames; static bool listed; static float lastX, lastY;
+  if (!getenv("PG_TEST_RACE") || (PGGameStatus() & (1 | 16)) || ++frames % 45) return;
+  const uint64_t ped = pg_test_call(instance, 0xd80958fc74e988a6ull, 0, NULL) & 0xffffffff;   // PLAYER_PED_ID
+  const uint64_t inVehicle[2] = {ped, 0};
+  const uint64_t vehicle = pg_test_call(instance, 0x9a9112a0fe9a4713ull, 2, inVehicle) & 0xffffffff;   // GET_VEHICLE_PED_IS_IN
+  if (!vehicle) return;
+  const float *position = NULL; uint64_t info, me;
+  const uint8_t *m = (const uint8_t *)(void *)env.memory.data;
+  if (pg_context_u64(m, env.memory.size, 20159720, &info) && info && pg_context_u64(m, env.memory.size, info + 8, &me) && me) position = pg_pointer(&env, me + 144, 12);
+  if (!position) return;
+  float best = 1e9f, target[3] = {0};
+  for (uint64_t blip = pg_test_call(instance, 0x1bede233e6cd2a1full, 1, (uint64_t[]){1}) & 0xffffffff; blip;   // GET_FIRST_BLIP_INFO_ID(1)
+       blip = pg_test_call(instance, 0x14f96aa50d6fbea7ull, 1, (uint64_t[]){1}) & 0xffffffff) {            // GET_NEXT_BLIP_INFO_ID(1)
+    const uint32_t colour = (uint32_t)pg_test_call(instance, 0xdf729e8d20cf7327ull, 1, (uint64_t[]){blip});      // GET_BLIP_COLOUR
+    pg_test_call(instance, 0xfa7c7f0aadf25d09ull, 1, (uint64_t[]){blip});                                    // GET_BLIP_INFO_ID_COORD
+    const uint8_t *r = pg_pointer(&env, pg_test_buffer + 8 * 32, 24); float c[3]; memcpy(&c[0], r, 4); memcpy(&c[1], r + 8, 4); memcpy(&c[2], r + 16, 4);
+    if (!listed) { char line[120]; snprintf(line, sizeof line, "TEST: race blip %llu colour %u at %.1f, %.1f, %.1f.", (unsigned long long)blip, colour, c[0], c[1], c[2]); pg_log(line); }
+    if (colour != 5 && colour != 66) continue;
+    const float d = (c[0] - position[0]) * (c[0] - position[0]) + (c[1] - position[1]) * (c[1] - position[1]);
+    if (d < best && d > 4.f && !(c[0] == lastX && c[1] == lastY)) { best = d; memcpy(target, c, sizeof target); }
+  }
+  listed = true;
+  if (best > 1e8f) return;
+  uint32_t fx, fy, fz; const float z = target[2] + 1.0f; memcpy(&fx, &target[0], 4); memcpy(&fy, &target[1], 4); memcpy(&fz, &z, 4);
+  const uint64_t move[8] = {vehicle, fx, fy, fz, 0, 0, 0, 0};
+  pg_test_call(instance, 0x06843da7060a026bull, 8, move);   // SET_ENTITY_COORDS
+  lastX = target[0]; lastY = target[1];
+  char line[96]; snprintf(line, sizeof line, "TEST: race autopilot to %.1f, %.1f, %.1f.", target[0], target[1], target[2]); pg_log(line);
+}
+#endif
+#if TARGET_OS_SIMULATOR
+// Test (PG_TEST_SPAWN="adder,buzzard2,..."): Settings › Cheats › Spawn vehicle without the screen. About
+// 40 s in, logs how many vehicles the menu lists and how many have the game's own names, then spawns
+// each model in turn through PGSpawnVehicle (the next once the last one finished), logging the name
+// and class the menu shows for it and how the spawn ended. Three or more spawns exercise the menu's
+// two-vehicle limit. PG_TEST_SPAWN_ENTER=1 puts the player in each one.
+static void pg_test_spawn(void) {
+  static int frames, index = -1; static bool waiting, counted;
+  const char *list = getenv("PG_TEST_SPAWN");
+  if (!list || !*list || index == -2 || (PGGameStatus() & 16) || ++frames < 1200) return;
+  char line[200];
+  if (!counted) {
+    const int32_t count = PGVehicleCatalogCount(); int named = 0;
+    if (count == -1 && frames < 1800) return;   // still reading the list
+    PGVehicleEntry entry;
+    for (int32_t i = 0; i < count; i++) if (PGVehicleCatalogEntryAt((uint32_t)i, &entry) && entry.label[0]) named++;
+    snprintf(line, sizeof line, "TEST: the vehicle menu lists %d models, %d with the game's own names.", count, named); pg_log(line);
+    counted = true;
+  }
+  if (waiting) {
+    const PGVehicleSpawnStatus status = PGGetVehicleSpawnStatus();
+    if (status == PGVehicleSpawnWaiting || status == PGVehicleSpawnLoading) return;
+    snprintf(line, sizeof line, "TEST: spawn %d finished with status %d (3 spawned, 4 unavailable, 6 not ready, 9 vehicle limit).", index, status); pg_log(line);
+    waiting = false;
+  }
+  char names[512], *name = NULL, *rest = NULL; snprintf(names, sizeof names, "%s", list);
+  int at = 0;
+  for (char *item = strtok_r(names, ",", &rest); item; item = strtok_r(NULL, ",", &rest), at++) if (at == index + 1) { name = item; break; }
+  if (!name) { index = -2; pg_log("TEST: spawn list done."); return; }
+  index++;
+  uint32_t model = 0; for (const char *c = name; *c; c++) { model += (uint8_t)(*c >= 'A' && *c <= 'Z' ? *c + 32 : *c); model += model << 10; model ^= model >> 6; }
+  model += model << 3; model ^= model >> 11; model += model << 15;
+  PGVehicleEntry entry = {0}; bool listed = false;
+  for (int32_t i = 0; i < PGVehicleCatalogCount() && !listed; i++) listed = PGVehicleCatalogEntryAt((uint32_t)i, &entry) && entry.model == model;
+  const bool enter = getenv("PG_TEST_SPAWN_ENTER") && atoi(getenv("PG_TEST_SPAWN_ENTER"));
+  waiting = PGSpawnVehicle(model, enter);
+  if (listed) snprintf(line, sizeof line, "TEST: spawn %d: %s, listed as \"%s\" (class %u)%s.", index, name, entry.label, entry.vehicleClass, waiting ? "" : ", refused");
+  else snprintf(line, sizeof line, "TEST: spawn %d: %s (0x%08x), not in the menu's list%s.", index, name, model, waiting ? "" : ", refused");
+  pg_log(line);
+}
+// Test (PG_TEST_CHEAT="god,wanted,time:18,weather:5,natural,repair,clean"): Settings › Cheats without
+// the screen. With "god" or "wanted", about 40 s in the player gets two wanted stars and the God mode /
+// Never wanted switches go on; what the game itself then says (GET_PLAYER_INVINCIBLE,
+// GET_PLAYER_WANTED_LEVEL, GET_MAX_WANTED_LEVEL) is logged at 45 s, the switches go off at 50 s and
+// it's logged again at 55 s. The other names are one-off actions (an hour, a weather 0-6), queued one
+// after another from 40 s, each logged as it finishes; repair and clean need PG_TEST_SPAWN_ENTER.
+static void pg_test_cheat_report(w2c_game *instance, const char *when) {
+  const uint64_t previous = pg_asi_enter_script(instance);
+  const uint64_t player = pg_test_call(instance, 0x4f8644af03d0e0d6ull, 0, NULL) & 0xffffffff;   // PLAYER_ID
+  const int invincible = (int)(pg_test_call(instance, 0xb721981b2b939e07ull, 1, (uint64_t[]){player}) & 1);   // GET_PLAYER_INVINCIBLE
+  const int wanted = (int)(uint32_t)pg_test_call(instance, 0xe28e54788ce8f12dull, 1, (uint64_t[]){player});   // GET_PLAYER_WANTED_LEVEL
+  const int limit = (int)(uint32_t)pg_test_call(instance, 0x462e0db9b137dc5full, 0, NULL);   // GET_MAX_WANTED_LEVEL
+  pg_asi_leave_script(instance, previous);
+  char line[160]; snprintf(line, sizeof line, "TEST: cheats %s: switches god %d wanted %d; the game says invincible %d, wanted level %d, wanted limit %d.",
+                           when, PGCheatEnabled(PGCheatGodMode), PGCheatEnabled(PGCheatNeverWanted), invincible, wanted, limit);
+  pg_log(line);
+}
+static void pg_test_cheat(w2c_game *instance) {
+  static int frames, next; static bool waiting, done; static PGCheatCommand last;
+  const char *list = getenv("PG_TEST_CHEAT");
+  if (!list || !*list || (PGGameStatus() & 16) || ++frames < 1200) return;
+  const bool god = strstr(list, "god") != NULL, wanted = strstr(list, "wanted") != NULL;
+  if ((god || wanted) && frames == 1200) {
+    if (wanted) {
+      const uint64_t previous = pg_asi_enter_script(instance);
+      const uint64_t player = pg_test_call(instance, 0x4f8644af03d0e0d6ull, 0, NULL) & 0xffffffff;   // PLAYER_ID
+      pg_test_call(instance, 0x39ff19c64ef7da5bull, 3, (uint64_t[]){player, 2, 0});   // SET_PLAYER_WANTED_LEVEL
+      pg_test_call(instance, 0xe0a7d1e497ffcd6full, 2, (uint64_t[]){player, 0});      // SET_PLAYER_WANTED_LEVEL_NOW
+      pg_asi_leave_script(instance, previous);
+    }
+    pg_test_cheat_report(instance, "before");
+    if (god) PGSetPersistentCheatEnabled(PGCheatGodMode, true);
+    if (wanted) PGSetPersistentCheatEnabled(PGCheatNeverWanted, true);
+  }
+  if ((god || wanted) && frames == 1350) pg_test_cheat_report(instance, "on");
+  if ((god || wanted) && frames == 1500) {
+    if (god) PGSetPersistentCheatEnabled(PGCheatGodMode, false);
+    if (wanted) PGSetPersistentCheatEnabled(PGCheatNeverWanted, false);
+  }
+  if ((god || wanted) && frames == 1650) pg_test_cheat_report(instance, "off again");
+  if (done) return;
+  char line[160];
+  if (waiting) {
+    const PGCheatStatus status = PGGetCheatStatus();
+    if (status == PGCheatWaiting) return;
+    snprintf(line, sizeof line, "TEST: cheat action %d finished with status %d (2 done, 3 no vehicle, 4 not ready).", next - 1, status); pg_log(line);
+    if (last == PGCheatSetTime) {
+      const uint64_t previous = pg_asi_enter_script(instance);
+      snprintf(line, sizeof line, "TEST: the game's clock says %d o'clock.", (int)(uint32_t)pg_test_call(instance, 0x25223ca6b4d20b7full, 0, NULL)); pg_log(line);   // GET_CLOCK_HOURS
+      pg_asi_leave_script(instance, previous);
+    }
+    waiting = false;
+  }
+  char names[256]; snprintf(names, sizeof names, "%s", list);
+  char *name = NULL, *rest = NULL; int at = 0;
+  for (char *item = strtok_r(names, ",", &rest); item; item = strtok_r(NULL, ",", &rest)) {
+    if (!strcmp(item, "god") || !strcmp(item, "wanted")) continue;
+    if (at++ == next) { name = item; break; }
+  }
+  if (!name) { done = true; return; }
+  next++;
+  PGCheatCommand command; int32_t value = 0;
+  if (!strncmp(name, "time:", 5)) { command = PGCheatSetTime; value = atoi(name + 5); }
+  else if (!strncmp(name, "weather:", 8)) { command = PGCheatSetWeather; value = atoi(name + 8); }
+  else if (!strcmp(name, "natural")) command = PGCheatNaturalWeather;
+  else if (!strcmp(name, "repair")) command = PGCheatRepairVehicle;
+  else if (!strcmp(name, "clean")) command = PGCheatCleanVehicle;
+  else { snprintf(line, sizeof line, "TEST: unknown cheat \"%s\".", name); pg_log(line); return; }
+  waiting = PGQueueCheat(command, value); last = command;
+  snprintf(line, sizeof line, "TEST: cheat action %d: %s%s.", next - 1, name, waiting ? " queued" : " refused"); pg_log(line);
+}
+#endif
 // Loads every .asi in the Mods folder once the player exists, then runs their scripts each frame.
 static void pg_asi_frame(w2c_game *instance) {
   static int state;  // 0 not loaded yet, 1 running, -1 no script mods
@@ -1620,6 +2053,10 @@ static void pg_asi_frame(w2c_game *instance) {
       while (dir && (entry = readdir(dir))) {
         size_t n = strlen(entry->d_name);
         if (n < 5 || strcasecmp(entry->d_name + n - 4, ".asi")) continue;
+        // ScriptHookVDotNet's loader runs C# scripts on Windows .NET, and OpenIV's is for the PC: neither can run here.
+        if (!strncasecmp(entry->d_name, "ScriptHookVDotNet", 17) || !strcasecmp(entry->d_name, "OpenIV.asi")) {
+          char line[PATH_MAX + 96]; snprintf(line, sizeof line, "Script mods: %s needs Windows (ScriptHookVDotNet or OpenIV); not loaded.", entry->d_name); pg_log(line); continue;
+        }
         if (!loaded && !pg_asi_init(&host)) { pg_log("Script mods: the interpreter could not start."); break; }
         char path[PATH_MAX]; snprintf(path, sizeof path, "%s/%s", places[place], entry->d_name);
         FILE *file = fopen(path, "rb"); if (!file) continue;
@@ -1652,13 +2089,24 @@ static void pg_asi_frame(w2c_game *instance) {
   *(uint64_t *)pg_pointer(&env, instance->w2c_g1 + 3088, 8) = previous;
 }
 // The game runs each of its scripts once per frame on the main game thread (scrThread::Run, wrapped by
-// Scripts/prepare_asi_script_tick.py); script mods get their turn just before the "main" script.
+// Scripts/prepare_asi_script_tick.py); script mods get their turn just before the "main" script, and
+// so does Settings › Cheats (vehicles must not be created from the controller thread, see
+// NativeVehicleSpawn.inc). A paused (suspended) script isn't run, so neither are these.
 void pg_asi_script_tick(w2c_game *instance, u64 thread) {
   if (!thread || strcmp(pg_string(&env, thread + 428), "main")) return;
   pg_asi_frame(instance);
+  pg_cheats_menu_tick(instance);
 #if TARGET_OS_SIMULATOR
+  pg_test_spawn();
+  pg_test_cheat(instance);
   pg_test_text(instance);
   pg_test_player_model(instance);
+  pg_test_tooth(instance);
+  pg_test_missing_text(instance);
+  pg_test_request_script(instance);
+  pg_test_phone(instance);
+  pg_test_race(instance);
+  pg_test_blips(instance);
 #endif
 }
 void pg_virtual_pad_apply(w2c_game *instance, uint64_t pad) {
@@ -1666,10 +2114,11 @@ void pg_virtual_pad_apply(w2c_game *instance, uint64_t pad) {
   if (pad == 12840656) pg_apply_cash_request(instance);
   if (pad == 12840656) pg_apply_lite(instance);
   if (pad == 12840656) pg_apply_targeting_mode(instance);
+  if (pad == 12840656) pg_tv_presentation_update(instance);
   if (pad == 12840656) pg_keep_on_test_map(instance);
   if (pad == 12840656) pg_keep_weapon_loaded(instance);
 #if TARGET_OS_SIMULATOR
-  if (pad == 12840656) { pg_test_teleport(instance); pg_test_speed(instance); pg_test_weapon(instance); pg_test_outfit(instance); pg_test_prompts(instance); pg_test_cash(instance); pg_test_tv(instance); pg_test_video(instance); pg_test_lester1_tv(instance); pg_test_photo(instance); pg_test_car(instance); pg_test_request_models(instance); pg_test_loadscene(instance); pg_test_loadscene_monitor(instance); }
+  if (pad == 12840656) { pg_test_teleport(instance); pg_test_speed(instance); pg_test_weapon(instance); pg_test_outfit(instance); pg_test_prompts(instance); pg_test_cash(instance); pg_test_tv(instance); pg_test_tv_flood(instance); pg_test_gfx_dirty(instance); pg_test_position(); pg_test_video(instance); pg_test_lester1_tv(instance); pg_test_photo(instance); pg_test_car(instance); pg_test_trailer_monitor(instance); pg_test_request_models(instance); pg_test_loadscene(instance); pg_test_loadscene_monitor(instance); }
 #endif
   if (pad != 12840656 || !atomic_load(&virtualPadActive)) return;
   uint64_t packed = atomic_load(&virtualPad);
@@ -2405,11 +2854,47 @@ static void pg_game_index(const char *label,uint64_t packfile){
  if(++archives==1000){fflush(out);rename(temp,final);pg_log("Mods: the game's file index is ready for the mod installer.");}
  else if(archives>1000&&archives%50==0)fflush(out);
 }
+// Audio in PC add-on packs (GTA-88): the game's own packs keep each audio data file three ways (X.dat151,
+// X.dat151.nametable, X.dat151.rel) and this engine reads the plain X.dat151; PC mods only ship the release
+// copy X.dat151.rel, so a car with its own sounds stopped the game after "Failed to find ...dat151". The
+// .rel file holds the same data: in an archive that has no plain copy, its entry is renamed to the plain
+// name (the names table is in memory; dropping a trailing ".rel" keeps the directory's sort order).
+static int pg_audio_rel_walk(uint64_t entries,uint64_t names,unsigned shift,uint32_t index,int depth){
+ const uint64_t *e=pg_pointer(&env,entries+16ull*index,16);
+ if(((e[0]>>40)&0x7FFFFF)!=0x7FFFFF)return 0;
+ uint32_t first=(uint32_t)e[1],count=(uint32_t)(e[1]>>32);int renamed=0;
+ if(depth>16||count>20000)return 0;
+ for(uint32_t i=0;i<count;i++){
+  const uint64_t *child=pg_pointer(&env,entries+16ull*(first+i),16);
+  if(((child[0]>>40)&0x7FFFFF)==0x7FFFFF){renamed+=pg_audio_rel_walk(entries,names,shift,first+i,depth+1);continue;}
+  char *name=(char *)pg_string(&env,names+((uint64_t)(child[0]&0xFFFF)<<shift));
+  size_t length=strlen(name);
+  if(length<9||strcasecmp(name+length-4,".rel")||!strcasestr(name,".dat"))continue;
+  bool plain=false;
+  for(uint32_t k=0;k<count&&!plain;k++){
+   const uint64_t *other=pg_pointer(&env,entries+16ull*(first+k),16);
+   const char *otherName=pg_string(&env,names+((uint64_t)(other[0]&0xFFFF)<<shift));
+   plain=k!=i&&strlen(otherName)==length-4&&!strncasecmp(otherName,name,length-4);
+  }
+  if(plain)continue;
+  name[length-4]=0;renamed++;
+ }
+ return renamed;
+}
 void pg_packfile_mounted(w2c_game *instance,u64 packfile,u64 name,u32 result){
  (void)instance;
  if(!result)return;
  const char *label=pg_string(&env,name);
  pg_game_index(label,packfile);
+ size_t labelLength=strlen(label);
+ if(labelLength>8&&!strcasecmp(label+labelLength-7,"dlc.rpf")&&(label[labelLength-8]=='/'||label[labelLength-8]=='\\')){   // "platform:\dlcPacks\<pack>\dlc.rpf"
+  uint64_t entries=*(uint64_t *)pg_pointer(&env,packfile+32,8),names=*(uint64_t *)pg_pointer(&env,packfile+16,8);
+  unsigned shift=*(uint8_t *)pg_pointer(&env,packfile+184,1);
+  int renamed=entries&&names?pg_audio_rel_walk(entries,names,shift,0,0):0;
+  if(getenv("PG_TEST_MODS")){char test[400];snprintf(test,sizeof test,"TEST: dlc pack %.300s mounted, %d audio .rel renamed (entries %s).",label,renamed,entries&&names?"ok":"missing");pg_log(test);}
+  static _Atomic int told;
+  if(renamed&&atomic_fetch_add(&told,1)<16){char line[400];snprintf(line,sizeof line,"Mods: %.300s has PC audio data (.rel only); %d file%s read as the game's own.",label,renamed,renamed==1?"":"s");pg_log(line);}
+ }
  const PGModPiece *pieces=NULL;int count=pg_mods_for_archive(label,&pieces);
  if(getenv("PG_TEST_MODS")&&strstr(label,"vehicles.rpf")){char test[400];snprintf(test,sizeof test,"TEST: mounted %.300s, %d mod files.",label,count);pg_log(test);}
  if(!count)return;

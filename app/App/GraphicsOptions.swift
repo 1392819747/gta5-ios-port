@@ -50,6 +50,33 @@ enum GraphicsPreset: Int, CaseIterable {
     }
 }
 
+/// One detail the player can set apart from the preset (GTA-84): an engine option and its choices.
+struct GraphicsDetail {
+    let option: String
+    let title: String
+    let values: [String]
+    let names: [String]
+
+    static let all: [GraphicsDetail] = {
+        let levels = [AppLanguage.choose("Low"), AppLanguage.choose("High"), AppLanguage.choose("Very high")]
+        let percent = ["0", "0.2", "0.4", "0.6", "0.8", "1"]
+        return [
+            GraphicsDetail(option: "textureQuality", title: AppLanguage.choose("Textures"), values: ["0", "1", "2"], names: levels),
+            GraphicsDetail(option: "shadowQuality", title: AppLanguage.choose("Shadows"), values: ["-1", "0", "1", "2"], names: [AppLanguage.choose("Off")] + levels),
+            GraphicsDetail(option: "reflectionQuality", title: AppLanguage.choose("Reflections"), values: ["0", "1", "2"], names: levels),
+            GraphicsDetail(option: "lodScale", title: AppLanguage.choose("Draw distance"), values: percent, names: percent.map { "\(Int((Double($0) ?? 0) * 100))%" }),
+            GraphicsDetail(option: "grassQuality", title: AppLanguage.choose("Grass"), values: ["0", "1", "2"], names: levels),
+            GraphicsDetail(option: "cityDensity", title: AppLanguage.choose("Traffic and people"), values: percent, names: percent.map { "\(Int((Double($0) ?? 0) * 100))%" }),
+        ]
+    }()
+
+    /// The preset's own value for this detail.
+    func presetValue(_ preset: GraphicsPreset) -> String {
+        preset.engineOptions.first { $0.hasPrefix("-\(option)=") }.map { String($0.dropFirst(option.count + 2)) } ?? values[0]
+    }
+    func name(of value: String) -> String { values.firstIndex(of: value).map { names[$0] } ?? value }
+}
+
 /// What this device can afford, measured before the engine starts.
 struct DeviceTier {
     let memoryLimitMB: Int
@@ -158,7 +185,13 @@ enum GraphicsConfiguration {
     static func apply(_ settings: GameSettings, screen: CGSize, tv: Bool = false) -> String {
         let preset = settings.graphicsPreset
         let (width, height) = size(for: preset, renderHeight: settings.renderHeight, screen: screen, matchScreenShape: tv || settings.matchScreenShape)
-        let options = preset.engineOptions
+        // The player's own details replace the preset's (GTA-84).
+        let overrides = settings.graphicsOverrides
+        let options = preset.engineOptions.map { option -> String in
+            let name = String(option.dropFirst().prefix { $0 != "=" })
+            return overrides[name].map { "-\(name)=\($0)" } ?? option
+        }
+        let own = GraphicsDetail.all.compactMap { detail in overrides[detail.option].map { "\(detail.option) \($0)" } }
         // The engine and renderer read PG_LITE when they start, after this. The Lite build always sets it.
         if preset == .lite { setenv("PG_LITE", "1", 1) } else if !Theme.isLite { unsetenv("PG_LITE") }
         PGSetMemoryCap(Int32(settings.memoryCapMB))
@@ -170,6 +203,6 @@ enum GraphicsConfiguration {
                 PGConfigureEngine($0, UInt32(buffer.count), Int32(width), Int32(height), settings.frameRateCap == 0 ? 0 : settings.frameRateCap == 60 ? 1 : 2)
             }
         }
-        return "\(preset.title) \(width)×\(height) at \(GameSettings.frameRateTitle(settings.frameRateCap))"
+        return "\(preset.title) \(width)×\(height) at \(GameSettings.frameRateTitle(settings.frameRateCap))" + (own.isEmpty ? "" : ", own settings: " + own.joined(separator: ", "))
     }
 }

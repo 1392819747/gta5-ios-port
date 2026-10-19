@@ -131,7 +131,11 @@ final class ModsViewController: UITableViewController, UIDocumentPickerDelegate 
             for skip in plan.skipped.prefix(8) { lines.append("• " + (skip.file as NSString).lastPathComponent + ": " + skip.reason) }
         }
         guard !plan.items.isEmpty else {
-            let alert = UIAlertController(title: AppLanguage.choose("Nothing to install"), message: lines.joined(separator: "\n") + "\n\n" + AppLanguage.choose("The app couldn't tell where this mod's files go. See the guide for putting files in the Mods folder by hand."), preferredStyle: .alert)
+            // Left out because it can't work on iPhone (Windows .NET, GTA V Enhanced): say so, not "couldn't tell where".
+            let title = plan.unsupported ? AppLanguage.choose("This mod can't run on iPhone") : AppLanguage.choose("Nothing to install")
+            let help = plan.unsupported ? AppLanguage.choose("It needs something that only runs on a Windows PC, or it was made for another version of the game. The guide lists what works.")
+                : AppLanguage.choose("The app couldn't tell where this mod's files go. See the guide for putting files in the Mods folder by hand.")
+            let alert = UIAlertController(title: title, message: lines.joined(separator: "\n") + "\n\n" + help, preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: AppLanguage.choose("OK"), style: .cancel) { _ in try? FileManager.default.removeItem(at: folder) })
             present(alert, animated: true); return
         }

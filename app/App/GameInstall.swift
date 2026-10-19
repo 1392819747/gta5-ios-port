@@ -54,6 +54,9 @@ final class GameInstallRun {
         }
         var options = GameInstaller.Options()
         options.log = { GameFolder.log("Install: " + $0) }
+        // A locked phone or a long Wi-Fi drop: iOS pauses the app, so keep trying for half an hour (it resumes
+        // at the byte it stopped) instead of 3 minutes; players lost whole downloads to a short break (GTA-93).
+        options.giveUpAfter = 1800
         options.toleratedSizeMismatches = tolerated
         #if targetEnvironment(simulator)
         // Simulator tests: PG_FAKE_FREE_GB pretends there is room, so a link install starts its download.
@@ -112,7 +115,7 @@ final class GameInstallRun {
                         return
                     }
                     var message = error.message
-                    if error.kind == .cancelled { message = AppLanguage.choose("Cancelled. Files already unpacked are kept; starting again replaces them.") }
+                    if error.kind == .cancelled { message = AppLanguage.choose("Cancelled. What was downloaded and unpacked is kept: Continue the download picks up where it stopped.") }
                     completion(.failure(message))
                 }
             })

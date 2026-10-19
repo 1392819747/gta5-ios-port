@@ -78,6 +78,22 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         label.isUserInteractionEnabled = false
         return label
     }()
+    /// Friend Request (GTA-73): how far the Lifeinvader presentation is, while the TV shows nothing.
+    private lazy var presentationPill: UILabel = {
+        let label = PaddedLabel()
+        label.font = Theme.body(13, .semibold)
+        label.textColor = .white
+        label.backgroundColor = UIColor.black.withAlphaComponent(0.6)
+        label.numberOfLines = 0
+        label.textAlignment = .center
+        label.layer.cornerRadius = 14
+        label.layer.masksToBounds = true
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.isHidden = true
+        label.isUserInteractionEnabled = false
+        return label
+    }()
+    private var presentationSecond = -1
     /// The boot stopped and the audio was shut down on purpose (not restarted when the app is active again).
     private var audioShutDown = false
     private var displayLink: CADisplayLink?
@@ -125,6 +141,9 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
     private var padProof: PGPadState?
     /// Bumps when a new story-cheat sequence starts, so an older one stops writing the pad.
     private var storyCheatToken = 0
+    /// Cheats › Spawn vehicle and the cheat actions: the note at the top while the game carries one out.
+    private var vehicleSpawnTimer: Timer?
+    private var vehicleSpawnNotice: UIView?
     private var lastGameStatus: UInt32 = 999
     private var worldReadyAt: CFTimeInterval?
     private var tiltNeutral: Double?
@@ -210,6 +229,8 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
             self.refreshModeChoice()
         }
         updateServerStatus()
+        // Automation: --forget-game-folder starts with no game folder chosen (download and Continue tests, GTA-93).
+        if ProcessInfo.processInfo.arguments.contains("--forget-game-folder") { GameFolder.clear() }
         // Debug/automation: --local-game-folder /path (a folder the app can already read) skips the picker.
         if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--local-game-folder"), index + 1 < ProcessInfo.processInfo.arguments.count {
             let folder = URL(fileURLWithPath: ProcessInfo.processInfo.arguments[index + 1])
@@ -985,7 +1006,7 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
                 let folder = try ModInstaller.unpack(file)
                 let plan = ModInstaller.plan(folder: folder, name: file.lastPathComponent, index: .load(manifest: EnginePaths.manifest))
                 try ModInstaller.install(plan)
-                appendLog("TEST: installed mod \(plan.name): \(plan.items.map { $0.target }.joined(separator: ", ")); skipped \(plan.skipped.map { $0.file + " (" + $0.reason + ")" }.joined(separator: ", "))")
+                appendLog("TEST: installed mod \(plan.name)\(plan.unsupported ? " (unsupported)" : ""): \(plan.items.map { $0.target }.joined(separator: ", ")); skipped \(plan.skipped.map { $0.file + " (" + $0.reason + ")" }.joined(separator: ", "))")
                 try? FileManager.default.removeItem(at: folder)
             } catch { appendLog("TEST: mod install failed for \(file.lastPathComponent): \(error.localizedDescription)") }
         }
@@ -1230,6 +1251,8 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         controller.editLayout = { [weak self] in self?.showLayoutEditor() }
         controller.targetingChanged = { PGSetTargetingMode(Int32(GameSettings.shared.targetingMode)) }
         controller.cheatSelected = { [weak self] cheat in self?.playStoryCheat(cheat) }
+        controller.nativeCheatSelected = { [weak self] action in self?.performNativeCheat(action) }
+        controller.vehicleSelected = { [weak self] vehicle, enter in self?.spawnVehicle(vehicle, enter: enter) }
         controller.moneyEntered = { [weak self] amount in
             self?.appendLog("Story cheat: set money to \(amount)")
             PGSetPlayerCash(amount)
@@ -1237,6 +1260,88 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         let navigation = UINavigationController(rootViewController: controller)
         Theme.styleNavigation(navigation)
         present(navigation, animated: true)
+    }
+    /// Cheats › Spawn vehicle: the game thread spawns it once play resumes (NativeVehicleSpawn.inc).
+    private func spawnVehicle(_ vehicle: SpawnVehicle, enter: Bool) {
+        guard PGSpawnVehicle(vehicle.model, enter) else {
+            showWhenFree(title: AppLanguage.choose("Spawn vehicle"), message: AppLanguage.choose("A vehicle is already loading. Wait for it to finish."))
+            return
+        }
+        appendLog("Vehicle menu: requested \(vehicle.name) (enter: \(enter)).")
+        monitorMenuAction(title: vehicle.title) {
+            switch PGGetVehicleSpawnStatus() {
+            case PGVehicleSpawnWaiting, PGVehicleSpawnLoading: return nil
+            case PGVehicleSpawnSucceeded: return AppLanguage.interpolate(AppLanguage.choose("Vehicle spawned: {arg0}"), [vehicle.title])
+            case PGVehicleSpawnUnavailable: return AppLanguage.choose("This vehicle isn't available in your game.")
+            case PGVehicleSpawnTimedOut: return AppLanguage.choose("Loading the vehicle took too long. Try again in an open area.")
+            case PGVehicleSpawnLowMemory: return AppLanguage.choose("Not enough free memory to spawn it safely. Go somewhere quieter, or restart with a lower graphics preset.")
+            case PGVehicleSpawnVehicleLimit: return AppLanguage.choose("Both menu vehicles are in use. Leave one empty, then try again.")
+            case PGVehicleSpawnNotReady: return AppLanguage.choose("Return to normal gameplay before spawning a vehicle.")
+            default: return AppLanguage.choose("The game couldn't create this vehicle here.")
+            }
+        }
+    }
+    /// Cheats › repair, clean, time or weather: the game thread runs it once play resumes (NativeCheats.inc).
+    private func performNativeCheat(_ action: NativeCheatAction) {
+        guard PGQueueCheat(action.command, action.value) else {
+            showWhenFree(title: AppLanguage.choose("Cheats"), message: AppLanguage.choose("A cheat is already pending. Wait for it to finish."))
+            return
+        }
+        appendLog("Cheats: requested \(action.title).")
+        let title = AppLanguage.choose(action.title)
+        monitorMenuAction(title: title) {
+            switch PGGetCheatStatus() {
+            case PGCheatWaiting: return nil
+            case PGCheatSucceeded: return AppLanguage.interpolate(AppLanguage.choose("Done: {arg0}"), [title])
+            case PGCheatNoVehicle: return AppLanguage.choose("Get into a vehicle first.")
+            default: return AppLanguage.choose("Return to normal gameplay before using this cheat.")
+            }
+        }
+    }
+    /// Leaves the pause menu Settings opened, then shows a note at the top until `result` has an answer
+    /// (checked four times a second), and that answer for 5 s.
+    private func monitorMenuAction(title: String, result: @escaping () -> String?) {
+        touchControls.reset()
+        if PGPauseMenuActive() { PGRequestPauseMenu() }
+        vehicleSpawnTimer?.invalidate()
+        vehicleSpawnNotice?.removeFromSuperview()
+        let notice = UIView()
+        notice.translatesAutoresizingMaskIntoConstraints = false
+        notice.backgroundColor = Theme.night.withAlphaComponent(0.85)
+        notice.layer.cornerRadius = 12
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.textColor = Theme.text
+        label.font = Theme.body(16, .semibold)
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        label.text = AppLanguage.interpolate(AppLanguage.choose("{arg0}: waiting for the game…"), [title])
+        notice.addSubview(label)
+        view.addSubview(notice)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: notice.leadingAnchor, constant: 16),
+            label.trailingAnchor.constraint(equalTo: notice.trailingAnchor, constant: -16),
+            label.topAnchor.constraint(equalTo: notice.topAnchor, constant: 12),
+            label.bottomAnchor.constraint(equalTo: notice.bottomAnchor, constant: -12),
+            notice.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
+            notice.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            notice.widthAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.widthAnchor, constant: -120),
+            notice.widthAnchor.constraint(greaterThanOrEqualToConstant: 240),
+        ])
+        vehicleSpawnNotice = notice
+        let started = Date()
+        vehicleSpawnTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self, weak notice, weak label] timer in
+            // The game answers within 40 s (10 s to resume play, 30 s to load a vehicle); if it never
+            // does, the note shouldn't stay up forever.
+            let answer = result() ?? (Date().timeIntervalSince(started) > 60
+                ? AppLanguage.choose("The game didn't respond. Return to normal gameplay and try again.") : nil)
+            guard let message = answer else { return }
+            timer.invalidate()
+            self?.vehicleSpawnTimer = nil
+            label?.text = message
+            UIAccessibility.post(notification: .announcement, argument: message)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak notice] in notice?.removeFromSuperview() }
+        }
     }
     /// The engine follows back-buffer size changes while running.
     private func applyLiveResolution() {
@@ -1283,6 +1388,13 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
             if on != touchSprintTesting { touchSprintTesting = on; touchControls.testSprint(on); appendLog("Test: touch sprint \(on ? "on" : "off")") }
         }
         #endif
+        #if targetEnvironment(simulator)
+        // --test-pause-at <seconds>: opens the pause menu the way leaving the app does (Start for 3 engine frames).
+        if let i = arguments.firstIndex(of: "--test-pause-at"), i + 1 < arguments.count, let at = Double(arguments[i + 1]),
+           !testPauseDone, sinceWorld > at {
+            testPauseDone = true; PGRequestPauseMenu(); appendLog("Test: pause menu requested")
+        }
+        #endif
         if let i = arguments.firstIndex(of: "--inject-key"), i + 3 < arguments.count,
            let key = UInt8(arguments[i + 1], radix: 16), let after = Double(arguments[i + 2]), let hold = Double(arguments[i + 3]) {
             if !injectedKey && sinceWorld > after { injectedKey = true; KeyboardMouse.shared.inject(key: key, down: true); appendLog("Test: key 0x\(arguments[i + 1]) down") }
@@ -1326,6 +1438,26 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
                                              loadingPill.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -18)])
             }
         }
+        // Friend Request (GTA-73): the Lifeinvader presentation runs on a black TV for about 3 minutes; say how
+        // far it is, or players give up before Jay Norris takes out the phone.
+        var presentationMs: Int32 = 0, presentationLength: Int32 = 0
+        if engineStarted, bootedMode == .story, PGTVPresentation(&presentationMs, &presentationLength) {
+            if presentationPill.superview == nil {
+                view.addSubview(presentationPill)
+                NSLayoutConstraint.activate([presentationPill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                                             presentationPill.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 64),
+                                             presentationPill.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.6)])
+            }
+            let second = Int(presentationMs / 1000)
+            if second != presentationSecond {
+                presentationSecond = second
+                let time = { (ms: Int32) in String(format: "%d:%02d", ms / 60000, ms / 1000 % 60) }
+                presentationPill.text = AppLanguage.interpolate(AppLanguage.choose("Lifeinvader presentation {arg0} of {arg1}. The TV stays black in this port (the game files have no TV videos): keep watching and wait for the next hint."), [time(presentationMs), time(presentationLength)])
+            }
+            if presentationPill.isHidden { presentationPill.isHidden = false; appendLog("TV: Lifeinvader presentation playing (\(presentationLength / 1000) s); showing its progress") }
+        } else if !presentationPill.isHidden {
+            presentationPill.isHidden = true; presentationSecond = -1; appendLog("TV: presentation progress hidden")
+        }
         if gameStatus != lastGameStatus {
             lastGameStatus = gameStatus
             appendLog("Game state: control \(gameStatus & 1 != 0 ? "off" : "on")\(gameStatus & 2 != 0 ? ", phone out" : "")\(gameStatus & 4 != 0 ? ", cutscene" : "")\(gameStatus & 8 != 0 ? ", warning screen" : "")\(gameStatus & 16 != 0 ? ", no player" : "")")
@@ -1339,13 +1471,34 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         if let controller = GCController.controllers().first(where: { $0.extendedGamepad != nil }), let pad = controller.extendedGamepad {
             state = PGPadState(gamepad: pad)
             hasController = true
+            // The touch Settings button hides while a controller is connected, so holding View / Share (Select)
+            // for a second opens the app's Settings; players used to disconnect the controller to get there.
+            if engineStarted, pad.buttonOptions?.isPressed == true {
+                if let since = controllerSelectSince, since >= 0, now - since > 1, presentedViewController == nil {
+                    controllerSelectSince = -1
+                    appendLog("Controller: Select held, opening Settings.")
+                    showSettings()
+                } else if controllerSelectSince == nil { controllerSelectSince = now }
+            } else { controllerSelectSince = nil }
             // Diagnostics (GTA-58, "R2 sometimes doesn't accelerate"): the strongest trigger values the
-            // controller reported, logged every 10 s while they move.
+            // controller reported, how often each trigger went down, and which other buttons were held with RT,
+            // logged every 10 s while they move.
             controllerTriggerPeak = (max(controllerTriggerPeak.0, pad.leftTrigger.value), max(controllerTriggerPeak.1, pad.rightTrigger.value))
+            let triggersDown = (pad.leftTrigger.value > 0.5, pad.rightTrigger.value > 0.5)
+            if triggersDown.0 && !controllerTriggersWereDown.0 { controllerTriggerPresses.0 += 1 }
+            if triggersDown.1 && !controllerTriggersWereDown.1 { controllerTriggerPresses.1 += 1; controllerButtonsWithRT.formUnion(state.padButtons) }
+            controllerTriggersWereDown = triggersDown
             if now - controllerTriggerLoggedAt > 10, controllerTriggerPeak.0 + controllerTriggerPeak.1 > 0 {
-                appendLog(String(format: "Controller %@: LT peak %.2f, RT peak %.2f (analog %@) in the last 10 s, vehicle %u", controller.vendorName ?? "?", controllerTriggerPeak.0, controllerTriggerPeak.1, pad.rightTrigger.isAnalog ? "yes" : "no", PGCurrentTouchContext()))
-                controllerTriggerPeak = (0, 0); controllerTriggerLoggedAt = now
+                let names: [(PadButtons, String)] = [(.a, "A"), (.b, "B"), (.x, "X"), (.y, "Y"), (.l1, "LB"), (.r1, "RB"), (.start, "Menu"), (.select, "View"), (.l3, "LS"), (.r3, "RS"), (.up, "Up"), (.down, "Down"), (.left, "Left"), (.right, "Right")]
+                let withRT = names.filter { controllerButtonsWithRT.contains($0.0) }.map(\.1).joined(separator: ",")
+                appendLog(String(format: "Controller %@: LT peak %.2f, RT peak %.2f (analog %@), pressed LT %d, RT %d times, held with RT: %@ in the last 10 s, vehicle %u", controller.vendorName ?? "?", controllerTriggerPeak.0, controllerTriggerPeak.1, pad.rightTrigger.isAnalog ? "yes" : "no", controllerTriggerPresses.0, controllerTriggerPresses.1, withRT.isEmpty ? "nothing" : withRT, PGCurrentTouchContext()))
+                controllerTriggerPeak = (0, 0); controllerTriggerLoggedAt = now; controllerTriggerPresses = (0, 0); controllerButtonsWithRT = []
             }
+            // A digital trigger (0 or 1, e.g. the GameSir X5 Lite's) pulses many times a second when the controller's
+            // turbo is on for it, and a pulsing RT hardly accelerates (GTA-58): it stays held 0.12 s after its last
+            // pressed reading, so the pulses become one press. Analog triggers are left as they are.
+            if !pad.leftTrigger.isAnalog { if triggersDown.0 { digitalTriggerAt.0 = now } else if now - digitalTriggerAt.0 < 0.12 { state.leftTrigger = 1 } }
+            if !pad.rightTrigger.isAnalog { if triggersDown.1 { digitalTriggerAt.1 = now } else if now - digitalTriggerAt.1 < 0.12 { state.rightTrigger = 1 } }
             if diagnosticsOverlay?.isHidden != true { controllerLabel.text = AppLanguage.interpolate(AppLanguage.choose("Controller: {arg0}"), [controller.vendorName ?? AppLanguage.choose("Gamepad")]) }
         } else if diagnosticsOverlay?.isHidden != true {
             controllerLabel.text = AppLanguage.choose("Touch controls ready")
@@ -1393,10 +1546,24 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
             touchControls.updateMissionInputs { previewMission || PGInputPolledWithin($0, 700) != 0 }
             // Deliberately let the native game decide if relative mouse motion
             // disables assisted targeting. Never force the last-device flag.
-            let mouseSwipe = touchControls.experimentalMouseLookActive && !hasController && !pcControls
+            var mouseSwipe = touchControls.experimentalMouseLookActive && !hasController && !pcControls
+            #if targetEnvironment(simulator)
+            // Test (PG_TEST_MOUSE=<seconds after WORLD_READY>): 20 s of swipe-camera mouse movement.
+            if let start = ProcessInfo.processInfo.environment["PG_TEST_MOUSE"].flatMap(Double.init), let ready = worldReadyAt,
+               now - ready > start, now - ready < start + 20 {
+                mouseSwipe = true; PGSetMouseFocus(true, true); PGMouseInput(6, 0, 0)
+                if !testMouseLogged { testMouseLogged = true; appendLog("TEST: mouse moving (swipe camera) for 20 s") }
+            } else if testMouseLogged, let start = ProcessInfo.processInfo.environment["PG_TEST_MOUSE"].flatMap(Double.init), let ready = worldReadyAt,
+                      now - ready >= start + 20, !testMouseStopped {
+                testMouseStopped = true; appendLog("TEST: mouse stopped")
+            }
+            #endif
             if mouseSwipe { PGSetMouseFocus(true, true) }
             else if wasMouseSwipeActive { PGSetMouseFocus(true, false) }
             wasMouseSwipeActive = mouseSwipe
+            #if targetEnvironment(simulator)
+            if let ready = worldReadyAt { touchControls.applyTestPresses(sinceWorld: now - ready) }
+            #endif
             let touch = touchControls.padState(elapsed: elapsed)
             if ProcessInfo.processInfo.arguments.contains("--trace-touch-controls") {
                 let sample = String(format: "Touch pad: buttons=%u move=%.2f,%.2f look=%.2f,%.2f triggers=%.2f,%.2f device=%d", touch.buttons, touch.leftX, touch.leftY, touch.rightX, touch.rightY, touch.leftTrigger, touch.rightTrigger, PGLastInputDevice())
@@ -1494,7 +1661,13 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         }
         PGUpdateVirtualPad(state)
     }
+    private var testMouseLogged = false, testMouseStopped = false, testPauseDone = false
+    /// When the controller's Select button went down (-1: Settings already opened for this hold).
+    private var controllerSelectSince: CFTimeInterval?
     private var controllerRadioWheel = false
+    /// Controller trigger diagnostics and the digital-trigger hold (GTA-58).
+    private var controllerTriggersWereDown = (false, false), controllerTriggerPresses = (0, 0), controllerButtonsWithRT = PadButtons()
+    private var digitalTriggerAt: (CFTimeInterval, CFTimeInterval) = (-1, -1)
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
     func draw(in view: MTKView) {
