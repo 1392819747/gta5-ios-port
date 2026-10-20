@@ -42238,89 +42238,6 @@
         }
       }
     },
-    "Lifeinvader presentation {arg0} of {arg1}. The TV stays black in this port (the game files have no TV videos): keep watching and wait for the next hint.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lifeinvader presentation {arg0} of {arg1}. The TV stays black in this port (the game files have no TV videos): keep watching and wait for the next hint."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lifeinvader-Präsentation {arg0} von {arg1}. Der Fernseher bleibt in diesem Port schwarz (die Spieldateien haben keine TV-Videos): weiter zuschauen und auf den nächsten Hinweis warten."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Presentación de Lifeinvader {arg0} de {arg1}. La TV se queda en negro en este port (los archivos del juego no tienen vídeos de TV): sigue mirando y espera la siguiente pista."
-          }
-        },
-        "es-419": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Presentación de Lifeinvader {arg0} de {arg1}. La TV se queda en negro en este port (los archivos del juego no tienen videos de TV): sigue mirando y espera la siguiente pista."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Présentation Lifeinvader {arg0} sur {arg1}. La télé reste noire dans ce portage (les fichiers du jeu n’ont pas de vidéos TV) : continue de regarder et attends l’indice suivant."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Presentazione Lifeinvader {arg0} di {arg1}. La TV resta nera in questo port (i file del gioco non hanno video TV): continua a guardare e aspetta il prossimo suggerimento."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lifeinvaderのプレゼン {arg0} / {arg1}。このポートではテレビは真っ暗のままです(ゲームファイルにテレビ映像がありません)。そのまま見て、次のヒントを待ってください。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lifeinvader 발표 {arg0} / {arg1}. 이 포트에서는 TV 화면이 검은색으로 남습니다(게임 파일에 TV 영상이 없음). 계속 보면서 다음 안내를 기다리세요."
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Prezentacja Lifeinvader {arg0} z {arg1}. Telewizor w tym porcie zostaje czarny (pliki gry nie mają filmów TV): oglądaj dalej i czekaj na następną wskazówkę."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Apresentação da Lifeinvader {arg0} de {arg1}. A TV fica preta neste port (os arquivos do jogo não têm vídeos de TV): continue assistindo e espere a próxima dica."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Презентация Lifeinvader {arg0} из {arg1}. Телевизор в этом порте остаётся чёрным (в файлах игры нет ТВ-видео): продолжайте смотреть и ждите следующей подсказки."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lifeinvader 发布会 {arg0} / {arg1}。此移植版中电视保持黑屏(游戏文件里没有电视视频):继续观看,等待下一条提示。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lifeinvader 發表會 {arg0} / {arg1}。此移植版中電視保持黑畫面(遊戲檔案裡沒有電視影片):繼續觀看,等待下一則提示。"
-          }
-        }
-      }
-    },
     "Can't pick it? A cloud icon next to the file means it's still in iCloud Drive: move it to On My iPhone first. In LiveContainer, turn on its Fix file selection setting.": {
       "extractionState": "manual",
       "localizations": {
@@ -51696,6 +51613,2413 @@
           "stringUnit": {
             "state": "translated",
             "value": "下次啟動 App 時生效。"
+          }
+        }
+      }
+    },
+    "Couldn't remove the mod": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't remove the mod"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mod konnte nicht entfernt werden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo quitar el mod"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo quitar el mod"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de supprimer le mod"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile rimuovere la mod"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mod を削除できませんでした"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모드를 제거하지 못했습니다"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie udało się usunąć moda"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível remover o mod"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось удалить мод"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法移除模组"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法移除模組"
+          }
+        }
+      }
+    },
+    "Open GTA V Port in Files": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open GTA V Port in Files"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GTA V Port in Dateien öffnen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir GTA V Port en Archivos"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir GTA V Port en Archivos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir GTA V Port dans Fichiers"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri GTA V Port in File"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「ファイル」でGTA V Portを開く"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "파일 앱에서 GTA V Port 열기"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otwórz GTA V Port w Plikach"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir GTA V Port no Arquivos"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть GTA V Port в «Файлах»"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在“文件”中打开 GTA V Port"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在「檔案」中打開 GTA V Port"
+          }
+        }
+      }
+    },
+    "This button opens that folder in Files. Move your game folder into it (touch and hold the game folder › Move), then come back: the app checks it by itself.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This button opens that folder in Files. Move your game folder into it (touch and hold the game folder › Move), then come back: the app checks it by itself."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Taste öffnet den Ordner in Dateien. Verschiebe deinen Spielordner hinein (Spielordner gedrückt halten › Bewegen) und komm zurück: Die App prüft ihn von selbst."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este botón abre esa carpeta en Archivos. Mueve tu carpeta del juego dentro (mantén pulsada la carpeta del juego › Mover) y vuelve: la app la revisa sola."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este botón abre esa carpeta en Archivos. Mueve tu carpeta del juego dentro (mantén presionada la carpeta del juego › Mover) y vuelve: la app la revisa sola."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce bouton ouvre ce dossier dans Fichiers. Déplacez-y votre dossier du jeu (touchez longuement le dossier du jeu › Déplacer), puis revenez : l’app le vérifie d’elle-même."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo pulsante apre quella cartella in File. Sposta lì la cartella del gioco (tieni premuta la cartella del gioco › Sposta), poi torna qui: l’app la controlla da sola."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このボタンで「ファイル」のそのフォルダが開きます。ゲームフォルダをそこへ移動して（ゲームフォルダを長押し › 移動）、戻ってきてください。アプリが自動で確認します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 버튼을 누르면 파일 앱에서 그 폴더가 열립니다. 게임 폴더를 그 안으로 옮긴 다음(게임 폴더를 길게 누르기 › 이동) 돌아오세요. 앱이 자동으로 확인합니다."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ten przycisk otwiera ten folder w Plikach. Przenieś do niego folder gry (przytrzymaj folder gry › Przenieś) i wróć: aplikacja sama go sprawdzi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este botão abre essa pasta no Arquivos. Mova a pasta do jogo para dentro dela (toque e segure a pasta do jogo › Mover) e volte: o app verifica sozinho."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Эта кнопка открывает эту папку в «Файлах». Переместите туда папку игры (нажмите и удерживайте папку игры › Переместить) и вернитесь: приложение само её проверит."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此按钮会在“文件”中打开该文件夹。把游戏文件夹移进去（按住游戏文件夹 › 移动），然后回来：App 会自动检查。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此按鈕會在「檔案」中打開該資料夾。把遊戲資料夾搬進去（按住遊戲資料夾 › 搬移），然後回來：App 會自動檢查。"
+          }
+        }
+      }
+    },
+    "Files didn't open": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Files didn't open"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dateien hat sich nicht geöffnet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se abrió Archivos"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se abrió Archivos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fichiers ne s’est pas ouvert"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File non si è aperto"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「ファイル」が開きませんでした"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "파일 앱이 열리지 않았습니다"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pliki się nie otworzyły"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O Arquivos não abriu"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«Файлы» не открылись"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“文件”没有打开"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「檔案」沒有打開"
+          }
+        }
+      }
+    },
+    "Open the Files app yourself and go to On My iPhone › GTA V Port, move your game folder there, then come back.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the Files app yourself and go to On My iPhone › GTA V Port, move your game folder there, then come back."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffne die Dateien-App selbst, geh zu Auf meinem iPhone › GTA V Port, verschiebe deinen Spielordner dorthin und komm zurück."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre tú mismo la app Archivos, ve a En mi iPhone › GTA V Port, mueve allí tu carpeta del juego y vuelve."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre tú mismo la app Archivos, ve a En mi iPhone › GTA V Port, mueve allí tu carpeta del juego y vuelve."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrez vous-même l’app Fichiers, allez dans Sur mon iPhone › GTA V Port, déplacez-y votre dossier du jeu, puis revenez."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri tu l’app File, vai in Su iPhone › GTA V Port, sposta lì la cartella del gioco, poi torna qui."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「ファイル」アプリを自分で開き、「このiPhone内 › GTA V Port」へゲームフォルダを移動してから戻ってきてください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "파일 앱을 직접 열고 ‘나의 iPhone › GTA V Port’로 가서 게임 폴더를 옮긴 다음 돌아오세요."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otwórz samodzielnie aplikację Pliki, przejdź do Na moim iPhonie › GTA V Port, przenieś tam folder gry i wróć."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abra você mesmo o app Arquivos, vá em No Meu iPhone › GTA V Port, mova a pasta do jogo para lá e volte."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Откройте «Файлы» сами, перейдите в На iPhone › GTA V Port, переместите туда папку игры и вернитесь."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请自己打开“文件”App，前往“我的 iPhone › GTA V Port”，把游戏文件夹移到那里，然后回来。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請自行打開「檔案」App，前往「我的 iPhone › GTA V Port」，把遊戲資料夾搬到那裡，然後回來。"
+          }
+        }
+      }
+    },
+    "Open didn't work?": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open didn't work?"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnen hat nicht geklappt?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿No funcionó Abrir?"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿No funcionó Abrir?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir n’a pas marché ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri non ha funzionato?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「開く」が使えませんでしたか？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "열기가 안 되나요?"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otwórz nie zadziałało?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir não funcionou?"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«Открыть» не сработало?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“打开”没反应？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「打開」沒反應？"
+          }
+        }
+      }
+    },
+    "Some sideloaded installs can't hand a folder to the app. Tap Open GTA V Port in Files, move your game folder there, then come back: the app finds it by itself.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some sideloaded installs can't hand a folder to the app. Tap Open GTA V Port in Files, move your game folder there, then come back: the app finds it by itself."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manche per Sideloading installierte Apps können keinen Ordner an die App übergeben. Tippe auf GTA V Port in Dateien öffnen, verschiebe deinen Spielordner dorthin und komm zurück: Die App findet ihn von selbst."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Algunas instalaciones por sideload no pueden pasar una carpeta a la app. Toca Abrir GTA V Port en Archivos, mueve allí tu carpeta del juego y vuelve: la app la encuentra sola."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Algunas instalaciones por sideload no pueden pasar una carpeta a la app. Toca Abrir GTA V Port en Archivos, mueve allí tu carpeta del juego y vuelve: la app la encuentra sola."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Certaines installations en sideload ne peuvent pas transmettre un dossier à l’app. Touchez Ouvrir GTA V Port dans Fichiers, déplacez-y votre dossier du jeu, puis revenez : l’app le trouve d’elle-même."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alcune installazioni in sideload non riescono a passare una cartella all’app. Tocca Apri GTA V Port in File, sposta lì la cartella del gioco, poi torna qui: l’app la trova da sola."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サイドロードでのインストールによっては、フォルダをアプリに渡せないことがあります。「「ファイル」でGTA V Portを開く」をタップし、ゲームフォルダをそこへ移動してから戻ってきてください。アプリが自動で見つけます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "일부 사이드로드 설치에서는 폴더를 앱에 넘길 수 없습니다. ‘파일 앱에서 GTA V Port 열기’를 탭하고 게임 폴더를 그곳으로 옮긴 다음 돌아오세요. 앱이 자동으로 찾습니다."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niektóre instalacje przez sideload nie mogą przekazać folderu aplikacji. Stuknij Otwórz GTA V Port w Plikach, przenieś tam folder gry i wróć: aplikacja sama go znajdzie."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Algumas instalações por sideload não conseguem passar uma pasta para o app. Toque em Abrir GTA V Port no Arquivos, mova a pasta do jogo para lá e volte: o app a encontra sozinho."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Некоторые установки через сайдлоад не могут передать папку приложению. Нажмите «Открыть GTA V Port в «Файлах»», переместите туда папку игры и вернитесь: приложение само её найдёт."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有些侧载安装无法把文件夹交给 App。轻点“在“文件”中打开 GTA V Port”，把游戏文件夹移到那里，然后回来：App 会自动找到它。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有些側載安裝無法把資料夾交給 App。點一下「在「檔案」中打開 GTA V Port」，把遊戲資料夾搬到那裡，然後回來：App 會自動找到它。"
+          }
+        }
+      }
+    },
+    "Find Weazel News: change the TV channel with the arrows (or move the left stick sideways).": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find Weazel News: change the TV channel with the arrows (or move the left stick sideways)."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finde Weazel News: Wechsle den TV-Sender mit den Pfeilen (oder bewege den linken Stick zur Seite)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Busca Weazel News: cambia de canal con las flechas (o mueve el stick izquierdo hacia un lado)."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Busca Weazel News: cambia de canal con las flechas (o mueve el stick izquierdo hacia un lado)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trouvez Weazel News : changez de chaîne avec les flèches (ou poussez le stick gauche sur le côté)."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trova Weazel News: cambia canale con le frecce (o muovi la levetta sinistra di lato)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weazel Newsを探す: 矢印でテレビのチャンネルを変えます（または左スティックを左右に倒します）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weazel News 찾기: 화살표로 TV 채널을 바꾸세요(또는 왼쪽 스틱을 옆으로 미세요)."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Znajdź Weazel News: zmień kanał strzałkami (albo przesuń lewą gałkę w bok)."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encontre o Weazel News: troque o canal com as setas (ou mova o analógico esquerdo para o lado)."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Найдите Weazel News: переключите канал стрелками (или отклоните левый стик в сторону)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找到 Weazel News：用箭头切换电视频道（或把左摇杆向左右推）。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找到 Weazel News：用箭頭切換電視頻道（或把左搖桿往左右推）。"
+          }
+        }
+      }
+    },
+    "Lifeinvader presentation {arg0} of {arg1}. The TV stays black (the game files have no TV videos). At {arg2} Jay Norris holds up the phone: then call him.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lifeinvader presentation {arg0} of {arg1}. The TV stays black (the game files have no TV videos). At {arg2} Jay Norris holds up the phone: then call him."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lifeinvader-Präsentation {arg0} von {arg1}. Der Fernseher bleibt schwarz (die Spieldateien haben keine TV-Videos). Bei {arg2} hält Jay Norris das Handy hoch: Ruf ihn dann an."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presentación de Lifeinvader {arg0} de {arg1}. La tele se queda en negro (los archivos del juego no tienen vídeos de TV). En {arg2} Jay Norris levanta el teléfono: entonces llámalo."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presentación de Lifeinvader {arg0} de {arg1}. La tele se queda en negro (los archivos del juego no tienen videos de TV). En {arg2} Jay Norris levanta el teléfono: entonces llámalo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Présentation Lifeinvader {arg0} sur {arg1}. La télé reste noire (les fichiers du jeu n’ont pas de vidéos TV). À {arg2}, Jay Norris montre le téléphone : appelez-le à ce moment-là."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presentazione Lifeinvader {arg0} di {arg1}. La TV resta nera (i file del gioco non hanno video TV). A {arg2} Jay Norris mostra il telefono: allora chiamalo."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lifeinvaderのプレゼン {arg0} / {arg1}。テレビは黒いままです（ゲームファイルにテレビ映像がありません）。{arg2}にJay Norrisが電話を掲げます。そこで彼に電話してください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lifeinvader 발표 {arg0} / {arg1}. TV는 검은 화면입니다(게임 파일에 TV 영상이 없음). {arg2}에 Jay Norris가 휴대폰을 들어 올립니다. 그때 전화하세요."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prezentacja Lifeinvader {arg0} z {arg1}. Telewizor zostaje czarny (pliki gry nie mają filmów TV). W {arg2} Jay Norris podnosi telefon: wtedy do niego zadzwoń."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apresentação da Lifeinvader {arg0} de {arg1}. A TV fica preta (os arquivos do jogo não têm vídeos de TV). Em {arg2} Jay Norris mostra o celular: então ligue para ele."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Презентация Lifeinvader {arg0} из {arg1}. Экран остаётся чёрным (в файлах игры нет ТВ-видео). В {arg2} Джей Норрис поднимает телефон: тогда позвоните ему."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lifeinvader 发布会 {arg0} / {arg1}。电视一直是黑的（游戏文件里没有电视视频）。{arg2} 时 Jay Norris 会举起手机：那时给他打电话。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lifeinvader 發表會 {arg0} / {arg1}。電視一直是黑的（遊戲檔案裡沒有電視影片）。{arg2} 時 Jay Norris 會舉起手機：那時打電話給他。"
+          }
+        }
+      }
+    },
+    "Call now: Jay Norris is holding up the phone. Phone › Contacts › Jay Norris, before {arg0} ({arg1} now).": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Call now: Jay Norris is holding up the phone. Phone › Contacts › Jay Norris, before {arg0} ({arg1} now)."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jetzt anrufen: Jay Norris hält das Handy hoch. Handy › Kontakte › Jay Norris, vor {arg0} (jetzt {arg1})."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Llama ya: Jay Norris tiene el teléfono en alto. Teléfono › Contactos › Jay Norris, antes de {arg0} (ahora {arg1})."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Llama ya: Jay Norris tiene el teléfono en alto. Teléfono › Contactos › Jay Norris, antes de {arg0} (ahora {arg1})."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appelez maintenant : Jay Norris montre le téléphone. Téléphone › Contacts › Jay Norris, avant {arg0} ({arg1} maintenant)."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiama ora: Jay Norris mostra il telefono. Telefono › Contatti › Jay Norris, prima di {arg0} (ora {arg1})."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今すぐ電話: Jay Norrisが電話を掲げています。電話 › 連絡先 › Jay Norris、{arg0}までに（現在 {arg1}）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지금 전화하세요: Jay Norris가 휴대폰을 들고 있습니다. 휴대폰 › 연락처 › Jay Norris, {arg0} 전까지(지금 {arg1})."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dzwoń teraz: Jay Norris trzyma telefon w górze. Telefon › Kontakty › Jay Norris, przed {arg0} (teraz {arg1})."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ligue agora: Jay Norris está mostrando o celular. Celular › Contatos › Jay Norris, antes de {arg0} (agora {arg1})."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Звоните сейчас: Джей Норрис держит телефон. Телефон › Контакты › Jay Norris, до {arg0} (сейчас {arg1})."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "现在打：Jay Norris 正举着手机。手机 › 联系人 › Jay Norris，在 {arg0} 之前（现在 {arg1}）。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在打：Jay Norris 正舉著手機。手機 › 聯絡人 › Jay Norris，在 {arg0} 之前（現在 {arg1}）。"
+          }
+        }
+      }
+    },
+    "Too late to call: the mission fails. Retry, and call Jay Norris between 1:17 and 2:50.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too late to call: the mission fails. Retry, and call Jay Norris between 1:17 and 2:50."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zu spät zum Anrufen: Die Mission schlägt fehl. Versuch es erneut und ruf Jay Norris zwischen 1:17 und 2:50 an."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demasiado tarde para llamar: la misión falla. Reinténtalo y llama a Jay Norris entre 1:17 y 2:50."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demasiado tarde para llamar: la misión falla. Reinténtalo y llama a Jay Norris entre 1:17 y 2:50."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trop tard pour appeler : la mission échoue. Réessayez et appelez Jay Norris entre 1:17 et 2:50."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Troppo tardi per chiamare: la missione fallisce. Riprova e chiama Jay Norris tra 1:17 e 2:50."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "電話するには遅すぎます: ミッション失敗です。リトライして、1:17から2:50の間にJay Norrisに電話してください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전화하기에 너무 늦었습니다: 미션 실패입니다. 다시 시도해 1:17에서 2:50 사이에 Jay Norris에게 전화하세요."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Za późno na telefon: misja się nie uda. Spróbuj ponownie i zadzwoń do Jaya Norrisa między 1:17 a 2:50."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tarde demais para ligar: a missão falha. Tente de novo e ligue para Jay Norris entre 1:17 e 2:50."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Звонить уже поздно: миссия провалена. Повторите и позвоните Джею Норрису между 1:17 и 2:50."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来不及打了：任务会失败。重试，并在 1:17 到 2:50 之间给 Jay Norris 打电话。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "來不及打了：任務會失敗。重試，並在 1:17 到 2:50 之間打給 Jay Norris。"
+          }
+        }
+      }
+    },
+    "an archive saved without encryption, which the game can't read; re-save it with OpenIV": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an archive saved without encryption, which the game can't read; re-save it with OpenIV"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ein Archiv ohne Verschlüsselung, das das Spiel nicht lesen kann; speichere es mit OpenIV neu"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "un archivo guardado sin cifrado, que el juego no puede leer; vuelve a guardarlo con OpenIV"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "un archivo guardado sin cifrado, que el juego no puede leer; vuelve a guardarlo con OpenIV"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "une archive enregistrée sans chiffrement, que le jeu ne peut pas lire ; réenregistrez-la avec OpenIV"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "un archivio salvato senza crittografia, che il gioco non può leggere; salvalo di nuovo con OpenIV"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暗号化なしで保存されたアーカイブで、ゲームが読み込めません。OpenIVで保存し直してください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "암호화 없이 저장된 아카이브라 게임이 읽을 수 없습니다. OpenIV로 다시 저장하세요"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "archiwum zapisane bez szyfrowania, którego gra nie odczyta; zapisz je ponownie w OpenIV"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "um arquivo salvo sem criptografia, que o jogo não consegue ler; salve-o de novo com o OpenIV"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "архив, сохранённый без шифрования, игра не может его прочитать; пересохраните его в OpenIV"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未加密保存的档案，游戏无法读取；请用 OpenIV 重新保存"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未加密儲存的封存檔，遊戲無法讀取；請用 OpenIV 重新儲存"
+          }
+        }
+      }
+    },
+    "removed when the game starts again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "removed when the game starts again"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wird beim nächsten Spielstart entfernt"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "se quita al volver a iniciar el juego"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "se quita al volver a iniciar el juego"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "supprimé au prochain lancement du jeu"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "rimossa al prossimo avvio del gioco"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "次にゲームを起動したときに削除されます"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다음에 게임을 시작할 때 제거됩니다"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "zostanie usunięty przy następnym uruchomieniu gry"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "removido quando o jogo iniciar de novo"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "будет удалён при следующем запуске игры"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下次启动游戏时移除"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下次啟動遊戲時移除"
+          }
+        }
+      }
+    },
+    "switched on when the game starts again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "switched on when the game starts again"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wird beim nächsten Spielstart eingeschaltet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "se activa al volver a iniciar el juego"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "se activa al volver a iniciar el juego"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "activé au prochain lancement du jeu"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "attivata al prossimo avvio del gioco"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "次にゲームを起動したときにオンになります"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다음에 게임을 시작할 때 켜집니다"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "zostanie włączony przy następnym uruchomieniu gry"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ativado quando o jogo iniciar de novo"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "будет включён при следующем запуске игры"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下次启动游戏时开启"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下次啟動遊戲時開啟"
+          }
+        }
+      }
+    },
+    "switched off when the game starts again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "switched off when the game starts again"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wird beim nächsten Spielstart ausgeschaltet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "se desactiva al volver a iniciar el juego"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "se desactiva al volver a iniciar el juego"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "désactivé au prochain lancement du jeu"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "disattivata al prossimo avvio del gioco"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "次にゲームを起動したときにオフになります"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다음에 게임을 시작할 때 꺼집니다"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "zostanie wyłączony przy następnym uruchomieniu gry"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "desativado quando o jogo iniciar de novo"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "будет выключен при следующем запуске игры"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下次启动游戏时关闭"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下次啟動遊戲時關閉"
+          }
+        }
+      }
+    },
+    "Import a Story save…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import a Story save…"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Story-Spielstand importieren …"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar una partida de la historia…"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar una partida de la historia…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer une sauvegarde de l’histoire…"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importa un salvataggio della storia…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ストーリーのセーブをインポート…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "스토리 저장 파일 가져오기…"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importuj zapis fabuły…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar um save do modo história…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Импортировать сохранение сюжета…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入故事模式存档…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯入故事模式存檔…"
+          }
+        }
+      }
+    },
+    "A save file from a PC or a friend (named like SGTA50000). It goes into a free save slot; load it in the game: Pause › Game › Load Game.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A save file from a PC or a friend (named like SGTA50000). It goes into a free save slot; load it in the game: Pause › Game › Load Game."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Spielstand vom PC oder von Freunden (Name wie SGTA50000). Er kommt in einen freien Speicherplatz; lade ihn im Spiel: Pause › Spiel › Spiel laden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una partida de un PC o de un amigo (con nombre como SGTA50000). Va a un hueco libre; cárgala en el juego: Pausa › Juego › Cargar partida."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una partida de una PC o de un amigo (con nombre como SGTA50000). Va a un espacio libre; cárgala en el juego: Pausa › Juego › Cargar partida."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une sauvegarde venant d’un PC ou d’un ami (nommée comme SGTA50000). Elle va dans un emplacement libre ; chargez-la dans le jeu : Pause › Jeu › Charger une partie."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un salvataggio da un PC o da un amico (con nome tipo SGTA50000). Va in uno slot libero; caricalo nel gioco: Pausa › Gioco › Carica partita."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PCや友達のセーブファイル（SGTA50000のような名前）。空いているスロットに入ります。ゲーム内で読み込みます: ポーズ › ゲーム › ゲームをロード。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PC나 친구의 저장 파일(SGTA50000 같은 이름)입니다. 빈 슬롯에 들어갑니다. 게임에서 불러오세요: 일시 정지 › 게임 › 게임 불러오기."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zapis z PC albo od znajomego (nazwa jak SGTA50000). Trafia do wolnego miejsca; wczytaj go w grze: Pauza › Gra › Wczytaj grę."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um save de um PC ou de um amigo (com nome como SGTA50000). Ele vai para um espaço livre; carregue no jogo: Pausa › Jogo › Carregar jogo."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранение с ПК или от друга (имя вроде SGTA50000). Оно попадёт в свободный слот; загрузите его в игре: Пауза › Игра › Загрузить игру."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来自电脑或朋友的存档（名称类似 SGTA50000）。会放进空存档位；在游戏中读取：暂停 › 游戏 › 读取游戏。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "來自電腦或朋友的存檔（名稱類似 SGTA50000）。會放進空存檔位；在遊戲中讀取：暫停 › 遊戲 › 讀取遊戲。"
+          }
+        }
+      }
+    },
+    "Save imported": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save imported"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spielstand importiert"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partida importada"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partida importada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sauvegarde importée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salvataggio importato"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セーブをインポートしました"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장 파일을 가져왔습니다"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zapis zaimportowany"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save importado"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранение импортировано"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存档已导入"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存檔已匯入"
+          }
+        }
+      }
+    },
+    "\"{arg0}\" is in save slot {arg1}. Start Story mode, then load it: Pause › Game › Load Game.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\"{arg0}\" is in save slot {arg1}. Start Story mode, then load it: Pause › Game › Load Game."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„{arg0}“ ist in Speicherplatz {arg1}. Starte den Story-Modus und lade ihn: Pause › Spiel › Spiel laden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«{arg0}» está en el hueco {arg1}. Inicia el modo historia y cárgala: Pausa › Juego › Cargar partida."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«{arg0}» está en el espacio {arg1}. Inicia el modo historia y cárgala: Pausa › Juego › Cargar partida."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "« {arg0} » est dans l’emplacement {arg1}. Lancez le mode histoire, puis chargez-la : Pause › Jeu › Charger une partie."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«{arg0}» è nello slot {arg1}. Avvia la modalità storia e caricalo: Pausa › Gioco › Carica partita."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「{arg0}」はスロット{arg1}にあります。ストーリーモードを開始して読み込んでください: ポーズ › ゲーム › ゲームをロード。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\"{arg0}\"이(가) 슬롯 {arg1}에 있습니다. 스토리 모드를 시작한 뒤 불러오세요: 일시 정지 › 게임 › 게임 불러오기."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„{arg0}” jest w miejscu {arg1}. Uruchom tryb fabularny i wczytaj go: Pauza › Gra › Wczytaj grę."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\"{arg0}\" está no espaço {arg1}. Inicie o modo história e carregue: Pausa › Jogo › Carregar jogo."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«{arg0}» в слоте {arg1}. Запустите сюжетный режим и загрузите его: Пауза › Игра › Загрузить игру."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“{arg0}”在存档位 {arg1}。开始故事模式后读取：暂停 › 游戏 › 读取游戏。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「{arg0}」在存檔位 {arg1}。開始故事模式後讀取：暫停 › 遊戲 › 讀取遊戲。"
+          }
+        }
+      }
+    },
+    "Couldn't import the save": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't import the save"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spielstand konnte nicht importiert werden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo importar la partida"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo importar la partida"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible d’importer la sauvegarde"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile importare il salvataggio"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セーブをインポートできませんでした"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장 파일을 가져오지 못했습니다"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie udało się zaimportować zapisu"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível importar o save"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось импортировать сохранение"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法导入存档"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法匯入存檔"
+          }
+        }
+      }
+    },
+    "That isn't a GTA V Story save. Story saves are files named like SGTA50000, about 0.5 MB.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That isn't a GTA V Story save. Story saves are files named like SGTA50000, about 0.5 MB."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das ist kein GTA V Story-Spielstand. Story-Spielstände heißen etwa SGTA50000 und sind etwa 0,5 MB groß."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eso no es una partida de la historia de GTA V. Se llaman como SGTA50000 y ocupan unos 0,5 MB."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eso no es una partida de la historia de GTA V. Se llaman como SGTA50000 y pesan unos 0,5 MB."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce n’est pas une sauvegarde de l’histoire de GTA V. Elles s’appellent comme SGTA50000 et font environ 0,5 Mo."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è un salvataggio della storia di GTA V. Si chiamano tipo SGTA50000 e pesano circa 0,5 MB."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GTA Vのストーリーのセーブではありません。セーブはSGTA50000のような名前で、約0.5 MBです。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GTA V 스토리 저장 파일이 아닙니다. 저장 파일은 SGTA50000 같은 이름이며 약 0.5 MB입니다."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To nie jest zapis fabuły GTA V. Zapisy nazywają się jak SGTA50000 i mają około 0,5 MB."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Isso não é um save do modo história do GTA V. Os saves têm nomes como SGTA50000 e cerca de 0,5 MB."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это не сохранение сюжета GTA V. Такие файлы называются вроде SGTA50000 и весят около 0,5 МБ."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这不是 GTA V 故事模式存档。存档文件名类似 SGTA50000，大约 0.5 MB。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這不是 GTA V 故事模式存檔。存檔檔名類似 SGTA50000，大約 0.5 MB。"
+          }
+        }
+      }
+    },
+    "All 15 save slots are in use. Delete a save in the game (Pause › Game › Load Game) or in Files, then try again.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All 15 save slots are in use. Delete a save in the game (Pause › Game › Load Game) or in Files, then try again."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle 15 Speicherplätze sind belegt. Lösche einen Spielstand im Spiel (Pause › Spiel › Spiel laden) oder in Dateien und versuche es erneut."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los 15 huecos están ocupados. Borra una partida en el juego (Pausa › Juego › Cargar partida) o en Archivos e inténtalo de nuevo."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los 15 espacios están ocupados. Borra una partida en el juego (Pausa › Juego › Cargar partida) o en Archivos e inténtalo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les 15 emplacements sont pris. Supprimez une sauvegarde dans le jeu (Pause › Jeu › Charger une partie) ou dans Fichiers, puis réessayez."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tutti i 15 slot sono occupati. Elimina un salvataggio nel gioco (Pausa › Gioco › Carica partita) o in File, poi riprova."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "15個のスロットがすべて使用中です。ゲーム内（ポーズ › ゲーム › ゲームをロード）か「ファイル」でセーブを削除してからやり直してください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "15개 슬롯이 모두 사용 중입니다. 게임(일시 정지 › 게임 › 게임 불러오기)이나 파일 앱에서 저장 파일을 지운 뒤 다시 시도하세요."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wszystkie 15 miejsc jest zajętych. Usuń zapis w grze (Pauza › Gra › Wczytaj grę) albo w Plikach i spróbuj ponownie."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os 15 espaços estão ocupados. Apague um save no jogo (Pausa › Jogo › Carregar jogo) ou no Arquivos e tente de novo."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все 15 слотов заняты. Удалите сохранение в игре (Пауза › Игра › Загрузить игру) или в «Файлах» и попробуйте снова."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "15 个存档位都已占用。请在游戏中（暂停 › 游戏 › 读取游戏）或“文件”中删除一个存档后再试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "15 個存檔位都已占用。請在遊戲中（暫停 › 遊戲 › 讀取遊戲）或「檔案」中刪除一個存檔後再試。"
+          }
+        }
+      }
+    },
+    "The save couldn't be copied: {arg0}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The save couldn't be copied: {arg0}"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Spielstand konnte nicht kopiert werden: {arg0}"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo copiar la partida: {arg0}"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo copiar la partida: {arg0}"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La sauvegarde n’a pas pu être copiée : {arg0}"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile copiare il salvataggio: {arg0}"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セーブをコピーできませんでした: {arg0}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장 파일을 복사하지 못했습니다: {arg0}"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie udało się skopiować zapisu: {arg0}"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível copiar o save: {arg0}"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось скопировать сохранение: {arg0}"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法复制存档：{arg0}"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法複製存檔：{arg0}"
+          }
+        }
+      }
+    },
+    "Subtitles above the home bar": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subtitles above the home bar"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untertitel über der Home-Leiste"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subtítulos sobre la barra de inicio"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subtítulos sobre la barra de inicio"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sous-titres au-dessus de la barre d’accueil"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sottotitoli sopra la barra Home"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字幕をホームバーより上に"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "자막을 홈 바 위에"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Napisy nad paskiem głównym"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legendas acima da barra de início"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Субтитры над полоской «Домой»"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字幕位于主屏幕指示条上方"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字幕位於主畫面指示條上方"
+          }
+        }
+      }
+    },
+    "Raises the subtitle line a little, so the home bar doesn't cover it. Applies the next time the game starts.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raises the subtitle line a little, so the home bar doesn't cover it. Applies the next time the game starts."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hebt die Untertitelzeile etwas an, damit die Home-Leiste sie nicht verdeckt. Gilt ab dem nächsten Spielstart."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sube un poco la línea de subtítulos para que la barra de inicio no la tape. Se aplica la próxima vez que inicies el juego."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sube un poco la línea de subtítulos para que la barra de inicio no la tape. Se aplica la próxima vez que inicies el juego."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remonte un peu la ligne des sous-titres pour que la barre d’accueil ne la cache pas. S’applique au prochain lancement du jeu."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alza un po’ la riga dei sottotitoli, così la barra Home non la copre. Vale dal prossimo avvio del gioco."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字幕の行を少し上げ、ホームバーで隠れないようにします。次にゲームを起動したときに適用されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "자막 줄을 조금 올려 홈 바에 가려지지 않게 합니다. 다음에 게임을 시작할 때 적용됩니다."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Podnosi trochę linię napisów, żeby pasek główny jej nie zasłaniał. Działa od następnego uruchomienia gry."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sobe um pouco a linha das legendas, para a barra de início não cobri-la. Vale na próxima vez que o jogo iniciar."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Немного поднимает строку субтитров, чтобы полоска «Домой» её не закрывала. Применяется при следующем запуске игры."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把字幕行稍微上移，免得被主屏幕指示条挡住。下次启动游戏时生效。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把字幕行稍微上移，免得被主畫面指示條擋住。下次啟動遊戲時生效。"
+          }
+        }
+      }
+    },
+    "Compressed see-through textures": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compressed see-through textures"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Komprimierte durchsichtige Texturen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texturas transparentes comprimidas"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texturas transparentes comprimidas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Textures transparentes compressées"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texture trasparenti compresse"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "透過テクスチャを圧縮"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "반투명 텍스처 압축"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skompresowane tekstury przezroczyste"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texturas transparentes comprimidas"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сжатые прозрачные текстуры"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "压缩透明纹理"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "壓縮透明材質"
+          }
+        }
+      }
+    },
+    "Experimental. On iPhones before the 15 Pro, leaves, fences, smoke and decals use a quarter of the memory, so more of the world stays sharp. Turn off if soft see-through edges show steps.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. On iPhones before the 15 Pro, leaves, fences, smoke and decals use a quarter of the memory, so more of the world stays sharp. Turn off if soft see-through edges show steps."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimentell. Auf iPhones vor dem 15 Pro brauchen Blätter, Zäune, Rauch und Aufkleber nur ein Viertel des Speichers, sodass mehr von der Welt scharf bleibt. Ausschalten, wenn weiche durchsichtige Ränder Stufen zeigen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. En iPhone anteriores al 15 Pro, hojas, vallas, humo y calcomanías ocupan una cuarta parte de la memoria, así más del mundo se ve nítido. Desactívalo si los bordes transparentes suaves muestran escalones."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. En iPhone anteriores al 15 Pro, hojas, cercas, humo y calcomanías ocupan una cuarta parte de la memoria, así más del mundo se ve nítido. Desactívalo si los bordes transparentes suaves muestran escalones."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expérimental. Sur les iPhone antérieurs au 15 Pro, feuilles, clôtures, fumée et décalcomanies n'utilisent qu'un quart de la mémoire, donc une plus grande partie du monde reste nette. Désactivez si les bords transparents doux montrent des paliers."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sperimentale. Sugli iPhone precedenti al 15 Pro, foglie, recinzioni, fumo e decalcomanie occupano un quarto della memoria, così più parte del mondo resta nitida. Disattiva se i bordi trasparenti sfumati mostrano gradini."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "実験的機能。iPhone 15 Pro より前の機種で、葉・フェンス・煙・デカールのメモリが4分の1になり、より広い範囲が鮮明なまま表示されます。柔らかい透過の縁に段差が出る場合はオフにしてください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "실험 기능. iPhone 15 Pro 이전 기기에서 나뭇잎, 울타리, 연기, 데칼이 메모리를 4분의 1만 사용해 더 많은 장면이 선명하게 유지됩니다. 부드러운 반투명 가장자리에 계단 현상이 보이면 끄세요."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eksperymentalne. Na iPhone'ach starszych niż 15 Pro liście, płoty, dym i naklejki zajmują ćwierć pamięci, więc więcej świata pozostaje ostre. Wyłącz, jeśli miękkie przezroczyste krawędzie mają schodki."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. Em iPhones anteriores ao 15 Pro, folhas, cercas, fumaça e decalques usam um quarto da memória, então mais do mundo fica nítido. Desative se bordas transparentes suaves mostrarem degraus."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Экспериментально. На iPhone до 15 Pro листва, заборы, дым и декали занимают четверть памяти, поэтому больше мира остаётся чётким. Выключите, если на мягких прозрачных краях видны ступеньки."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "实验功能。在 iPhone 15 Pro 之前的机型上，树叶、栅栏、烟雾和贴花只占四分之一内存，让更多场景保持清晰。如果柔和的透明边缘出现色阶，请关闭。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "實驗功能。在 iPhone 15 Pro 之前的機型上，樹葉、柵欄、煙霧和貼花只佔四分之一記憶體，讓更多場景保持清晰。如果柔和的透明邊緣出現色階，請關閉。"
+          }
+        }
+      }
+    },
+    "More engine memory": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More engine memory"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mehr Engine-Speicher"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más memoria para el motor"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más memoria para el motor"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus de mémoire pour le moteur"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Più memoria per il motore"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エンジンメモリを増やす"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "엔진 메모리 늘리기"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Więcej pamięci silnika"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mais memória para o motor"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Больше памяти движка"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更多引擎内存"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更多引擎記憶體"
+          }
+        }
+      }
+    },
+    "Experimental, off by default. Gives the game about 270 MB more room inside its 4 GB, for fewer stops after long play on 6-8 GB iPhones. Turn off if the game stops more often.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental, off by default. Gives the game about 270 MB more room inside its 4 GB, for fewer stops after long play on 6-8 GB iPhones. Turn off if the game stops more often."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimentell, standardmäßig aus. Gibt dem Spiel etwa 270 MB mehr Platz in seinen 4 GB, für weniger Abbrüche nach langem Spielen auf iPhones mit 6-8 GB. Ausschalten, wenn das Spiel öfter stoppt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental, desactivado por defecto. Da al juego unos 270 MB más de espacio dentro de sus 4 GB, para menos cierres tras jugar mucho en iPhone de 6-8 GB. Desactívalo si el juego se detiene más a menudo."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental, desactivado por defecto. Da al juego unos 270 MB más de espacio dentro de sus 4 GB, para menos cierres tras jugar mucho en iPhone de 6-8 GB. Desactívalo si el juego se detiene más seguido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expérimental, désactivé par défaut. Donne au jeu environ 270 Mo de plus dans ses 4 Go, pour moins d'arrêts après une longue partie sur les iPhone de 6-8 Go. Désactivez si le jeu s'arrête plus souvent."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sperimentale, disattivato di default. Dà al gioco circa 270 MB in più nei suoi 4 GB, per meno arresti dopo lunghe sessioni su iPhone da 6-8 GB. Disattiva se il gioco si ferma più spesso."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "実験的機能（初期設定はオフ）。ゲームの4 GBの中に約270 MBの余裕を作り、6〜8 GBのiPhoneで長時間プレイ後に止まりにくくします。ゲームが止まりやすくなった場合はオフにしてください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "실험 기능, 기본값은 끔. 게임의 4 GB 안에 약 270 MB의 여유를 더 만들어 6~8 GB iPhone에서 오래 플레이한 뒤 멈추는 일을 줄입니다. 게임이 더 자주 멈추면 끄세요."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eksperymentalne, domyślnie wyłączone. Daje grze około 270 MB więcej miejsca w jej 4 GB, czyli mniej zatrzymań po długiej grze na iPhone'ach z 6-8 GB. Wyłącz, jeśli gra zatrzymuje się częściej."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental, desativado por padrão. Dá ao jogo cerca de 270 MB a mais dentro dos seus 4 GB, para menos paradas após jogar muito em iPhones de 6-8 GB. Desative se o jogo parar com mais frequência."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Экспериментально, по умолчанию выключено. Даёт игре примерно на 270 МБ больше места в её 4 ГБ, чтобы реже останавливалась после долгой игры на iPhone с 6-8 ГБ. Выключите, если игра стала останавливаться чаще."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "实验功能，默认关闭。在游戏的 4 GB 内多腾出约 270 MB，让 6-8 GB 的 iPhone 长时间游玩后更少停止。如果游戏更常停止，请关闭。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "實驗功能，預設關閉。在遊戲的 4 GB 內多騰出約 270 MB，讓 6-8 GB 的 iPhone 長時間遊玩後更少停止。如果遊戲更常停止，請關閉。"
           }
         }
       }

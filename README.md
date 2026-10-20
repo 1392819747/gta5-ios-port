@@ -109,6 +109,10 @@ PC mods work as downloaded: car and character replacements, add-on cars, OpenIV 
 
 **Settings › Cheats** has a vehicle spawner (search any vehicle the game has, it appears in front of you), God mode and Never wanted switches, repair and clean, time of day and weather, Set money and the game's own story cheats. See [docs/CHEATS.md](docs/CHEATS.md).
 
+## Anonymous play stats
+
+Since v1.4.4 the app sends a few anonymous numbers so we can see what to fix first: how many people play, on which iPhones and versions, FPS, crashes, and which missions fail. No names, saves, game files, mod names or IP addresses. Exactly what is sent: [docs/STATS.md](docs/STATS.md).
+
 ## Translate the app
 
 Anyone can add a language to the app or finish one with the Translate page on the builder website. Vietnamese and Arabic are the first community translations. See [docs/TRANSLATING.md](docs/TRANSLATING.md).

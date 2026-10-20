@@ -151,6 +151,7 @@ static const uint32_t BIND_DS = 0x40;
 bool gNativeBC = false;
 bool gPackedBC1 = false;
 bool gASTCBC1 = false;
+bool gASTCBC3 = false;
 bool gSkipTopMip = false;
 uint64_t gSkipBigTopMip = 0;
 
@@ -220,7 +221,7 @@ FormatInfo mapFormat(uint32_t f, uint32_t bind) {
 		default: m.format = m.srgb ? MTLPixelFormatBC7_RGBAUnorm_sRGB : MTLPixelFormatBC7_RGBAUnorm; m.alt = m.srgb ? MTLPixelFormatBC7_RGBAUnorm : MTLPixelFormatBC7_RGBAUnorm_sRGB;
 		}
 	} else if (m.bc) {		// decoded on the CPU to an uncompressed format
-		if (m.bc == 1 && gASTCBC1) {
+		if ((m.bc == 1 || (m.bc == 3 && gASTCBC3)) && gASTCBC1) {
 			m.astc = true;
 			m.format = m.srgb ? MTLPixelFormatASTC_4x4_sRGB : MTLPixelFormatASTC_4x4_LDR;
 			m.alt = m.srgb ? MTLPixelFormatASTC_4x4_LDR : MTLPixelFormatASTC_4x4_sRGB;

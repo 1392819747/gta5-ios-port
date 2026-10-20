@@ -74,6 +74,14 @@ void pg_log(const char *message) {
   if (!strncmp(message, "[wasm] region 0x", 16)) pg_note_region(message);
   if (!strncmp(message, "[wasm] mem: malloc arena ", 25)) pg_note_engine_memory(message);	// the address-space guard (GTA-70)
   if (strstr(message, "Failed to allocation virtual memory")) pg_note_pool_failure();	// the pool's free space is in pieces (GTA-128)
+  // Script mods like Simple Trainer query interior entity sets every frame, and the engine prints each find:
+  // hundreds of thousands of lines that filled the 50 MB log (GTA-135). Count them instead.
+  if (!strncmp(message, "[scene] <ENTITY SET FOUND", 25)) {
+    static _Atomic uint64_t entitySetLines;
+    uint64_t n = atomic_fetch_add(&entitySetLines, 1);
+    if (!(n & (n + 1)) && n >= 1023) { char line[128]; snprintf(line, sizeof line, "[scene] %llu \"ENTITY SET FOUND\" lines so far, left out of the log", (unsigned long long)n + 1); pg_log(line); }
+    return;
+  }
   size_t length = strlen(message);
   while (length && (message[length-1] == '\n' || message[length-1] == ' ')) length--;
   if (!length || (length == 6 && !memcmp(message, "Error:", 6)) || (length == 8 && !memcmp(message, "Warning:", 8)) ||
@@ -261,7 +269,10 @@ static uint64_t engineAddressHeadroom(void){
  // On by default since v1.4.3 (Kevin, 2026-10-20); PG_GUARD_POOL_ROOM=0 turns it off.
  static int poolRoom=-1;if(poolRoom<0){const char *v=getenv("PG_GUARD_POOL_ROOM");poolRoom=!(v&&atoi(v)==0);}
  const uint64_t region=256ull<<20,pool=atomic_load(&poolFreeBytes);
- if(poolRoom&&pool>region&&timeMS(CLOCK_MONOTONIC)-atomic_load(&poolFailedAt)>60000)room+=pool-region;
+ // Only while the engine still has a whole region of address space of its own (GTA-145): the pool's free space
+ // comes in pieces (log 1137: 790 MB free, largest piece 8 MB), and a block too big for them needs a new region.
+ // With 112 MB really left the pieces counted as 534 MB more room, streaming went on, and a 37 MB block was fatal.
+ if(poolRoom&&room>=region&&pool>region&&timeMS(CLOCK_MONOTONIC)-atomic_load(&poolFailedAt)>60000)room+=pool-region;
  return room;
 }
 static bool nativeProcessHeadroom(uint64_t *headroom){
@@ -419,20 +430,22 @@ static uint64_t pg_engine_memory_mb(void){
 // had 4 GB of video memory to spare. On GPUs that decode BC textures they also take about 4 times
 // what the engine counts. Memory then fills within minutes and the streaming guard throttles the
 // game for the rest of the session (the slowdown players report). The budget is what the limit
-// leaves after about 1.8 GB for the rest of the game and the guard's reserve, halved where BC
-// textures are decoded (in simulator soaks the GPU held about twice what the engine counted).
+// leaves after about 1.8 GB for the rest of the game and the guard's reserve, divided by what the
+// textures take on this GPU per counted byte (PGTextureRatioPercent: measured in earlier sessions,
+// GTA-123; it was a fixed halving).
 int PGGPUReadsBC(void);
+int PGTextureRatioPercent(void);
 u64 pg_video_memory(u64 reported){
  uint64_t mb=0;
  const char *configured=getenv("PG_VIDEO_MEMORY_MB");
  if(configured)mb=(uint64_t)atol(configured);
  else if(processLimitMB){
   uint64_t textures=processLimitMB>1800+640?processLimitMB-1800:640;
-  mb=PGGPUReadsBC()?textures:textures/2;
+  mb=textures*100/(uint64_t)PGTextureRatioPercent();
   if(mb<640)mb=640;
  }
  if(!mb||(mb<<20)>=reported)return reported;
- char line[160];snprintf(line,sizeof line,"Video memory for the engine: %llu MB (memory limit %llu MB, %s).",(unsigned long long)mb,(unsigned long long)processLimitMB,PGGPUReadsBC()?"GPU reads BC textures":"BC textures decoded");pg_log(line);
+ char line[200];snprintf(line,sizeof line,"Video memory for the engine: %llu MB (memory limit %llu MB, textures x%.2f, %s).",(unsigned long long)mb,(unsigned long long)processLimitMB,PGTextureRatioPercent()/100.0,PGGPUReadsBC()?"GPU reads BC textures":"BC textures decoded");pg_log(line);
  return mb<<20;
 }
 static u32 nativeEngineCores=2;
@@ -725,7 +738,9 @@ PGControlHints PGReadControlHints(uint32_t touchContext){
   // latch. The script D-pad (232-235) by its group or a direction: the torture tool cart says "Use
   // ~INPUTGROUP_SCRIPT_LSTICK_ALL~/~INPUTGROUP_SCRIPT_DPAD_ALL~ and ~INPUT_SCRIPT_RDOWN~" and reads the stick too, and
   // the touch arrows stay for it (harness, fbi3).
-  static const struct{const char *token;int input;}named[]={{"~INPUT_SCRIPT_RIGHT_AXIS_X~",220},{"~INPUT_SCRIPT_RIGHT_AXIS_Y~",221},
+  // The left stick's axes: a TV couch's "Use ~INPUT_SCRIPT_LEFT_AXIS_X~ to change the channel" (the touch layout shows
+  // arrows for it; Friend Request waits for a channel change, GTA-73).
+  static const struct{const char *token;int input;}named[]={{"~INPUT_SCRIPT_LEFT_AXIS_X~",218},{"~INPUT_SCRIPT_LEFT_AXIS_Y~",219},{"~INPUT_SCRIPT_RIGHT_AXIS_X~",220},{"~INPUT_SCRIPT_RIGHT_AXIS_Y~",221},
     {"~INPUTGROUP_SCRIPT_RSTICK_ALL~",220},{"~INPUT_SCRIPT_RUP~",222},{"~INPUT_SCRIPT_RDOWN~",223},{"~INPUT_SCRIPT_RLEFT~",224},
     {"~INPUT_SCRIPT_RRIGHT~",225},{"~INPUT_SCRIPT_LB~",226},{"~INPUT_SCRIPT_RB~",227},{"~INPUT_SCRIPT_LT~",228},{"~INPUT_SCRIPT_RT~",229},
     {"~INPUT_SCRIPT_LS~",230},{"~INPUT_SCRIPT_RS~",231},{"~PAD_RSTICK_ROTATE~",220},{"~PAD_RSTICK_ROTATE~",229},
@@ -1043,6 +1058,9 @@ static void pg_test_teleport(w2c_game *instance) {
   const int period = fields == 7 && seconds >= 5 ? (int)(seconds * 30) : 0;
   const char *after = getenv("PG_TEST_TELEPORT_AFTER");		// seconds before the first move (default 30)
   const int first = after ? atoi(after) * 30 : 900;
+  // Frames count only once there's a player: an optimized build runs the pad update many more times during the
+  // loading screens, and a teleport there exhausts the script GUID pool (fwPool<fwScriptGuid>::PoolFullCallback).
+  if (PGGameStatus() & 16) return;
   if (++frames < first || (frames - first) % (period ? period : 1)) return;
   if (!period) frames = -1;
   const float *t = p[jumps++ & 1];
@@ -1050,6 +1068,26 @@ static void pg_test_teleport(w2c_game *instance) {
   float *v = pg_pointer(&env, vector, 24); v[0] = t[0]; v[2] = t[1]; v[4] = t[2];
   PG_FN_SET_ENTITY_COORDS_NO_OFFSET(instance, PG_FN_PLAYER_PED_ID(instance), vector, 0, 0, 0);
   char line[96]; snprintf(line, sizeof line, "TEST: player moved to %.1f, %.1f, %.1f (jump %d).", t[0], t[1], t[2], jumps); pg_log(line);
+}
+void w2c_game_f3111(w2c_game*, u64); // rage::sysDependencyScheduler::InsertInternal(rage::sysDependency*)
+// Test (PG_TEST_STALE_JOB=1): about 20 s after there's a player, queues one dependency job that looks like a freed one
+// (job function and scratch size filled with 0xDD, as RAGE fills freed memory), as players' logs show for GTA-144.
+// Without Scripts/prepare_dependency_guard.py the worker asks for a 3722304989-byte scratch buffer and the game stops;
+// with it the log says "Dependency worker: dropped a stale job" and play goes on.
+static void pg_test_stale_job(w2c_game *instance) {
+  static int frames;
+  if (frames < 0 || !getenv("PG_TEST_STALE_JOB") || (PGGameStatus() & 16) || ++frames < 600) return;
+  frames = -1;
+  uint64_t job = PG_FN_OPERATOR_NEW(instance, 160);
+  uint8_t *d = pg_pointer(&env, job, 160);
+  memset(d, 0, 160);
+  memset(d + 80, 0xDD, 16);   // parents (+80, +88): freed memory too
+  memset(d + 96, 0xDD, 8);    // job function
+  d[110] = 1;                 // needs scratch memory...
+  memset(d + 112, 0xDD, 4);   // ...of 0xDDDDDDDD bytes
+  d[146] = 0;                 // priority (InsertInternal picks the queue by it)
+  char line[96]; snprintf(line, sizeof line, "TEST: queued a stale dependency job at 0x%llx.", (unsigned long long)job); pg_log(line);
+  w2c_game_f3111(instance, job);
 }
 u32 PG_FN_STAT_GET_INT(w2c_game*, u32, u64, u32); // stats_commands::CommandStatGetInt
 static uint32_t pg_joaat(const char *text);
@@ -2364,7 +2402,7 @@ void pg_virtual_pad_apply(w2c_game *instance, uint64_t pad) {
   if (pad == 12840656) pg_keep_on_test_map(instance);
   if (pad == 12840656) pg_keep_weapon_loaded(instance);
 #if TARGET_OS_SIMULATOR
-  if (pad == 12840656) { pg_test_teleport(instance); pg_test_speed(instance); pg_test_weapon(instance); pg_test_outfit(instance); pg_test_prompts(instance); pg_test_cash(instance); pg_test_tv(instance); pg_test_tv_flood(instance); pg_test_gfx_dirty(instance); pg_test_position(); pg_test_video(instance); pg_test_lester1_tv(instance); pg_test_photo(instance); pg_test_car(instance); pg_test_trailer_monitor(instance); pg_test_request_models(instance); pg_test_loadscene(instance); pg_test_loadscene_monitor(instance); }
+  if (pad == 12840656) { pg_test_teleport(instance); pg_test_stale_job(instance); pg_test_speed(instance); pg_test_weapon(instance); pg_test_outfit(instance); pg_test_prompts(instance); pg_test_cash(instance); pg_test_tv(instance); pg_test_tv_flood(instance); pg_test_gfx_dirty(instance); pg_test_position(); pg_test_video(instance); pg_test_lester1_tv(instance); pg_test_photo(instance); pg_test_car(instance); pg_test_trailer_monitor(instance); pg_test_request_models(instance); pg_test_loadscene(instance); pg_test_loadscene_monitor(instance); }
 #endif
   if (pad != 12840656 || !atomic_load(&virtualPadActive)) return;
   uint64_t packed = atomic_load(&virtualPad);
@@ -3016,6 +3054,69 @@ u32 pg_texture_view_bad(w2c_game *instance, u64 texture) {
     pg_log(line);
   }
   return bad;
+}
+// Dependency jobs whose descriptor was already freed (Scripts/prepare_dependency_guard.py, GTA-144): the worker drops
+// them instead of allocating a 0xDDDDDDDD-byte scratch buffer or calling a garbage job pointer. Counted, first 4 logged.
+static _Atomic uint64_t dependencyJobsSkipped;
+void pg_dependency_skipped(w2c_game *instance, u64 job, u64 function, u32 size) {
+  (void)instance;
+  if (atomic_fetch_add(&dependencyJobsSkipped, 1) < 4) {
+    char line[160]; snprintf(line, sizeof line, "Dependency worker: dropped a stale job at 0x%llx (function 0x%llx, scratch %u bytes): its descriptor was freed (GTA-144).",
+                             (unsigned long long)job, (unsigned long long)function, size);
+    pg_log(line);
+  }
+}
+// Engine heaps that reserve far more address space than they use (Scripts/prepare_heap_sizes.py, GTA-124). In 358
+// player logs the Replay recorder heap (heap 0 here: 196 MB) never held more than 2 MB and heap 2 (220 MB) at most
+// 58 MB, while the 4 GB address space is what runs out on 6-8 GB iPhones (GTA-70, GTA-145). PG_SMALL_ENGINE_HEAPS=1
+// (Settings › Experimental, off by default, Kevin 2026-10-20) makes them 16 and 128 MB: about 270 MB more room.
+// Replay recording never runs on the port (the engine skips its recording threads; START_REPLAY_RECORDING does
+// nothing, simulator 2026-10-20), so the Replay heap is unused either way.
+uint64_t pg_engine_heap_size(uint32_t heap, uint64_t size) {
+  static int small = -1;
+  if (small < 0) { const char *v = getenv("PG_SMALL_ENGINE_HEAPS"); small = v && atoi(v) == 1; }
+  if (!small) return size;
+  uint64_t wanted = heap == 0 ? 16ull << 20 : heap == 2 ? 128ull << 20 : size;
+  if (wanted > size) wanted = size;
+  static _Atomic bool logged[3];
+  if (heap < 3 && !atomic_exchange(&logged[heap], true)) {
+    char line[128]; snprintf(line, sizeof line, "Smaller engine heaps: %s heap %llu MB instead of %llu MB (GTA-124).", heap == 0 ? "Replay" : "debug",
+                             (unsigned long long)(wanted >> 20), (unsigned long long)(size >> 20));
+    pg_log(line);
+  }
+  return wanted;
+}
+// Render phases destroyed by a device restore that stay in the phase list (Scripts/prepare_destroyed_phases.py,
+// GTA-89). A live resize (Settings resolution, a TV) restores the graphics device and CViewportManager::DeviceReset
+// deletes the render phases; one stays in the list at 11547128 (an atArray: data at +0, u16 count at +8) with the
+// bare rage::fwRenderPhase vtable (4219920) that ~fwRenderPhase leaves behind. CGameScan::KickVisibilityJobs then
+// calls through it (slot +64 is past that vtable: table index 4227208) and the game stops; 12 player logs, v1.3.4 to
+// v1.4.3, all that index. At the start of each KickVisibilityJobs (main thread, once a frame) such entries are dropped.
+static _Atomic uint64_t destroyedPhasesDropped;
+void pg_drop_destroyed_phases(w2c_game *instance) {
+  (void)instance;
+  uint64_t list;
+  if (env.memory.size < 11547136) return;
+  memcpy(&list, env.memory.data + 11547128, 8);
+  if (!list || list + 16 > env.memory.size) return;
+  uint64_t data; uint16_t count;
+  memcpy(&data, env.memory.data + list, 8); memcpy(&count, env.memory.data + list + 8, 2);
+  if (!data || data + 8ull * count > env.memory.size) return;
+  uint64_t *phases = (uint64_t *)(env.memory.data + data);
+  uint16_t kept = 0;
+  for (uint16_t i = 0; i < count; i++) {
+    uint64_t phase = phases[i], vtable = 0;
+    if (phase && phase + 8 <= env.memory.size) memcpy(&vtable, env.memory.data + phase, 8);
+    if (vtable == 4219920) {
+      if (atomic_fetch_add(&destroyedPhasesDropped, 1) < 4) {
+        char line[128]; snprintf(line, sizeof line, "Render phase %u of %u was destroyed by the device restore; dropped it from the phase list (GTA-89).", i, count);
+        pg_log(line);
+      }
+      continue;
+    }
+    phases[kept++] = phase;
+  }
+  if (kept != count) memcpy(env.memory.data + list + 8, &kept, 2);
 }
 void pg_note_call_indirect(const char *function,uint32_t index,uint32_t size){indirectFunction=function;indirectIndex=index;indirectSize=size;}
 void pg_record_trap(int code) {

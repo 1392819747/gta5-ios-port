@@ -237,6 +237,14 @@ final class GameSettings {
         get { defaults.object(forKey: "expFastEngineThreads") as? Bool ?? true }
         set { defaults.set(newValue, forKey: "expFastEngineThreads") }
     }
+    var compressedAlphaTextures: Bool { // GTA-118: BC3 textures kept as ASTC (lossy alpha); on by default since v1.4.4 (Kevin)
+        get { defaults.object(forKey: "expCompressedAlphaTextures") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "expCompressedAlphaTextures") }
+    }
+    var smallerEngineHeaps: Bool {      // GTA-124: Replay and debug heaps 16/128 MB instead of 196/220, off by default
+        get { defaults.object(forKey: "expSmallerEngineHeaps") as? Bool ?? false }
+        set { defaults.set(newValue, forKey: "expSmallerEngineHeaps") }
+    }
     /// A switch turned off sets the engine's own off value, unless a test launch already set it.
     static func applyExperimentalSwitches() {
         let settings = GameSettings.shared
@@ -244,6 +252,8 @@ final class GameSettings {
         if !settings.smarterTextureLoading { off("PG_GUARD_POOL_ROOM", "0") }
         if !settings.lighterBigTextures { off("PG_BIG_MIP_SKIP", "0") }
         if !settings.fastEngineThreads { off("PG_ENGINE_QOS", "off"); off("PG_QUERY_COMMIT_MS", "2") }
+        if !settings.compressedAlphaTextures { off("PG_ASTC_BC3", "0") }
+        if settings.smallerEngineHeaps { off("PG_SMALL_ENGINE_HEAPS", "1") }
     }
     var showFPS: Bool {
         get { defaults.object(forKey: "showFPS") as? Bool ?? true }
@@ -254,6 +264,19 @@ final class GameSettings {
         case bottomLeft, topLeft, custom
         var title: String { [AppLanguage.choose("Bottom left"), AppLanguage.choose("Top left"), AppLanguage.choose("Custom")][rawValue] }
     }
+    /// Subtitles above the home bar (GTA-95): the subtitle line moves up 5% of the screen (frontend.xml), so the home
+    /// bar doesn't cover it. On by default on iPhones with a home bar.
+    var subtitlesAboveHomeBar: Bool {
+        get { defaults.object(forKey: "subtitlesAboveHomeBar") as? Bool ?? Self.hasHomeBar }
+        set { defaults.set(newValue, forKey: "subtitlesAboveHomeBar") }
+    }
+    /// Face ID iPhones and iPads: no home button, a home bar at the bottom of the screen.
+    static let hasHomeBar: Bool = {
+        var info = utsname(); uname(&info)
+        let model = withUnsafeBytes(of: &info.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+        // Home-button iPhones: 8/8 Plus (iPhone10,1/2/4/5) and SE 2nd/3rd generation (iPhone12,8, iPhone14,6).
+        return !["iPhone10,1", "iPhone10,2", "iPhone10,4", "iPhone10,5", "iPhone12,8", "iPhone14,6"].contains(model) && !model.hasPrefix("iPhone9,")
+    }()
     var minimapPlace: MinimapPlace {
         get { MinimapPlace(rawValue: defaults.integer(forKey: "minimapPlace")) ?? .bottomLeft }
         set { defaults.set(newValue.rawValue, forKey: "minimapPlace") }

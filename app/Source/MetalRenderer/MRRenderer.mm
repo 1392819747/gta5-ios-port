@@ -12,6 +12,7 @@
 #include "MRFrameReports.h"
 #include "BCTextureDecoder.h"
 #include "BC1ToASTC.h"
+#include "NativeGraphics.h"
 #include "NativeFrameRate.h"
 #import <UIKit/UIKit.h>
 #if __has_include(<MetalFX/MetalFX.h>) && !TARGET_OS_SIMULATOR		// iPhone SDK only
@@ -549,7 +550,7 @@ static void createTexture(const uint32_t *p) {
 				blocks += (mw + 3) / 4 * ((mh + 3) / 4) * bcBlockBytes(m.bc) * md;
 			}
 			if (t->bcNative) t->gpuBytes = blocks;
-			else if (t->astc) t->gpuBytes = blocks * 2;		// 16-byte blocks for BC1's 8
+			else if (t->astc) t->gpuBytes = t->bcKind == 1 ? blocks * 2 : blocks;		// 16-byte blocks for BC1's 8, BC3's 16
 			else for (uint32_t mip = t->skip; mip < mips; mip++)
 				t->gpuBytes += (uint64_t)std::max(1u, w >> mip) * std::max(1u, t->height >> mip) * (dim == 3 ? std::max(1u, d >> mip) : arraySize) * samples * bytesPerTexel(m.format);
 		}
@@ -656,11 +657,26 @@ static void uploadTextureInner(const uint32_t *p) {
 		w = std::min(w, mw - std::min(mw, x)); h = std::min(h, mh - std::min(mh, y));
 		if (!w || !h) return;
 		storeCompressed(t, mip, slice, x, y, z, w, h, d, bpr, rpi, data, size);
+#if TARGET_OS_SIMULATOR
+		// PG_DUMP_BC=3 (simulator): the game's BC3 blocks as uploaded, appended to Documents/bc3-blocks.bin (up to
+		// 64 MB), for measuring BC3-to-ASTC quality offline on real textures (GTA-118).
+		static int dumpKind = getenv("PG_DUMP_BC") ? atoi(getenv("PG_DUMP_BC")) : 0;
+		static size_t dumped;
+		if (dumpKind && dumpKind == (int)t->bcKind && dumped < (64u << 20) && d == 1) {
+			static FILE *dump = fopen([[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject
+			                           stringByAppendingPathComponent:@"bc3-blocks.bin"] fileSystemRepresentation], "wb");
+			const uint32_t rowBytes = (w + 3) / 4 * bcBlockBytes(t->bcKind);
+			if (dump && rowBytes <= bpr) for (uint32_t row = 0; row < (h + 3) / 4 && (size_t)row * bpr + rowBytes <= size; row++) {
+				fwrite(data + (size_t)row * bpr, 1, rowBytes, dump); dumped += rowBytes;
+			}
+			if (dump) fflush(dump);
+		}
+#endif
 		size_t outSize = 0;
 		if (t->astc) {		// rewritten block by block, then uploaded as blocks (rows count block rows)
 			uint32_t astcBpr = 0, astcRpi = 0;
-			void *blocks = PGTranscodeBC1ToASTC(w, h, d, bpr, rpi, data, size, &outSize, &astcBpr, &astcRpi);
-			if (!blocks) { gTextureStats.decodeFailures++; logOnce("astcfail", "Metal renderer: BC1 upload smaller than its region"); return; }
+			void *blocks = PGTranscodeBCToASTC(t->bcKind, w, h, d, bpr, rpi, data, size, &outSize, &astcBpr, &astcRpi);
+			if (!blocks) { gTextureStats.decodeFailures++; logOnce("astcfail", "Metal renderer: BC%u upload smaller than its region", t->bcKind); return; }
 			uploadBlocks(t, level, slice, x, y, z, w, h, d, astcBpr, astcBpr * astcRpi, (const uint8_t *)blocks);
 			free(blocks);
 			t->proxyDirty = true;
@@ -2373,6 +2389,7 @@ static void report() {
 	     gTextureStats.gpuBytes / MB, gTextureStats.bcGameBytes / MB, gTextureStats.bcGpuBytes / MB, gTextureStats.shadowBytes / MB,
 	     (unsigned long long)gTextureStats.bcReadbacks.load(), (unsigned long long)gTextureStats.bcCopies.load(),
 	     (unsigned long long)gTextureStats.createFailures.load(), (unsigned long long)gTextureStats.decodeFailures.load());
+	PGNoteTextureRatio(gTextureStats.bcGpuBytes.load(), gTextureStats.bcGameBytes.load());		// the next boot's texture budget (GTA-123)
 	std::string kinds;
 	for (int k = 1; k < 8; k++) for (int srgb = 0; srgb < 2; srgb++) if (int64_t v = gTextureStats.kindBytes[k][srgb]) {
 		char b[48]; snprintf(b, sizeof b, "%sBC%d%s %.0f MB", kinds.empty() ? "" : ", ", k, srgb ? " sRGB" : "", v / MB); kinds += b;
@@ -2479,6 +2496,7 @@ static bool setup() {
 #endif
 	// PG_NO_ASTC_BC1=1 keeps the decoded BC1 path (A1BGR5 or RGBA8), for comparisons.
 	gASTCBC1 = !gNativeBC && !getenv("PG_NO_ASTC_BC1") && [R->device supportsFamily:MTLGPUFamilyApple2];
+	gASTCBC3 = gASTCBC1 && !(getenv("PG_ASTC_BC3") && atoi(getenv("PG_ASTC_BC3")) == 0);		// on since v1.4.4 (Kevin); PG_ASTC_BC3=0 turns it off
 	// Lite build (the app sets PG_LITE from its Info.plist); PG_LITE_TEXTURES=0 keeps textures whole there.
 	gSkipTopMip = getenv("PG_LITE") && strcmp(getenv("PG_LITE"), "0") && !(getenv("PG_LITE_TEXTURES") && !strcmp(getenv("PG_LITE_TEXTURES"), "0"));
 	// Textures of at least 512×512 texels lose their largest level where BC is decoded, a quarter of their
@@ -2523,7 +2541,7 @@ static bool setup() {
 	if (!R->blitPipe) { logf("Metal renderer: present pipeline failed: %s", error.localizedDescription.UTF8String); return false; }
 	frameReportsInstall(R->device);
 	logf("Metal renderer: %s, 32-bit float filtering %s, border colours %s, BC textures %s.", R->device.name.UTF8String, R->float32Filtering ? "yes" : "no (nearest fallback)",
-	     R->borderColors ? "yes" : "no", gNativeBC ? "native" : gASTCBC1 ? "decoded on the CPU (BC1 as ASTC)" : gPackedBC1 ? "decoded on the CPU (BC1 as 16-bit)" : "decoded on the CPU");
+	     R->borderColors ? "yes" : "no", gNativeBC ? "native" : gASTCBC3 ? "decoded on the CPU (BC1 and BC3 as ASTC)" : gASTCBC1 ? "decoded on the CPU (BC1 as ASTC)" : gPackedBC1 ? "decoded on the CPU (BC1 as 16-bit)" : "decoded on the CPU");
 	if (gSkipTopMip) logf("Metal renderer: Lite: the game's textures go to the GPU without their largest level.");
 	else if (gSkipBigTopMip) logf("Metal renderer: textures of %llu texels or more go to the GPU without their largest level (PG_BIG_MIP_SKIP).", (unsigned long long)gSkipBigTopMip);
 	return true;

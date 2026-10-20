@@ -47,6 +47,8 @@ uint32_t PGCurrentTouchContext(void);
 uint32_t PGGameStatus(void);
 // Friend Request's Lifeinvader presentation on the TV: how far it is (ms) and how long; false when not on.
 bool PGTVPresentation(int32_t *playMs, int32_t *durationMs);
+// Subtitles above the home bar (GTA-95): how far up the subtitle line moves, in fractions of the screen height.
+void PGSetSubtitleRaise(double raise);
 // A mod file the game can't read (made for GTA V Enhanced): true, with the reason (NativeAssets.m).
 bool PGModFileProblem(const char *path, char *why, size_t n);
 // Script mods (.asi): press or release a Windows virtual-key code for them; which keys they poll.

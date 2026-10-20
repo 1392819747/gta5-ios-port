@@ -114,6 +114,7 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
     private let modKeys = ModKeysView(frame: .zero)
     private let gyro = GyroInput()
     private var engineStarted = false
+    private let playStats = PlayStats()
     private var bootedPreset = GameSettings.shared.graphicsPreset
     private var bootedMode: GameMode?
     private var stableTimer: Timer?
@@ -452,6 +453,7 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
     }
 
     private func handleLine(_ line: String, written: Bool, show: Bool) {
+        playStats.line(line)
         if line.hasPrefix("ASSET_WARM_PROGRESS ") {
             let parts = line.split(separator: " ")
             if parts.count >= 3 {
@@ -600,6 +602,8 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         home.settingsButton.isHidden = true
         home.layoutButton.isHidden = true
         engineStarted = true
+        ModInstaller.gameRunning = true
+        playStats.gameStarting(GameSettings.shared.gameMode, sandboxMap: GameSettings.shared.sandboxMap)
         refreshModeChoice()
         let mode = GameSettings.shared.gameMode
         bootedMode = mode
@@ -607,6 +611,7 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         PGSetStartMode(testMap ? 3 : Int32(mode.rawValue))
         let minimap = GameSettings.shared.minimapLayout
         PGSetMinimapLayout(minimap.dx, minimap.dy, minimap.scale)
+        PGSetSubtitleRaise(GameSettings.shared.subtitlesAboveHomeBar ? 0.05 : 0)
         TouchControlsView.minimapLayout = minimap
         placeFPSLabel()
         appendLog("Game mode: \(mode.title)\(mode == .sandbox ? " on " + GameSettings.sandboxMapTitles[GameSettings.shared.sandboxMap] : "")")
@@ -1195,11 +1200,15 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
             if mission != lastStoryMission { lastStoryMission = mission; appendLog("Story: \(mission.isEmpty ? "no mission running" : "mission \(mission) running")") }
             if replay != lastReplayState { if replay == 1 { appendLog("Story: Mission failed screen") }; lastReplayState = replay }
         }
+        playStats.health(fps: Double(PGRenderedFramesPerSecond()), thermal: ProcessInfo.processInfo.thermalState.rawValue, mission: story ? String(cString: name) : nil, failedScreen: replay == 1)
         appendLog(String(format: "Health: memory %d MB used, %d MB free · guard stopped streaming growth %llu×, asked to evict %llu× · reads %llu (%.1f MB, avg %.1f ms, slow %llu, errors %llu) · %.0f FPS · thermal %@ · CPU %.2f cores · GPU %.1f ms · streaming %llu waiting (%llu over 10 s), loaded %llu (median %llu ms, 95%% %llu ms), unloaded %llu · at %.0f, %.0f, %.0f",
                          used, free, d[0], d[7], d[1], Double(d[2]) / 1_048_576, avgMS, d[5], d[3], PGRenderedFramesPerSecond(), thermal, cores, gpuMS, stream[0], stream[1], stream[2], stream[3], stream[4], stream[5], position.0, position.1, position.2))
     }
 
-    @objc private func leftApp() { if stableTimer?.isValid != false { GameSettings.shared.markBootInterrupted() } }
+    @objc private func leftApp() {
+        if stableTimer?.isValid != false { GameSettings.shared.markBootInterrupted() }
+        playStats.sessionEnded()
+    }
 
     /// The touch-controls layout editor (pre-game, or from Settings).
     private func showLayoutEditor() {
@@ -1488,25 +1497,38 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
                                              loadingPill.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -18)])
             }
         }
-        // Friend Request (GTA-73): the Lifeinvader presentation runs on a black TV for about 3 minutes; say how
-        // far it is, or players give up before Jay Norris takes out the phone.
+        // Friend Request (GTA-73): the Lifeinvader presentation runs on a black TV. The mission (lester1) first waits
+        // for a channel change ("Find Weazel News"), then lets the player call Jay Norris's phone from 77 s to
+        // 170 s after the news comes on, which is when Jay holds the phone up on TV; after that the mission fails.
+        // On a black TV players can't see either moment, so the note says what to do and when.
         var presentationMs: Int32 = 0, presentationLength: Int32 = 0
-        if engineStarted, bootedMode == .story, PGTVPresentation(&presentationMs, &presentationLength) {
+        let playing = engineStarted && bootedMode == .story && PGTVPresentation(&presentationMs, &presentationLength)
+        let findNews = engineStarted && bootedMode == .story && !playing && lastStoryMission.hasPrefix("lester1") && touchControls.tvCouch
+        if playing || findNews {
             if presentationPill.superview == nil {
                 view.addSubview(presentationPill)
                 NSLayoutConstraint.activate([presentationPill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
                                              presentationPill.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 64),
                                              presentationPill.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.6)])
             }
-            let second = Int(presentationMs / 1000)
+            let second = playing ? Int(presentationMs / 1000) : -2
             if second != presentationSecond {
                 presentationSecond = second
                 let time = { (ms: Int32) in String(format: "%d:%02d", ms / 60000, ms / 1000 % 60) }
-                presentationPill.text = AppLanguage.interpolate(AppLanguage.choose("Lifeinvader presentation {arg0} of {arg1}. The TV stays black in this port (the game files have no TV videos): keep watching and wait for the next hint."), [time(presentationMs), time(presentationLength)])
+                let callFrom: Int32 = 77_083, callUntil: Int32 = 170_000
+                if !playing {
+                    presentationPill.text = AppLanguage.choose("Find Weazel News: change the TV channel with the arrows (or move the left stick sideways).")
+                } else if presentationMs < callFrom {
+                    presentationPill.text = AppLanguage.interpolate(AppLanguage.choose("Lifeinvader presentation {arg0} of {arg1}. The TV stays black (the game files have no TV videos). At {arg2} Jay Norris holds up the phone: then call him."), [time(presentationMs), time(presentationLength), time(callFrom)])
+                } else if presentationMs < callUntil {
+                    presentationPill.text = AppLanguage.interpolate(AppLanguage.choose("Call now: Jay Norris is holding up the phone. Phone › Contacts › Jay Norris, before {arg0} ({arg1} now)."), [time(callUntil), time(presentationMs)])
+                } else {
+                    presentationPill.text = AppLanguage.choose("Too late to call: the mission fails. Retry, and call Jay Norris between 1:17 and 2:50.")
+                }
             }
-            if presentationPill.isHidden { presentationPill.isHidden = false; appendLog("TV: Lifeinvader presentation playing (\(presentationLength / 1000) s); showing its progress") }
+            if presentationPill.isHidden { presentationPill.isHidden = false; appendLog(playing ? "TV: Lifeinvader presentation playing (\(presentationLength / 1000) s); showing when to call" : "TV: Friend Request waits for a channel change; showing how") }
         } else if !presentationPill.isHidden {
-            presentationPill.isHidden = true; presentationSecond = -1; appendLog("TV: presentation progress hidden")
+            presentationPill.isHidden = true; presentationSecond = -1; appendLog("TV: presentation note hidden")
         }
         if gameStatus != lastGameStatus {
             lastGameStatus = gameStatus

@@ -138,7 +138,9 @@ enum ModInstaller {
         guard ["yft", "ytd", "ydd", "ydr", "rpf"].contains(url.pathExtension.lowercased()) else { return nil }
         var why = [CChar](repeating: 0, count: 200)
         guard PGModFileProblem(url.path, &why, why.count) else { return nil }
-        return String(cString: why).contains("Enhanced")
+        let text = String(cString: why)
+        if text.contains("without encryption") { return AppLanguage.choose("an archive saved without encryption, which the game can't read; re-save it with OpenIV") }
+        return text.contains("Enhanced")
             ? AppLanguage.choose("made for GTA V Enhanced; use the mod's Legacy (original PC) version")
             : AppLanguage.choose("made for another version of the game")
     }
@@ -358,9 +360,47 @@ enum ModInstaller {
             return Installed(name: name, enabled: enabled, files: count, url: url, waiting: waiting)
         }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
+    /// The game is running (NativePortViewController): it reads mod files from their folders while it plays, so
+    /// switching a mod off or removing it then is queued for the next start instead (a removed add-on pack
+    /// stopped the game: "Game file missing from your folder", log 1119, GTA-140).
+    static var gameRunning = false
+    private static let pendingKey = "modsPendingChanges"
+    /// Queued changes by mod name: "on", "off" or "remove".
+    static var pending: [String: String] { UserDefaults.standard.dictionary(forKey: pendingKey) as? [String: String] ?? [:] }
+    private static func queue(_ name: String, _ change: String?) {
+        var all = pending; all[name] = change
+        UserDefaults.standard.set(all, forKey: pendingKey)
+    }
+    /// At launch, before the game reads the Mods folder: the changes made while it was running.
+    static func applyPending() {
+        let changes = pending
+        guard !changes.isEmpty else { return }
+        UserDefaults.standard.removeObject(forKey: pendingKey)
+        for mod in installed() {
+            switch changes[mod.name] {
+            case "remove"?: try? remove(mod)
+            case "on"?: try? setEnabled(mod, true)
+            case "off"?: try? setEnabled(mod, false)
+            default: break
+            }
+        }
+    }
     static func setEnabled(_ mod: Installed, _ on: Bool) throws {
+        if gameRunning { queue(mod.name, on == mod.enabled ? nil : (on ? "on" : "off")); return }
         let to = modsFolder.appendingPathComponent(on ? mod.name : mod.name + ".off")
         if to != mod.url { try FileManager.default.moveItem(at: mod.url, to: to) }
     }
-    static func remove(_ mod: Installed) throws { try FileManager.default.removeItem(at: mod.url) }
+    /// Folders copied in by hand (Files app, a computer) can hold read-only files or folders, which
+    /// removeItem refuses (GTA-136): make everything writable, then remove again.
+    static func remove(_ mod: Installed) throws {
+        if gameRunning { queue(mod.name, "remove"); return }
+        let fm = FileManager.default
+        do { try fm.removeItem(at: mod.url); return } catch {
+            if let items = fm.enumerator(at: mod.url, includingPropertiesForKeys: nil) {
+                for case let url as URL in items { try? fm.setAttributes([.posixPermissions: 0o755, .immutable: false], ofItemAtPath: url.path) }
+            }
+            try? fm.setAttributes([.posixPermissions: 0o755, .immutable: false], ofItemAtPath: mod.url.path)
+            try fm.removeItem(at: mod.url)
+        }
+    }
 }

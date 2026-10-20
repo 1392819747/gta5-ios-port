@@ -4,6 +4,7 @@ import UIKit
 /// during play only resolution and controls apply live, the rest on restart.
 final class SettingsViewController: UITableViewController {
     private let settings = GameSettings.shared
+    private let savePickerDelegate = SavePickerDelegate()
     private let engineRunning: Bool
     private let bootPreset: GraphicsPreset
     /// The mode the running engine started in (nil before Play).
@@ -34,7 +35,7 @@ final class SettingsViewController: UITableViewController {
     private enum ControlsRow {
         case tab, swipeLook, swipeAim, stickLook, stickAim
         case targeting, fireAlsoAims, sprintButton, steeringButtons, airplaneRightStick, buttonSize, buttonOpacity, editLayout, minimap
-        case hideTouchWithController, keyboardMouse, inputState
+        case hideTouchWithController, keyboardMouse, inputState, safeZone
     }
     private var controlsTab: ControlsTab {
         settings.cameraTouchMode == .stick ? .stick : .swipe
@@ -43,7 +44,7 @@ final class SettingsViewController: UITableViewController {
     private var controlsRows: [ControlsRow] {
         let camera: [ControlsRow] = controlsTab == .stick ? [.stickLook, .stickAim] : [.swipeLook, .swipeAim]
         return [.tab] + camera + [.targeting, .fireAlsoAims, .sprintButton, .steeringButtons, .airplaneRightStick, .buttonSize, .buttonOpacity,
-                                  .editLayout, .minimap, .hideTouchWithController, .keyboardMouse]
+                                  .editLayout, .minimap, .safeZone, .hideTouchWithController, .keyboardMouse]
     }
 
     @objc private func controlsTabChanged(_ sender: UISegmentedControl) {
@@ -145,16 +146,19 @@ final class SettingsViewController: UITableViewController {
         (view as? UITableViewHeaderFooterView)?.textLabel?.textColor = Theme.tertiaryText
     }
 
+    /// Game mode: Story, Sandbox, the Sandbox map (Sandbox only), then Import a Story save.
+    private var importSaveRow: Int { GameMode.allCases.count + (settings.gameModeChoice == .sandbox ? 1 : 0) }
+
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         switch sectionKind(section) {
         // While the game runs, settings that only take effect at the next start are hidden.
-        case .mode: return engineRunning ? 0 : GameMode.allCases.count + (settings.gameModeChoice == .sandbox ? 1 : 0)
+        case .mode: return engineRunning ? 0 : importSaveRow + 1
         case .graphics: return engineRunning ? Self.liveGraphicsRows.count : settings.tier.allowed.count + 7 + GraphicsDetail.all.count
         case .controls: return controlsRows.count
         case .cheats: return engineRunning ? StoryCheats.all.count + storyCheatStart : 0
         case .gyro: return (settings.gyroAim == .off ? 1 : 3) + (settings.tiltSteer == .off ? 1 : 2)
         case .files: return engineRunning ? 0 : fileRows.count
-        case .device: return 7
+        case .device: return 9
         case .language: return 1
         }
     }
@@ -214,6 +218,11 @@ final class SettingsViewController: UITableViewController {
         content.secondaryTextProperties.color = .secondaryLabel
         let presets = settings.tier.allowed
         switch sectionKind(indexPath.section) {
+        case .mode where indexPath.row == importSaveRow:
+            content.text = AppLanguage.choose("Import a Story save…")
+            content.secondaryText = AppLanguage.choose("A save file from a PC or a friend (named like SGTA50000). It goes into a free save slot; load it in the game: Pause › Game › Load Game.")
+            content.image = UIImage(systemName: "square.and.arrow.down")
+            content.textProperties.color = view.tintColor ?? .systemBlue
         case .mode where indexPath.row == GameMode.allCases.count:
             // Sandbox only: which map.
             content.text = AppLanguage.choose("Sandbox map")
@@ -467,6 +476,12 @@ final class SettingsViewController: UITableViewController {
                 content.secondaryText = ControlsLayout.isCustomized ? AppLanguage.choose("Customized") : AppLanguage.choose("Move, resize or hide buttons")
                 content.textProperties.color = .systemBlue
                 cell.selectionStyle = .default
+            case .safeZone:
+                content.text = AppLanguage.choose("Subtitles above the home bar")
+                content.secondaryText = AppLanguage.choose("Raises the subtitle line a little, so the home bar doesn't cover it. Applies the next time the game starts.")
+                cell.accessoryView = toggle(settings.subtitlesAboveHomeBar, label: AppLanguage.choose("Subtitles above the home bar")) { [weak self] in
+                    self?.settings.subtitlesAboveHomeBar = $0
+                }
             case .hideTouchWithController:
                 content.text = AppLanguage.choose("Hide when a controller is connected")
                 content.secondaryText = AppLanguage.choose("Touch controls come back as soon as the controller disconnects")
@@ -600,11 +615,13 @@ final class SettingsViewController: UITableViewController {
                 content.secondaryText = AppLanguage.choose("Save or send this run's log and the previous one yourself")
                 content.textProperties.color = .systemBlue
             } else if indexPath.row >= 4 {
-                // Experimental (v1.4.3): on by default; turning one off applies the next time the app starts.
+                // Experimental (v1.4.3, BC3 v1.4.4): on by default; turning one off applies the next time the app starts.
                 let rows: [(String, String, ReferenceWritableKeyPath<GameSettings, Bool>)] = [
                     (AppLanguage.choose("Smarter texture loading"), AppLanguage.choose("Experimental. Keeps the ground and roads from turning grey after long play. Turn off if the game runs out of memory."), \.smarterTextureLoading),
                     (AppLanguage.choose("Lighter big textures"), AppLanguage.choose("Experimental. The largest textures use a quarter of the memory on iPhones before the 15 Pro, so more of the world stays sharp. Turn off for the sharpest close-ups."), \.lighterBigTextures),
                     (AppLanguage.choose("Faster engine threads"), AppLanguage.choose("Experimental. Keeps the game on the fast processor cores for steadier FPS. Turn off if your iPhone gets too hot."), \.fastEngineThreads),
+                    (AppLanguage.choose("Compressed see-through textures"), AppLanguage.choose("Experimental. On iPhones before the 15 Pro, leaves, fences, smoke and decals use a quarter of the memory, so more of the world stays sharp. Turn off if soft see-through edges show steps."), \.compressedAlphaTextures),
+                    (AppLanguage.choose("More engine memory"), AppLanguage.choose("Experimental, off by default. Gives the game about 270 MB more room inside its 4 GB, for fewer stops after long play on 6-8 GB iPhones. Turn off if the game stops more often."), \.smallerEngineHeaps),
                 ]
                 let (title, detail, key) = rows[indexPath.row - 4]
                 content.text = title
@@ -686,6 +703,13 @@ final class SettingsViewController: UITableViewController {
         if sectionKind(indexPath.section) == .cheats {
             let cheat = StoryCheats.all[indexPath.row - storyCheatStart]
             dismiss(animated: true) { self.cheatSelected?(cheat) }
+            return
+        }
+        if sectionKind(indexPath.section) == .mode, indexPath.row == importSaveRow {
+            let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.item, .data], asCopy: true)
+            picker.delegate = savePickerDelegate
+            savePickerDelegate.done = { [weak self] outcome in self?.showSaveImport(outcome) }
+            present(picker, animated: true)
             return
         }
         if sectionKind(indexPath.section) == .mode {
@@ -953,5 +977,32 @@ final class SettingsViewController: UITableViewController {
         control.accessibilityLabel = label
         control.addAction(UIAction { [weak control] _ in changed(control?.isOn ?? false) }, for: .valueChanged)
         return control
+    }
+}
+
+// MARK: Import a Story save
+
+final class SavePickerDelegate: NSObject, UIDocumentPickerDelegate {
+    var done: ((SaveImport.Outcome) -> Void)?
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let url = urls.first else { return }
+        let outcome = SaveImport.importSave(from: url)
+        DispatchQueue.main.async { self.done?(outcome) }
+    }
+}
+
+extension SettingsViewController {
+    fileprivate func showSaveImport(_ outcome: SaveImport.Outcome) {
+        let alert: UIAlertController
+        switch outcome {
+        case let .imported(title, slot):
+            alert = UIAlertController(title: AppLanguage.choose("Save imported"),
+                                      message: AppLanguage.interpolate(AppLanguage.choose("\"{arg0}\" is in save slot {arg1}. Start Story mode, then load it: Pause › Game › Load Game."), [title, String(slot)]),
+                                      preferredStyle: .alert)
+        case let .failed(message):
+            alert = UIAlertController(title: AppLanguage.choose("Couldn't import the save"), message: message, preferredStyle: .alert)
+        }
+        alert.addAction(UIAlertAction(title: AppLanguage.choose("OK"), style: .cancel))
+        present(alert, animated: true)
     }
 }

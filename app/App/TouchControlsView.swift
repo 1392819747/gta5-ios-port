@@ -370,6 +370,7 @@ final class TouchControlsView: UIView {
     private var hints = PGControlHints()
     private var exitHoldStart: CFTimeInterval?
     private var phoneDock = false
+    private var dockShowsLetters = false
     private var lastDockInput: CFTimeInterval = 0
     /// Game state (PGGameStatus): the phone is out on screen, and a full-screen prompt waits for
     /// Accept/Back (player control off outside cutscenes, e.g. Mission failed, or a warning screen).
@@ -503,6 +504,10 @@ final class TouchControlsView: UIView {
     /// The help asks for the right stick ("Rotate R to pull it out"): the right side is a stick then, also with the
     /// swipe camera, whose mouse movement the mission doesn't read as the stick (GTA-94).
     private var helpAsksRightStick: Bool { !helpAsked.isDisjoint(with: [220, 221]) }
+    /// On a safehouse couch the TV help says "Use the left stick to change the channel / the volume", and on
+    /// touch the stick is an invisible area: arrows that move the left stick show instead (Friend Request waits
+    /// for a channel change before the Lifeinvader presentation starts, GTA-73).
+    var tvCouch: Bool { context == .onFoot && !promptActive && !scriptMenu && !taxiRide && !helpAsked.isDisjoint(with: [218, 219]) }
     /// Mission triggers latched on (see padState): asked for together with the right stick.
     private var latchedTriggers: Set<Int32> = [], triggerWasPressed: Set<Int32> = []
     private var rightStickWasAsked = false
@@ -718,6 +723,9 @@ final class TouchControlsView: UIView {
             let contextButton: [ControlButton] = hints.helpContext ? [interact] : []
             return [camera, pause, settings] + (stick ? [] : [up, down, left, right]) + contextButton + [accept, back, promptOption]
         }
+        if tvCouch && !editing {
+            return [camera, phone, pause, settings, up, down, left, right] + (hints.helpContext ? [interact] : [])
+        }
         // A taxi ride: the destination menu takes D-pad left/right to change and A to choose.
         if taxiRide && !editing {
             return [camera, phone, pause, settings, radio, left, right, accept, taxiHurry, taxiStop, enter, lookBack]
@@ -805,6 +813,13 @@ final class TouchControlsView: UIView {
             roles = roles.filter { if case .planeStick = $0.value { return false }; return true }
         }
         visible = computeVisible().filter { editing || !hiddenByPlayer($0) }
+        // With the phone out, the game's own hints name pad buttons ("Take Photo A", "Exit B", "Send X"): the dock's
+        // buttons show those letters then, so players find the camera's shutter and send (TG reports 1061, 1128).
+        let letters = phoneDock && gamePhoneOut
+        if letters != dockShowsLetters {
+            dockShowsLetters = letters
+            accept.setIcon(letters ? "script_a" : "accept"); back.setIcon(letters ? "script_b" : "back"); phoneOption.setIcon(letters ? "script_x" : "phone_option")
+        }
         let mission = missionButtons.filter { b in visible.contains(where: { $0 === b.button }) }.map(\.button.name).joined(separator: ", ")
         if mission != lastMissionLog { lastMissionLog = mission; hintsChanged?("Mission buttons: " + (mission.isEmpty ? "none" : mission)) }
         let shown = Set(visible.map(ObjectIdentifier.init))
@@ -1502,13 +1517,19 @@ final class TouchControlsView: UIView {
         if phone.pressed && phoneDock && !gamePhoneOut { held.insert(.up) }
         if !phone.pressed { phoneOpensDock = false }
         if phone.pressed && gamePhoneOut && !phoneOpensDock { held.insert(.b) }
-        if up.pressed { held.insert(.up) }
-        if down.pressed { held.insert(.down) }
-        if taxiRide {
+        if tvCouch {
+            // The TV remote reads the left stick: left/right change the channel, up/down the volume.
+            if left.pressed { state.leftX = -1 } else if right.pressed { state.leftX = 1 }
+            if up.pressed { state.leftY = 1 } else if down.pressed { state.leftY = -1 }
+        } else if taxiRide {
             // The taxi's destination menu reads the left stick (D-pad left would change the station).
+            if up.pressed { held.insert(.up) }
+            if down.pressed { held.insert(.down) }
             if left.pressed { state.leftX = -1 }
             if right.pressed { state.leftX = 1 }
         } else {
+            if up.pressed { held.insert(.up) }
+            if down.pressed { held.insert(.down) }
             if left.pressed { held.insert(.left) }
             if right.pressed { held.insert(.right) }
         }
