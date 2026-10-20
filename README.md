@@ -10,6 +10,8 @@ A fan project that runs the WebAssembly build of GTA V natively on iPhone: the e
 
 > Not affiliated with or endorsed by Rockstar Games or Take-Two Interactive. Rights holders: contact kevin@aether.ee and the repository will be taken down promptly.
 
+**On a Mac?** The same app runs natively on Apple Silicon Macs with keyboard and mouse: **[gta5-macos-port](https://github.com/kevinerikjs/gta5-macos-port)** ([setup guide](docs/MAC.md)).
+
 ## What you need
 
 | | |
