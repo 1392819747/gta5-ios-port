@@ -142,6 +142,10 @@ On many sideloaded installs iOS doesn't hand a picked folder to the app (Open st
 
 The app needs the whole unpacked web build (version 8b0b5899ed): the folder that has data and b inside, about 21 GB. The app checks every file and tells you exactly what's missing or damaged. For building with fivestarport.vercel.app you pick only three files from it (b/8b0b5899ed/game.wasm, shaders.zip made from the shaders folder, data/manifest.json); the big folder stays on your phone.
 
+### Which version of the game files is the best or most stable (mirror, gta5webport.zip, 19 GB, 21 GB)?
+
+The app needs the web build 8b0b5899ed (the folder with data and b inside). A zip or a rar of the same build gives the same files. Whatever you use, the app checks every file and tells you if something is missing, damaged or from a different version.
+
 ### Where are save files stored, and how do I add someone else's save?
 
 Saves are in Files › On My iPhone › GTA V Port › EngineFiles › userdata › Documents › Rockstar Games › GTA V › Default. You can copy save files there (PC saves work too). Back up this folder before reinstalling.
@@ -172,7 +176,7 @@ The project doesn't share save files. If you have a save, copy it into GTA V Por
 
 ### My game file download stopped (lost Wi-Fi, locked the phone, app closed). Do I have to start the 21 GB again?
 
-No, since v1.4.2. A dropped connection is retried for 30 minutes (also while the phone is locked), and if the app was closed, Game files shows "The download stopped at N%" with Continue the download: it picks up where it stopped instead of starting again. Zip archives and normal (not solid, not split) RAR5 archives continue in the middle of the download; other archives are read again but files already unpacked aren't written again.
+No, since v1.4.2. A dropped connection is retried for 30 minutes (also while the phone is locked), and if the app was closed, Game files shows "The download stopped at N%" with Continue the download: it picks up where it stopped instead of starting again. Zip archives and normal (not solid, not split) RAR5 archives like mirror.rar continue in the middle of the download; other archives are read again but files already unpacked aren't written again.
 
 ### The download link only sends me to ad or betting sites. How do I download?
 
