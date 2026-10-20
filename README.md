@@ -10,6 +10,8 @@ A fan project that runs the WebAssembly build of GTA V natively on iPhone: the e
 
 > Not affiliated with or endorsed by Rockstar Games or Take-Two Interactive. Rights holders: contact kevin@aether.ee and the repository will be taken down promptly.
 
+**Website:** [fivestarport.site](https://fivestarport.site): the guide, the builder and the translate page in one place.
+
 **On a Mac?** The same app runs natively on Apple Silicon Macs with keyboard and mouse: **[gta5-macos-port](https://github.com/kevinerikjs/gta5-macos-port)** ([setup guide](docs/MAC.md)).
 
 ## What you need
@@ -43,7 +45,7 @@ Build it yourself from your own game files with 5★ Port Builder (free, about 2
 
 https://github.com/user-attachments/assets/1efff2dc-675e-473d-b988-0c23784404ed
 
-Open **[fivestarport.vercel.app](https://fivestarport.vercel.app)** on your iPhone and follow the steps:
+Open **[fivestarport.site/build](https://fivestarport.site/build/)** on your iPhone and follow the steps:
 1. **Connect GitHub.** The builder makes a private copy of this repository in your account. GitHub asks you to approve it once; keep "All repositories" selected.
 2. **Pick three files** from your game folder:
    - `b/8b0b5899ed/game.wasm`
@@ -90,7 +92,7 @@ The biggest upgrade is **more memory**: iOS normally gives the app about half of
 
 Players report this works great and makes the game far more playable.
 
-1. Build with **Enable increased memory entitlements** ticked on [fivestarport.vercel.app](https://fivestarport.vercel.app). It's on by default; if you built with it off, tick it and tap **Build again**.
+1. Build with **Enable increased memory entitlements** ticked on [fivestarport.site/build](https://fivestarport.site/build/). It's on by default; if you built with it off, tick it and tap **Build again**.
 2. Install the new `GTA5Port.ipa` with **SideStore** as usual.
 3. Install **[GetMoreRam](https://github.com/hugeBlack/GetMoreRam)**, sign in with the **same Apple ID** you use in SideStore, pick **GTA V Port** and add **Increased Memory Limit**.
 4. In SideStore, **refresh** GTA V Port so it picks up the change.
