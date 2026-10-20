@@ -9,25 +9,47 @@ enum LogUploader {
     private static let perLog = 1_800_000
     private static let head = 256_000
 
-    static func trimmed(_ data: Data) -> Data {
-        guard data.count > perLog else { return data }
+    static func trimmed(_ data: Data, to limit: Int = perLog) -> Data {
+        guard data.count > limit else { return data }
         var result = Data(data.prefix(head))
-        result.append("\n… \(data.count - perLog) bytes cut …\n".data(using: .utf8)!)
-        result.append(data.suffix(perLog - head))
+        result.append("\n… \(data.count - limit) bytes cut …\n".data(using: .utf8)!)
+        result.append(data.suffix(limit - head))
         return result
     }
 
-    static func send(note: String, done: @escaping ((String, String)) -> Void) {
+    /// The newest Story mode save (SGTA5…, about 0.5 MB), so the developer can load the game where it happened
+    /// (Harness/gta.py save-from-log). Mission replay restore points (MISREP) and backups are left out.
+    static func latestSave() -> URL? {
+        let folder = URL(fileURLWithPath: EnginePaths.filesRoot().path).appendingPathComponent("userdata/Documents/Rockstar Games/GTA V/Default")
+        let saves = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        return saves.filter { $0.lastPathComponent.hasPrefix("SGTA5") && $0.pathExtension.isEmpty }
+            .max { ((try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast)
+                 < ((try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) }
+    }
+
+    static func send(note: String, includeSave: Bool = false, done: @escaping ((String, String)) -> Void) {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let save = includeSave ? latestSave().flatMap { url in (try? Data(contentsOf: url)).map { (url.lastPathComponent, $0) } } : nil
         var body = Data()
         for (title, name) in [("PREVIOUS RUN", "native-port-previous.log"), ("THIS RUN", "native-port.log")] {
             guard let data = try? Data(contentsOf: documents.appendingPathComponent(name)), !data.isEmpty else { continue }
             body.append("===== \(title) (\(name)) =====\n".data(using: .utf8)!)
-            body.append(trimmed(data))
+            // With a save the logs get a little less room, to stay under the site's 4 MB.
+            body.append(trimmed(data, to: save == nil ? perLog : 1_400_000))
             body.append("\n".data(using: .utf8)!)
         }
+        if let (name, data) = save {
+            body.append("===== SAVE (\(name), \(data.count) bytes, base64) =====\n".data(using: .utf8)!)
+            body.append(data.base64EncodedData(options: [.lineLength76Characters, .endLineWithLineFeed]))
+            body.append("\n===== END SAVE =====\n".data(using: .utf8)!)
+        }
         guard !body.isEmpty else { DispatchQueue.main.async { done((AppLanguage.choose("No log yet"), AppLanguage.choose("Start the game once, then try again."))) }; return }
-        var request = URLRequest(url: endpoint, timeoutInterval: 60)
+        var url = endpoint
+        #if targetEnvironment(simulator)
+        // Test (PG_LOG_ENDPOINT=http://127.0.0.1:port/): the upload goes to a local catcher, not to Telegram.
+        if let local = ProcessInfo.processInfo.environment["PG_LOG_ENDPOINT"].flatMap(URL.init(string:)) { url = local }
+        #endif
+        var request = URLRequest(url: url, timeoutInterval: 60)
         request.httpMethod = "POST"
         request.setValue("text/plain; charset=utf-8", forHTTPHeaderField: "Content-Type")
         request.setValue("\(GameSettings.shared.tier.model) · iOS \(UIDevice.current.systemVersion) · \(GameSettings.shared.tier.memoryLimitMB) MB limit", forHTTPHeaderField: "X-Device")
@@ -53,6 +75,7 @@ enum LogUploader {
 final class SendLogViewController: UIViewController {
     private let note = UITextView()
     private let status = UILabel()
+    private let includeSave = UISwitch()
     var finished: ((String, String) -> Void)?
 
     override func viewDidLoad() {
@@ -87,7 +110,17 @@ final class SendLogViewController: UIViewController {
         }
         status.font = .preferredFont(forTextStyle: .footnote)
         status.textColor = .secondaryLabel
-        let stack = UIStackView(arrangedSubviews: [info, note, status])
+        // The save lets the developer load the game where it happened; it holds game progress only.
+        let saveLabel = UILabel()
+        saveLabel.text = AppLanguage.choose("Include my latest save (game progress only, about 0.5 MB), so the developer can load the game where it happened")
+        saveLabel.numberOfLines = 0
+        saveLabel.font = .preferredFont(forTextStyle: .footnote)
+        includeSave.isOn = LogUploader.latestSave() != nil
+        includeSave.isEnabled = includeSave.isOn
+        let saveRow = UIStackView(arrangedSubviews: [saveLabel, includeSave])
+        saveRow.spacing = 12
+        saveRow.alignment = .center
+        let stack = UIStackView(arrangedSubviews: [info, note, saveRow, status])
         stack.axis = .vertical
         stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -109,7 +142,7 @@ final class SendLogViewController: UIViewController {
         navigationItem.rightBarButtonItem?.isEnabled = false
         note.resignFirstResponder()
         status.text = AppLanguage.choose("Sending…")
-        LogUploader.send(note: note.text ?? "") { [weak self] result in
+        LogUploader.send(note: note.text ?? "", includeSave: includeSave.isOn) { [weak self] result in
             guard let self else { return }
             let done = self.finished
             self.dismiss(animated: true) { done?(result.0, result.1) }

@@ -152,6 +152,7 @@ bool gNativeBC = false;
 bool gPackedBC1 = false;
 bool gASTCBC1 = false;
 bool gSkipTopMip = false;
+uint64_t gSkipBigTopMip = 0;
 
 FormatInfo mapFormat(uint32_t f, uint32_t bind) {
 	bool ds = (bind & BIND_DS) != 0;

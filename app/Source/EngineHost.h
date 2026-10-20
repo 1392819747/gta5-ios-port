@@ -36,12 +36,14 @@ void PGSetAssetServer(const char *url);
 // Before PGStartEngine: a folder on this device that contains the game's data/
 // files (the app holds security-scoped access to it); NULL streams from the server.
 void PGSetLocalGameFolder(const char *dataPath);
+// The minimap's place (GTA-131, NativeAssets.m): offsets in the game's HUD units and a size factor; before the engine starts.
+void PGSetMinimapLayout(double dx, double dy, double scale);
 bool PGUsingLocalGameFolder(void);
 void PGStartEngine(const char *manifestPath, const char *filesRoot, PGLogCallback, void *context);
 void PGUpdateController(PGControllerState state, double elapsedSeconds);
 // Player context: 0 on foot, otherwise the vehicle type + 1 (see NativeTouchContext.h).
 uint32_t PGCurrentTouchContext(void);
-// Game state for the touch layout: 1 control off, 2 phone out, 4 cutscene, 8 warning screen, 16 no player.
+// Game state for the touch layout: 1 control off, 2 phone out, 4 cutscene, 8 warning screen, 16 no player, 32 game paused.
 uint32_t PGGameStatus(void);
 // Friend Request's Lifeinvader presentation on the TV: how far it is (ms) and how long; false when not on.
 bool PGTVPresentation(int32_t *playMs, int32_t *durationMs);
@@ -64,17 +66,24 @@ typedef struct {
   bool specialActive;  // running now
   float specialFill;   // meter, 0...1
   bool canDetonate;    // the player has sticky bombs placed
+  bool helpDetonate;   // a help message asks for INPUT_DETONATE (explosives a mission planted)
   bool helpShown;      // a help message is on screen
   bool helpContext;    // ...and it asks for the context input (D-pad right)
-  uint32_t helpInputs; // ...and the script inputs it names: bit n is input 218 + n (sticks 218-221, buttons 222-231)
+  uint32_t helpInputs; // ...and the script inputs it names: bit n is input 218 + n (sticks 218-221, buttons 222-231, D-pad 232-235)
   bool radioWheelOpen; // the radio wheel is up
   uint32_t vehicleModel; // model name hash (joaat) of the vehicle the player is in, 0 on foot
   uint32_t pedModel;     // model name hash (joaat) of the player ped (a_c_chop while playing as Chop)
+  bool trailerAttached;  // the player's vehicle pulls a trailer (the touch controls show Detach trailer)
   bool passenger;        // in a vehicle, not in the driver's seat (taxi rides)
   bool taxiMenu;         // the taxi ride script (taxiservice) is running
   bool phoneBrowser;     // the phone's internet app (appinternet) is open
 } PGControlHints;
 PGControlHints PGReadControlHints(uint32_t touchContext);
+// For player logs: the story mission running ("docks_setup (DH1)", empty when none), the player's position and
+// the replay controller's state (1: the Mission failed screen). False before the engine runs.
+bool PGStoryContext(char *mission, size_t size, float position[3], int32_t *replayState);
+// Simulator only (Source/NativeDebugChannel.inc): runs one test-harness command and writes its JSON reply.
+void PGDebugCommand(const char *command, char *reply, size_t size);
 // The next weapon of the aircraft the player flies (applied on the game thread).
 void PGNextAircraftWeapon(void);
 /// Story cheat "Set money": the playing character's cash becomes `amount` at the next engine frame.
@@ -124,6 +133,8 @@ bool PGSetPersistentCheatEnabled(PGCheatSwitch cheat, bool enabled);
 int PGLoadSceneSeconds(void);
 /// Whether a script asked for input `action` (the engine's input id) in the last `ms` milliseconds.
 int PGInputPolledWithin(int action, double ms);
+/// Whether a script read input `action` in any way in the last `ms` milliseconds (for diagnostics; GTA-129).
+int PGInputReadWithin(int action, double ms);
 /// Presses Start (opens the pause menu, or closes it when open): held for the next three engine frames.
 void PGRequestPauseMenu(void);
 // Keyboard and mouse, through the game's own PC input (the block the browser build wrote): key
@@ -171,3 +182,5 @@ uint64_t PGGPUTextureBytes(void);
 void PGLogMemoryPools(void);
 uint64_t PGMemoryBudgetEvictions(void);
 void PGAssetHealth(uint64_t out[6]);
+void PGStreamingHealth(uint64_t out[6]);		// NativeStreamingHealth.c (GTA-116)
+double PGGPUFrameMilliseconds(void);		// MRRenderer.mm

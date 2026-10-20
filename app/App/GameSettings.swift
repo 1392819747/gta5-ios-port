@@ -223,10 +223,60 @@ final class GameSettings {
         get { defaults.bool(forKey: "sharperUpscaling") }
         set { defaults.set(newValue, forKey: "sharperUpscaling"); PGSetSharperUpscaling(newValue ? 1 : 0) }
     }
+    /// This device › Experimental (v1.4.3, on by default): improvements that player logs still have to confirm,
+    /// each with a switch to turn it off. Read by the engine and renderer, so they apply when the app starts.
+    var smarterTextureLoading: Bool {   // GTA-128: grey ground after long play
+        get { defaults.object(forKey: "expSmarterTextureLoading") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "expSmarterTextureLoading") }
+    }
+    var lighterBigTextures: Bool {      // GTA-122: the largest textures without their top level
+        get { defaults.object(forKey: "expLighterBigTextures") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "expLighterBigTextures") }
+    }
+    var fastEngineThreads: Bool {       // GTA-92: engine threads on the fast cores, queries sent at once
+        get { defaults.object(forKey: "expFastEngineThreads") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "expFastEngineThreads") }
+    }
+    /// A switch turned off sets the engine's own off value, unless a test launch already set it.
+    static func applyExperimentalSwitches() {
+        let settings = GameSettings.shared
+        func off(_ name: String, _ value: String) { if getenv(name) == nil { setenv(name, value, 1) } }
+        if !settings.smarterTextureLoading { off("PG_GUARD_POOL_ROOM", "0") }
+        if !settings.lighterBigTextures { off("PG_BIG_MIP_SKIP", "0") }
+        if !settings.fastEngineThreads { off("PG_ENGINE_QOS", "off"); off("PG_QUERY_COMMIT_MS", "2") }
+    }
     var showFPS: Bool {
         get { defaults.object(forKey: "showFPS") as? Bool ?? true }
         set { defaults.set(newValue, forKey: "showFPS") }
     }
+    /// Touch controls › Minimap (GTA-131): where the game's minimap sits. The game reads it when it starts.
+    enum MinimapPlace: Int, CaseIterable {
+        case bottomLeft, topLeft, custom
+        var title: String { [AppLanguage.choose("Bottom left"), AppLanguage.choose("Top left"), AppLanguage.choose("Custom")][rawValue] }
+    }
+    var minimapPlace: MinimapPlace {
+        get { MinimapPlace(rawValue: defaults.integer(forKey: "minimapPlace")) ?? .bottomLeft }
+        set { defaults.set(newValue.rawValue, forKey: "minimapPlace") }
+    }
+    /// The custom place, in the game's HUD units: offset from the usual bottom-left corner (x to the right,
+    /// y negative = up) and a size factor.
+    var minimapCustom: (dx: Double, dy: Double, scale: Double) {
+        get {
+            let v = defaults.array(forKey: "minimapCustom") as? [Double] ?? []
+            return v.count == 3 ? (v[0], v[1], v[2]) : (0, 0, 1)
+        }
+        set { defaults.set([newValue.dx, newValue.dy, newValue.scale], forKey: "minimapCustom") }
+    }
+    /// What the game gets for the chosen place. Top left: up until the map's top edge is just below the screen's.
+    var minimapLayout: (dx: Double, dy: Double, scale: Double) {
+        switch minimapPlace {
+        case .bottomLeft: return (0, 0, 1)
+        case .topLeft: return (0, -0.79, 1)
+        case .custom: return minimapCustom
+        }
+    }
+    /// The map sits in the top half: the FPS counter moves to the bottom left instead.
+    var minimapAtTop: Bool { minimapLayout.dy < -0.4 && minimapLayout.dx < 0.25 }
     var keyboardMouse: Bool {
         get { defaults.object(forKey: "keyboardMouse") as? Bool ?? true }
         set { defaults.set(newValue, forKey: "keyboardMouse") }

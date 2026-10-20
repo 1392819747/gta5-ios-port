@@ -4,6 +4,12 @@ Wraps the script commands IS_CONTROL_PRESSED, GET_CONTROL_VALUE, GET_CONTROL_NOR
 DISABLED_ forms, the UNBOUND_NORMAL stick reads and the JUST_PRESSED/JUST_RELEASED checks: the original becomes static and a wrapper with the engine's name reports each
 answer, so a test can see which inputs a minigame polls and what the touch controls give it
 (the yoga poses, GTA-37). Off by default: the host returns at once.
+
+Seven of the script commands scripts actually call (IS_CONTROL_PRESSED, IS_CONTROL_JUST_PRESSED and others) read
+the input themselves instead of calling the commands above, so those reads were never seen: the race result
+screen's wait for IS_CONTROL_JUST_PRESSED 215/216 didn't show in "Prompt: scripts read inputs" (GTA-98, GTA-129).
+They are wrapped as well and report through pg_control_script_read, with the control, input and answer read from
+the call's arguments. That feeds the test trace and the prompt diagnostics only, not the touch layouts' poll check.
 """
 from pathlib import Path
 from engine_names import fn
@@ -40,3 +46,34 @@ for name, kind, tag in COMMANDS:
         s = s[:first.end()] + '\n' + DECLARATION + s[first.end():]
     path.write_text(s)
     print(f'control trace: patched f{function} in {path.name}')
+
+SCRIPT_COMMANDS = [('IS_CONTROL_PRESSED', 'i', 0), ('IS_CONTROL_JUST_PRESSED', 'i', 0), ('IS_CONTROL_JUST_RELEASED', 'i', 0),
+                   ('IS_CONTROL_RELEASED', 'i', 0), ('GET_CONTROL_VALUE', 'i', 1), ('GET_CONTROL_UNBOUND_NORMAL', 'f', 2),
+                   ('GET_DISABLED_CONTROL_UNBOUND_NORMAL', 'f', 4)]
+SCRIPT_DECLARATION = 'extern void pg_control_script_read(u32 kind, u32 control, u32 action, f32 value);'
+MEMORY = 'wasm_rt_local_memory_base, wasm_rt_local_memory_size, instance->w2c_env_memory, '
+
+for command, answer, tag in SCRIPT_COMMANDS:
+    function = fn(f'pad_commands::SetupScriptCommands()::scrWrapped_{command}::Call(rage::scrThread::Info&)')
+    head = f'void w2c_game_f{function}(w2c_game* instance, u64 var_p0) {{'
+    path = next(p for p in sorted((root / 'Generated').glob('game_*.c')) if head in p.read_text())
+    s = path.read_text()
+    if f'pg_control_script_original_f{function}(' in s: print(f'control trace: f{function} ({command}) already patched'); continue
+    if s.count(head) != 1: raise RuntimeError(f'Pinned f{function} ({command}) changed')
+    start, end = body_range(s, head)
+    original = s[start:end].replace(head, f'static void pg_control_script_original_f{function}(w2c_game* instance, u64 var_p0) {{', 1)
+    load = 'f32_load_shared' if answer == 'f' else '(f32)(s32)i32_load_shared'
+    # rage::scrThread::Info: +0 where the answer goes, +16 the arguments (8 bytes each): control, input.
+    wrapper = (f'{head}\n  uint8_t* const wasm_rt_local_memory_base = NULL;\n  uint64_t wasm_rt_local_memory_size = 0;\n'
+               f'  (void)wasm_rt_local_memory_base;\n  (void)wasm_rt_local_memory_size;\n'
+               f'  pg_control_script_original_f{function}(instance, var_p0);\n'
+               f'  u64 args = i64_load_shared({MEMORY}(u64)checked_add_u64(var_p0, 16u));\n'
+               f'  u64 answer = i64_load_shared({MEMORY}(u64)(var_p0));\n'
+               f'  pg_control_script_read({tag}, i32_load_shared({MEMORY}(u64)(args)), i32_load_shared({MEMORY}(u64)checked_add_u64(args, 8u)),\n'
+               f'                         {load}({MEMORY}(u64)(answer)));\n}}\n')
+    s = s[:start] + original + wrapper + s[end:]
+    if SCRIPT_DECLARATION not in s:
+        first = re.search(r'^#include "game-[a-z-]*impl\.h"$', s, re.M)
+        s = s[:first.end()] + '\n' + SCRIPT_DECLARATION + s[first.end():]
+    path.write_text(s)
+    print(f'control trace: patched f{function} ({command}) in {path.name}')

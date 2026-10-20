@@ -52,6 +52,14 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
     private var queue: MTLCommandQueue?
     private let output = UITextView()
     private let fpsLabel = UILabel()
+    // Top left, or bottom left while the minimap sits at the top (GTA-131).
+    private lazy var fpsAtTop = fpsLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8)
+    private lazy var fpsAtBottom = fpsLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -8)
+    private func placeFPSLabel() {
+        let bottom = GameSettings.shared.minimapAtTop
+        fpsAtTop.isActive = !bottom
+        fpsAtBottom.isActive = bottom
+    }
     private let inputTestLabel = UILabel()
     private var wasMouseSwipeActive = false
     private var lastDeviceDiagnostic = ""
@@ -96,6 +104,7 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
     private var presentationSecond = -1
     /// The boot stopped and the audio was shut down on purpose (not restarted when the app is active again).
     private var audioShutDown = false
+    private var audioRetry: DispatchWorkItem?
     private var displayLink: CADisplayLink?
     private var lastControllerPoll: CFTimeInterval?
     private var lines: [String] = []
@@ -157,6 +166,11 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
     private var proofInputActive = false
     #if targetEnvironment(simulator)
     private var simulatorKeys = Set<UIKeyboardHIDUsage>()
+    /// The debug channel (DebugChannel.swift): its controller input, held until a time; the last pad sample sent.
+    private var debugPad = PGPadState(), debugPadUntil: CFTimeInterval = 0
+    private(set) var debugLastPad = PGPadState()
+    var debugTouchControls: TouchControlsView { touchControls }
+    func debugHold(_ pad: PGPadState, for seconds: Double) { debugPad = pad; debugPadUntil = CACurrentMediaTime() + seconds }
     override var canBecomeFirstResponder: Bool { true }
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
@@ -316,7 +330,7 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         ])
         NSLayoutConstraint.activate([
             fpsLabel.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 12),
-            fpsLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            fpsAtTop,
             fpsLabel.widthAnchor.constraint(equalToConstant: 68),
             fpsLabel.heightAnchor.constraint(equalToConstant: 24),
             inputTestLabel.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 12),
@@ -364,6 +378,9 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
             displayLink?.preferredFrameRateRange = CAFrameRateRange(minimum: min(60, top), maximum: top, preferred: top)
         }
         displayLink?.add(to: .main, forMode: .common)
+        #if targetEnvironment(simulator)
+        DebugChannel.shared.start(self)
+        #endif
         observeExternalDisplays()
         NotificationCenter.default.addObserver(self, selector: #selector(controllerChanged), name: .GCControllerDidDisconnect, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(controllerChanged), name: .GCControllerDidConnect, object: nil)
@@ -588,6 +605,10 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         bootedMode = mode
         let testMap = mode == .sandbox && GameSettings.shared.sandboxMap == 1
         PGSetStartMode(testMap ? 3 : Int32(mode.rawValue))
+        let minimap = GameSettings.shared.minimapLayout
+        PGSetMinimapLayout(minimap.dx, minimap.dy, minimap.scale)
+        TouchControlsView.minimapLayout = minimap
+        placeFPSLabel()
         appendLog("Game mode: \(mode.title)\(mode == .sandbox ? " on " + GameSettings.sandboxMapTitles[GameSettings.shared.sandboxMap] : "")")
         bootedPreset = GameSettings.shared.graphicsPreset
         // A TV already connected gets the picture from the start, in its own shape.
@@ -789,7 +810,8 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
     private func startAudio() {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default)
+            // Players' own music (Spotify, Apple Music) keeps playing alongside the game instead of stopping it (GTA-132).
+            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
             try session.setPreferredSampleRate(48000)
             try session.setActive(true)
             let format = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 2)!
@@ -827,14 +849,24 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         }
         center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in self?.resumeAudio(reason: "app active") }
         center.addObserver(forName: .AVAudioEngineConfigurationChange, object: audioEngine, queue: .main) { [weak self] _ in self?.resumeAudio(reason: "audio configuration changed") }
+        center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { [weak self] _ in self?.resumeAudio(reason: "media services reset") }
     }
-    private func resumeAudio(reason: String) {
+    /// Activation fails while a call or Siri still holds the audio ("Session activation failed", logs 666 and
+    /// 752), so a failed restart is tried again a few times, 0.5 to 8 s apart, while the app is in front (GTA-132).
+    private func resumeAudio(reason: String, attempt: Int = 0) {
         guard audioSource != nil, !audioEngine.isRunning, !audioShutDown else { return }
         do {
             try AVAudioSession.sharedInstance().setActive(true)
             try audioEngine.start()
-            appendLog("Audio restarted (\(reason)).")
-        } catch { appendLog("Audio could not restart (\(reason)): \(error.localizedDescription)") }
+            appendLog("Audio restarted (\(reason)\(attempt > 0 ? ", try \(attempt + 1)" : "")).")
+        } catch {
+            appendLog("Audio could not restart (\(reason)): \(error.localizedDescription)")
+            guard attempt < 5, UIApplication.shared.applicationState == .active else { return }
+            audioRetry?.cancel()
+            let retry = DispatchWorkItem { [weak self] in self?.resumeAudio(reason: reason, attempt: attempt + 1) }
+            audioRetry = retry
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5 * Double(1 << attempt), execute: retry)
+        }
     }
 
     @objc private func controllerChanged() { pollController() }
@@ -1117,6 +1149,7 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
     }
 
     private var healthLines = 0
+    private var lastStoryMission = "", lastReplayState: Int32 = -1
     private func logHealth() {
         var vm = task_vm_info_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
@@ -1130,10 +1163,19 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         let available = Int(os_proc_available_memory() / 1_048_576)
         let free = available > 0 ? available : max(0, GameSettings.shared.tier.memoryLimitMB - used)
         healthLines += 1
+        // An interruption that never ends (another app's audio, logs 700 and 613) leaves the game silent while it plays on (GTA-132).
+        // Not while another app still plays: the player's own music would be cut off every 10 s.
+        if !audioEngine.isRunning, UIApplication.shared.applicationState == .active, !AVAudioSession.sharedInstance().isOtherAudioPlaying {
+            resumeAudio(reason: "silent while playing")
+        }
         if healthLines % 6 == 1 { PGLogMemoryPools() }   // where the memory is, once a minute
         var reads = [UInt64](repeating: 0, count: 6)
         reads.withUnsafeMutableBufferPointer { PGAssetHealth($0.baseAddress) }
         let now = [PGMemoryBudgetClamps()] + reads + [PGMemoryBudgetEvictions()]
+        // What players see of streaming (GTA-116): requests still waiting, how long loads took, what was unloaded.
+        var stream = [UInt64](repeating: 0, count: 6)
+        stream.withUnsafeMutableBufferPointer { PGStreamingHealth($0.baseAddress) }
+        let gpuMS = PGGPUFrameMilliseconds()
         let d = zip(now, lastHealth).map { $0 &- $1 }
         lastHealth = now
         let avgMS = d[1] > 0 ? Double(d[6]) / Double(d[1]) / 1000 : 0
@@ -1145,8 +1187,16 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         let wall = CACurrentMediaTime()
         let cores = lastCPU.map { (cpu - $0.cpu) / max(0.001, wall - $0.wall) } ?? 0
         lastCPU = (cpu, wall)
-        appendLog(String(format: "Health: memory %d MB used, %d MB free · guard stopped streaming growth %llu×, asked to evict %llu× · reads %llu (%.1f MB, avg %.1f ms, slow %llu, errors %llu) · %.0f FPS · thermal %@ · CPU %.2f cores",
-                         used, free, d[0], d[7], d[1], Double(d[2]) / 1_048_576, avgMS, d[5], d[3], PGRenderedFramesPerSecond(), thermal, cores))
+        // Which mission and where (GTA-106), so a report can be replayed at the same moment in the simulator.
+        var name = [CChar](repeating: 0, count: 64), position: (Float, Float, Float) = (0, 0, 0), replay: Int32 = -1
+        let story = withUnsafeMutablePointer(to: &position) { $0.withMemoryRebound(to: Float.self, capacity: 3) { PGStoryContext(&name, name.count, $0, &replay) } }
+        if story {
+            let mission = String(cString: name)
+            if mission != lastStoryMission { lastStoryMission = mission; appendLog("Story: \(mission.isEmpty ? "no mission running" : "mission \(mission) running")") }
+            if replay != lastReplayState { if replay == 1 { appendLog("Story: Mission failed screen") }; lastReplayState = replay }
+        }
+        appendLog(String(format: "Health: memory %d MB used, %d MB free · guard stopped streaming growth %llu×, asked to evict %llu× · reads %llu (%.1f MB, avg %.1f ms, slow %llu, errors %llu) · %.0f FPS · thermal %@ · CPU %.2f cores · GPU %.1f ms · streaming %llu waiting (%llu over 10 s), loaded %llu (median %llu ms, 95%% %llu ms), unloaded %llu · at %.0f, %.0f, %.0f",
+                         used, free, d[0], d[7], d[1], Double(d[2]) / 1_048_576, avgMS, d[5], d[3], PGRenderedFramesPerSecond(), thermal, cores, gpuMS, stream[0], stream[1], stream[2], stream[3], stream[4], stream[5], position.0, position.1, position.2))
     }
 
     @objc private func leftApp() { if stableTimer?.isValid != false { GameSettings.shared.markBootInterrupted() } }
@@ -1460,7 +1510,7 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         }
         if gameStatus != lastGameStatus {
             lastGameStatus = gameStatus
-            appendLog("Game state: control \(gameStatus & 1 != 0 ? "off" : "on")\(gameStatus & 2 != 0 ? ", phone out" : "")\(gameStatus & 4 != 0 ? ", cutscene" : "")\(gameStatus & 8 != 0 ? ", warning screen" : "")\(gameStatus & 16 != 0 ? ", no player" : "")")
+            appendLog("Game state: control \(gameStatus & 1 != 0 ? "off" : "on")\(gameStatus & 2 != 0 ? ", phone out" : "")\(gameStatus & 4 != 0 ? ", cutscene" : "")\(gameStatus & 8 != 0 ? ", warning screen" : "")\(gameStatus & 16 != 0 ? ", no player" : "")\(gameStatus & 32 != 0 ? ", paused" : "")")
             if ProcessInfo.processInfo.arguments.contains("--capture-state") { PGCaptureNativeFrame("state-\(gameStatus)-\(Int(now))") }
         }
         if let padProof { PGUpdateVirtualPad(padProof); return }
@@ -1592,6 +1642,7 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
         }
         keys.padButtons = keyButtons
         state.merge(keys)
+        if now < debugPadUntil { state.merge(debugPad) }
         #endif
         if !touchActive && wasMouseSwipeActive {
             PGSetMouseFocus(true, false)
@@ -1659,6 +1710,9 @@ final class NativePortViewController: UIViewController, MTKViewDelegate {
             controllerRadioWheel = false
             PGSetRadioWheelDirection(0, 0, false)
         }
+        #if targetEnvironment(simulator)
+        debugLastPad = state
+        #endif
         PGUpdateVirtualPad(state)
     }
     private var testMouseLogged = false, testMouseStopped = false, testPauseDone = false

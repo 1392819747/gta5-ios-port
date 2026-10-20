@@ -1,5 +1,47 @@
 # Changelog
 
+## v1.4.3
+
+### Missions
+- **Trackify works**: the game files ship the phone's Trackify app as an empty stub, so it never ran, and asking for it jammed the game's script loading for the rest of the session (respawn freezes, phone apps and missions that never loaded). The port now does the app's job on the phone's own Trackify screen: the sonar with the mission's target, direction from where you face, distance and depth, and the ping that speeds up as you get closer.
+- **The Merryweather Heist (Offshore)**: the heist opens Trackify itself and waited for it to load for good; it now goes on. The submersible holds out to 200 m (the game kept a script's crush depth for one frame only, so the heist's own limit didn't hold and the sub imploded beside the device at 180 m).
+- **Street race result screens**: "1st Place … Retry / Continue" ignored every button and Pause. Making the pause input exclusive disabled about 70 inputs that share an unbound keyboard key, Continue and Retry among them; unbound keys no longer count.
+- **By the Book's tooth**: the tool cart keeps its arrows, and at "Rotate to pull it out" the RT button stays held while the right side becomes a stick. The game counts only a fast rotation (about 3 to 4 turns a second).
+- **Scouting the Port**: the Handler's arm lowers again, also after a mission retry (two of its flags could keep garbage from reused memory, so it only went up).
+- **Mission failed after dying** shows Retry / Exit instead of the play buttons.
+- **"Loading Story Mode" hang**: leaving a replayed mission or loading a save waited forever on a debug log flush; it no longer does.
+- **Chop**: the switch button shows whenever the game waits for a character switch, to get back to Franklin.
+
+### Controls
+- **Detach trailer** button while a vehicle pulls a trailer.
+- **Cargobob hook** button in any Cargobob.
+- **"Press → to pick up a container"** (the docks crane) gets the Interact button, and **"Detonate the explosives"** (bombs a mission planted) gets Detonate.
+- **Minimap**: Settings › Touch controls › Minimap: bottom left, top left or a custom spot (drag and pinch). Tap the minimap for the full-screen map; pinch to zoom it.
+- **Sprint button setting**: with it on, pushing the stick to its edge no longer sprints.
+
+### Sound
+- Sound restarts after interruptions that failed to restart or never ended, and the game plays alongside your own music app.
+- **Fuller engine sounds with your own PC files**: the Mods guide explains how to use your own PC copy's audio archives from the Mods folder ([docs/MODS.md](docs/MODS.md#your-own-pc-audio-files)).
+
+### Languages
+- **Translate the app** on the builder website's Translate page ([docs/TRANSLATING.md](docs/TRANSLATING.md)); the app's language picker lists the new languages. First community translations: Vietnamese by @lekhoi2811 and Arabic by @uk9_v (the rest falls back to English until more lines are translated).
+
+### Stability and performance
+- **Crash after a resolution change or connecting a TV**: the main thread rebuilt graphics objects while the render thread could still be drawing with them ("Invalid call_indirect"); it now waits for the render thread first.
+- **Add-on cars and bigger mod packs**: more room for vehicle handling entries (3000), scripts, scenarios and physics objects, which stopped the game when full.
+- **Experimental, on by default** (Settings › This device can switch each off):
+  - Smarter texture loading: the memory guard counts the free space in the texture pool. It used to hold back loading while most of the pool was empty, and the ground went grey after about 10 minutes.
+  - Lighter big textures: on iPhones before the 15 Pro, the sharpest level of only the biggest textures is skipped.
+  - Faster engine threads: engine threads run at a higher priority, and GPU queries go out at once (for the FPS drop after a few minutes).
+
+### Logs
+- Send log can include your latest save, so a problem can be reproduced exactly.
+- Logs say which mission is running, what a stuck prompt waits for, and streaming health.
+- The version number is right again (v1.4.2 said 1.4.1).
+- Other bug fixes and improvements.
+
+Thanks to @abtastic-hub for the reports behind the trailer, Handler, Chop and engine sound changes ([#20](https://github.com/kevinerikjs/gta5-ios-port/issues/20)), to @lekhoi2811 and @uk9_v for the first translations, and to everyone in the Telegram group who sent logs and saves.
+
 ## v1.4.2
 - **Cheats menu** (Settings › Cheats, [docs/CHEATS.md](docs/CHEATS.md)), contributed by [@gfejer](https://github.com/gfejer) ([#22](https://github.com/kevinerikjs/gta5-ios-port/pull/22)): a searchable vehicle spawner with the game's own vehicle names (it keeps your last two spawned vehicles, so they don't pile up), God mode and Never wanted switches that last until you turn them off, repair and clean, time of day and weather, next to Set money and the game's own story cheats. Everything runs on the game's main script thread.
 - **Game files download continues**: a dropped connection is retried for 30 minutes (iOS pauses the app while the phone is locked); after the app was closed, Game files offers "Continue the download", which resumes from the saved byte. Normal (non-solid, single-volume) RAR5 archives continue in the middle too, not only zip.

@@ -69,9 +69,11 @@ static void pg_note_region(const char *message) {
   if (i < 64) { engineRegions[i].base = base; engineRegions[i].bytes = mb << 20; } else atomic_store(&engineRegionCount, 64);
 }
 static void pg_note_engine_memory(const char *line);
+static void pg_note_pool_failure(void);
 void pg_log(const char *message) {
   if (!strncmp(message, "[wasm] region 0x", 16)) pg_note_region(message);
   if (!strncmp(message, "[wasm] mem: malloc arena ", 25)) pg_note_engine_memory(message);	// the address-space guard (GTA-70)
+  if (strstr(message, "Failed to allocation virtual memory")) pg_note_pool_failure();	// the pool's free space is in pieces (GTA-128)
   size_t length = strlen(message);
   while (length && (message[length-1] == '\n' || message[length-1] == ' ')) length--;
   if (!length || (length == 6 && !memcmp(message, "Error:", 6)) || (length == 8 && !memcmp(message, "Warning:", 8)) ||
@@ -139,6 +141,8 @@ const char *pg_string(struct w2c_env *host, uint64_t address) {
 }
 
 wasm_rt_shared_memory_t *w2c_env_memory(struct w2c_env *host) { return &env.memory; }
+// The engine's memory for host code that reads its tables (NativeStreamingHealth.c).
+const uint8_t *pg_engine_memory(uint64_t *size) { *size = env.memory.size; return env.memory.data; }
 static double timeMS(clockid_t clock) {
   struct timespec time;
   clock_gettime(clock, &time);
@@ -229,20 +233,36 @@ static uint64_t memoryCapMB, capReserveBytes;
 // v1.4 logs, 2026-10-17). The engine reports its malloc use about every 10 s ("[wasm] mem: malloc arena
 // A MB (in use U MB)"); headroom is the reservation minus that use, plus anything the heap grew since.
 static _Atomic uint64_t engineInUseBytes, engineSizeAtSample;
-static _Atomic bool engineLimited;		// the address space, not iOS memory, is what holds streaming back
+static _Atomic bool engineLimited;		// the address space holds streaming back while the phone has memory to spare
+// The resource pool, where streamed textures and models live, grows in 256 MB regions up to 2 GB and keeps
+// them: once it has peaked, malloc counts a mostly empty pool as used ("resource virtual 586/2048 MB" with
+// 3655 of 4095 MB in use, log 982), the guard sees ~400 MB of room and holds streaming, and the ground
+// turns grey after a while (GTA-128). PG_GUARD_POOL_ROOM=1 counts the pool's free space as room too, less
+// one region for its pieces, and not for a minute after the engine reports it couldn't place a block
+// ("Failed to allocation virtual memory ... Largest Free Block 0", log 991). On by default since v1.4.3.
+static _Atomic uint64_t poolFreeBytes;
+static _Atomic double poolFailedAt=-1e9;
+static void pg_note_pool_failure(void){atomic_store(&poolFailedAt,timeMS(CLOCK_MONOTONIC));}
 static void pg_note_engine_memory(const char *line){
  const char *at=line;
- double arena=0,inUse=0;
- if(sscanf(at,"[wasm] mem: malloc arena %lf MB (in use %lf MB)",&arena,&inUse)!=2||inUse<=0)return;
+ double arena=0,inUse=0,gameUsed=0,gameSize=0,poolUsed=0,poolSize=0;
+ int fields=sscanf(at,"[wasm] mem: malloc arena %lf MB (in use %lf MB), game virtual %lf/%lf MB, resource virtual %lf/%lf MB",&arena,&inUse,&gameUsed,&gameSize,&poolUsed,&poolSize);
+ if(fields<2||inUse<=0)return;
  atomic_store(&engineSizeAtSample,env.memory.size);
  atomic_store(&engineInUseBytes,(uint64_t)(inUse*1048576.0));
+ atomic_store(&poolFreeBytes,fields==6&&poolSize>poolUsed?(uint64_t)((poolSize-poolUsed)*1048576.0):0);
 }
 static uint64_t engineAddressHeadroom(void){
  // Until the engine's first report there's no limit: the heap starts at 3328 MB, mostly unused.
  uint64_t inUse=atomic_load(&engineInUseBytes);if(!inUse)return UINT64_MAX;
  uint64_t capacity=env.memory.max_pages*env.memory.page_size,size=env.memory.size;
  uint64_t sampled=atomic_load(&engineSizeAtSample),used=inUse+(size>sampled?size-sampled:0);if(used>size)used=size;
- return capacity>used?capacity-used:0;
+ uint64_t room=capacity>used?capacity-used:0;
+ // On by default since v1.4.3 (Kevin, 2026-10-20); PG_GUARD_POOL_ROOM=0 turns it off.
+ static int poolRoom=-1;if(poolRoom<0){const char *v=getenv("PG_GUARD_POOL_ROOM");poolRoom=!(v&&atoi(v)==0);}
+ const uint64_t region=256ull<<20,pool=atomic_load(&poolFreeBytes);
+ if(poolRoom&&pool>region&&timeMS(CLOCK_MONOTONIC)-atomic_load(&poolFailedAt)>60000)room+=pool-region;
+ return room;
 }
 static bool nativeProcessHeadroom(uint64_t *headroom){
  if(!nativeMemoryGuard)return false;
@@ -261,7 +281,13 @@ static bool nativeProcessHeadroom(uint64_t *headroom){
  available=available>capReserveBytes?available-capReserveBytes:0;
 #endif
  uint64_t engine=engineAddressHeadroom();
- atomic_store(&engineLimited,engine<available);
+ // The fast nudges (guardNudge) are for phones with memory to spare beyond the engine's room (8 GB:
+ // about 2 GB more). On 5-6 GB phones the two sit within ~100 MB of each other (v1.4.1 logs: median
+ // 78 MB), so the engine mode fired there too and threw textures out ~12x faster than v1.4 (GTA-117).
+ // PG_GUARD_SPARE_MB is that margin (512 in the A/B); 0, the default until a device A/B, keeps v1.4.1's rule.
+ static uint64_t spare=UINT64_MAX;
+ if(spare==UINT64_MAX){const char *v=getenv("PG_GUARD_SPARE_MB");long mb=v?atol(v):0;spare=(uint64_t)(mb>0&&mb<=4096?mb:0)<<20;}
+ atomic_store(&engineLimited,engine<available&&available-engine>spare);
  if(engine<available){
   available=engine;
   static _Atomic double loggedAt;double now=timeMS(CLOCK_MONOTONIC);
@@ -571,7 +597,9 @@ void w2c_env_wasm_audio_publish_js(struct w2c_env *host, u64 ring, u32 capacity)
 // control-disabled flags at *(ped+4328)+936), 2 phone on screen (a CPhoneMgr flag at 19505653 that
 // CPhoneMgr::Render/Delete and the phone-model render phase use; set while the phone is up),
 // 4 cutscene playing (IS_CUTSCENE_PLAYING, *(19339168)+3215), 8 warning screen
-// (IS_WARNING_MESSAGE_ACTIVE: 19577926 or 19577929 bit 0), 16 no local player yet.
+// (IS_WARNING_MESSAGE_ACTIVE: 19577926 or 19577929 bit 0), 16 no local player yet, 32 game paused (fwTimer's
+// paused flag, 12321468, set by fwTimer::Update f8924: the pause menu, and screens like Mission failed that pause
+// the game without taking player control away).
 uint32_t PGGameStatus(void){
  if(!atomic_load(&inputBlock))return 16;
  const uint8_t *m=(const uint8_t *)(void *)env.memory.data;uint64_t size=env.memory.size;
@@ -582,6 +610,7 @@ uint32_t PGGameStatus(void){
  }else bits|=16;
  #define PG_BYTE(address) atomic_load_explicit((const _Atomic uint8_t *)(m+(address)),memory_order_relaxed)
  if(size>19577930){
+  if(PG_BYTE(12321468))bits|=32;
   if(PG_BYTE(19505653))bits|=2;
   if(PG_BYTE(19577926)||(PG_BYTE(19577929)&1))bits|=8;
  }
@@ -627,6 +656,8 @@ static bool pg_can_detonate(const uint8_t *m,uint64_t size,uint64_t ped){
  }
  return false;
 }
+// Set on the game thread by pg_trailer_tick (below), read with the other hints.
+static _Atomic bool pg_trailer_attached;
 PGControlHints PGReadControlHints(uint32_t touchContext){
  PGControlHints hints={0};
  if(!atomic_load(&inputBlock))return hints;
@@ -672,6 +703,7 @@ PGControlHints PGReadControlHints(uint32_t touchContext){
   }
  }
  hints.canDetonate=pg_can_detonate(m,size,ped);
+ hints.trailerAttached=atomic_load(&pg_trailer_attached);
  uint64_t pedInfo;
  if(pg_context_u64(m,size,ped+32,&pedInfo)&&pedInfo)pg_context_u32(m,size,pedInfo+24,&hints.pedModel);
  // Help messages (CMessages, 3 slots of 600 bytes; "is help showing" is the first byte).
@@ -679,14 +711,25 @@ PGControlHints PGReadControlHints(uint32_t touchContext){
  if(pg_context_u8(m,size,25477136,&first)&&first&&size>25477136+1800){
   hints.helpShown=true;
   const char *text=(const char *)(m+25477136);
-  static const char *const tokens[]={"INPUT_CONTEXT","INPUT_TALK"};
-  for(int t=0;t<2&&!hints.helpContext;t++)if(memmem(text,1800,tokens[t],strlen(tokens[t])))hints.helpContext=true;
+  // D-pad right: also the script's own pad input, as in "Press ~INPUT_SCRIPT_PAD_RIGHT~ to pick up a container" (the
+  // docks crane; 3 player logs had no button for it, report 953).
+  static const char *const tokens[]={"INPUT_CONTEXT","INPUT_TALK","~INPUT_SCRIPT_PAD_RIGHT~"};
+  for(int t=0;t<3&&!hints.helpContext;t++)if(memmem(text,1800,tokens[t],strlen(tokens[t])))hints.helpContext=true;
+  // "Detonate the explosives using ~INPUT_DETONATE~": missions that plant the explosives themselves, so the player
+  // has no sticky bombs of their own and canDetonate stays off (log 563, report 946).
+  if(memmem(text,1800,"~INPUT_DETONATE~",16))hints.helpDetonate=true;
   // The script inputs the help names (GTA-94): "Hold ~INPUT_SCRIPT_RT~ to grip a tooth" asks for RT however the
   // script then reads it, which the poll check doesn't always see; the right stick by its group or either axis.
+  // By the Book's next step, "Rotate ~PAD_RSTICK_ROTATE~ to pull it out.", names only the rotation, but RT has to stay
+  // held while rotating (let go and it's back to "Hold RT"): it asks for both, so the RT button stays and keeps its
+  // latch. The script D-pad (232-235) by its group or a direction: the torture tool cart says "Use
+  // ~INPUTGROUP_SCRIPT_LSTICK_ALL~/~INPUTGROUP_SCRIPT_DPAD_ALL~ and ~INPUT_SCRIPT_RDOWN~" and reads the stick too, and
+  // the touch arrows stay for it (harness, fbi3).
   static const struct{const char *token;int input;}named[]={{"~INPUT_SCRIPT_RIGHT_AXIS_X~",220},{"~INPUT_SCRIPT_RIGHT_AXIS_Y~",221},
     {"~INPUTGROUP_SCRIPT_RSTICK_ALL~",220},{"~INPUT_SCRIPT_RUP~",222},{"~INPUT_SCRIPT_RDOWN~",223},{"~INPUT_SCRIPT_RLEFT~",224},
     {"~INPUT_SCRIPT_RRIGHT~",225},{"~INPUT_SCRIPT_LB~",226},{"~INPUT_SCRIPT_RB~",227},{"~INPUT_SCRIPT_LT~",228},{"~INPUT_SCRIPT_RT~",229},
-    {"~INPUT_SCRIPT_LS~",230},{"~INPUT_SCRIPT_RS~",231}};
+    {"~INPUT_SCRIPT_LS~",230},{"~INPUT_SCRIPT_RS~",231},{"~PAD_RSTICK_ROTATE~",220},{"~PAD_RSTICK_ROTATE~",229},
+    {"~INPUTGROUP_SCRIPT_DPAD_ALL~",232},{"~INPUT_SCRIPT_PAD_UP~",232},{"~INPUT_SCRIPT_PAD_DOWN~",233},{"~INPUT_SCRIPT_PAD_LEFT~",234}};
   const size_t length=strnlen(text,1800);
   for(size_t t=0;t<sizeof named/sizeof named[0];t++)if(memmem(text,length,named[t].token,strlen(named[t].token)))hints.helpInputs|=1u<<(named[t].input-218);
   // Logged once per new message, so the prompts' button tokens can be checked in logs.
@@ -719,6 +762,44 @@ PGControlHints PGReadControlHints(uint32_t touchContext){
   }
  }
  return hints;
+}
+// Script globals of the pinned build: Global_N is slot N & 0x3ffff of block N >> 18 (block pointers from 15408128).
+static uint64_t pg_script_global(uint64_t index) {
+  const uint8_t *m = (const uint8_t *)(void *)env.memory.data; const uint64_t size = env.memory.size;
+  uint64_t block;
+  if (!pg_context_u64(m, size, 15408128 + 8 * (index >> 18), &block) || !block) return 0;
+  const uint64_t address = block + 8 * (index & 0x3ffff);
+  return address + 8 <= size ? address : 0;
+}
+// Story context for player logs (GTA-106): the mission running (its script, matched against the game's mission
+// table: Global_99461, 34 words a mission, the script name first; the label at word 8), the player's position,
+// and the replay controller's state (Global_109375: 1 is the Mission failed screen). Harness/gta.py uses the same
+// numbers to start a mission in the simulator at the moment a log describes.
+bool PGStoryContext(char *mission, size_t size, float position[3], int32_t *replayState) {
+  mission[0] = 0; position[0] = position[1] = position[2] = 0; *replayState = -1;
+  if (!atomic_load(&inputBlock)) return false;
+  const uint8_t *m = (const uint8_t *)(void *)env.memory.data; const uint64_t msize = env.memory.size;
+  uint64_t info, ped, threads; uint16_t count = 0;
+  if (pg_context_u64(m, msize, 20159720, &info) && info && pg_context_u64(m, msize, info + 8, &ped) && ped && ped + 156 < msize)
+    memcpy(position, m + ped + 144, 12);
+  const uint64_t state = pg_script_global(109375);
+  if (state) { uint32_t value; memcpy(&value, m + state, 4); *replayState = (int32_t)value; }
+  if (!pg_context_u64(m, msize, 15409704, &threads) || !threads || !pg_context_u16(m, msize, 15409712, &count)) return true;
+  for (int number = 0; number < 110; number++) {
+    const uint64_t entry = pg_script_global(99461 + 34 * number), label = pg_script_global(99461 + 34 * number + 8);
+    if (!entry || !label || entry + 32 > msize) break;
+    char name[25]; memcpy(name, m + entry, 24); name[24] = 0;
+    if (!name[0] || strlen(name) < 3) break;
+    for (uint16_t i = 0; i < count && i < 512; i++) {
+      uint64_t thread;
+      if (!pg_context_u64(m, msize, threads + 8ull * i, &thread) || !thread || thread + 460 > msize) continue;
+      if (strncasecmp((const char *)(m + thread + 428), name, 24)) continue;
+      char tag[9]; memcpy(tag, m + label, 8); tag[8] = 0;
+      snprintf(mission, size, "%s (%s)", name, tag);
+      return true;
+    }
+  }
+  return true;
 }
 // The radio wheel reads INPUT_RADIO_WHEEL_UD/LR (332/333) from the main frontend control
 // (CRadioWheel::GetInputAxis f35894 -> CControlMgr::GetMainFrontendControl f65461: 24660320, or
@@ -906,6 +987,44 @@ u32 PG_FN_WEAPON_ENTITY(w2c_game*, u32, u32); // weapon_commands::CommandGetCurr
 u32 PG_FN_SELECTED_WEAPON(w2c_game*, u32); // weapon_commands::CommandGetSelectedPedWeapon
 u32 PG_FN_PLAYER_PED_ID(w2c_game*); // player_commands::CommandPlayerPedId
 void PG_FN_SET_ENTITY_COORDS_NO_OFFSET(w2c_game*, u32, u64, u32, u32, u32); // entity_commands::CommandSetEntityCoordsNoOffset
+// Scripts the game files can't stream (GTA-102): a request for apptrackify (the phone's Trackify app, The Merryweather
+// Heist and Monkey Business in the sub) is never turned into a read, and every later request on its streaming device
+// waits behind it: no script loads again that session, and a respawn's streaming flush waits for it for good (logs
+// 745, 749, 896; harness: Email and Zit never load after it). The request is turned away (REQUEST_SCRIPT and
+// REQUEST_SCRIPT_WITH_NAME_HASH, Scripts/prepare_script_request_guard.py): the app doesn't open, nothing else hangs.
+static _Atomic double pgTrackifyRequestedAt;   // the phone asks again every frame while it waits for the app
+static void pg_script_request_refused(const char *name) {
+  atomic_store(&pgTrackifyRequestedAt, timeMS(CLOCK_MONOTONIC));
+  static _Atomic int logged;
+  if (atomic_exchange(&logged, 1)) return;
+  char line[200]; snprintf(line, sizeof line, "Scripts: %s isn't loaded: these game files can't stream it, and the request would hold up every later script (GTA-102).", name);
+  pg_log(line);
+}
+// Test: PG_ALLOW_BLOCKED_SCRIPTS=1 lets the requests through (to study or verify the streaming fault itself).
+static bool pg_blocked_scripts_allowed(void) {
+  static int allowed = -1;
+  if (allowed < 0) allowed = getenv("PG_ALLOW_BLOCKED_SCRIPTS") != NULL;
+  return allowed;
+}
+u32 pg_script_request_allowed(u64 name) {
+  const char *text = name ? pg_string(&env, name) : NULL;
+  if (!text || strcasecmp(text, "apptrackify") || pg_blocked_scripts_allowed()) return 1;
+  pg_script_request_refused("apptrackify");
+  return 0;
+}
+// The script is "loaded" and starting it starts nothing, so a mission that opens the app itself (The Merryweather
+// Heist: REQUEST_SCRIPT, then wait for HAS_SCRIPT_LOADED, then START_NEW_SCRIPT; it waited there for good) goes on,
+// with the phone in its app state, where the port-made Trackify draws (GTA-134).
+u32 pg_script_name_blocked(u64 name) {
+  const char *text = name ? pg_string(&env, name) : NULL;
+  return text && !strcasecmp(text, "apptrackify") && !pg_blocked_scripts_allowed();
+}
+u32 pg_script_hash_blocked(u32 hash) { return hash == 0x15902b0eu && !pg_blocked_scripts_allowed(); }
+u32 pg_script_hash_request_allowed(u32 hash) {
+  if (hash != 0x15902b0eu || pg_blocked_scripts_allowed()) return 1;   // joaat("apptrackify")
+  pg_script_request_refused("apptrackify");
+  return 0;
+}
 #if TARGET_OS_SIMULATOR
 u32 PG_FN_PRELOAD_MOVIE(w2c_game*, u64, u64); // CMovieMgr::PreloadMovie
 void PG_FN_PLAY_MOVIE(w2c_game*, u32); // CMovieMgr::Play
@@ -1813,13 +1932,13 @@ static void pg_test_missing_text(w2c_game *instance) {
 // Test (PG_TEST_TOOTH=1, GTA-94, GTA-82): mission prompts without the missions, each shown every frame as a script
 // shows help (BEGIN/ADD/END_TEXT_COMMAND_DISPLAY_HELP). From about 40 s in, player control off and "Hold
 // ~INPUT_SCRIPT_RT~ to grip a tooth." (By the Book, the prompt layout); from about 70 s, control on and RT named with
-// the right stick, as the scene polls both while pulling (the play layout); from about 100 s, control off and a stick
+// the mission's rotate prompt, as the scene polls RT and the stick while pulling (the play layout); from about 100 s, control off and a stick
 // with ~INPUT_CONTEXT~, as at a safehouse couch (GTA-82); from about 130 s, control off and Trevor's whiskey prompt
 // (~INPUT_CONTEXT~ and ~INPUT_SCRIPT_RUP~, log 602); from about 160 s, control on and nothing.
 static void pg_test_tooth(w2c_game *instance) {
   static int frames; static uint64_t label, texts[4];
   static const char *const prompts[4] = {"Hold ~INPUT_SCRIPT_RT~ to grip a tooth.",
-    "Keep ~INPUT_SCRIPT_RT~ held and rotate ~INPUTGROUP_SCRIPT_RSTICK_ALL~ to pull it out.",
+    "Rotate ~PAD_RSTICK_ROTATE~ to pull it out.",   // the mission's own text (the harness in fbi3)
     "Use ~INPUT_SCRIPT_RIGHT_AXIS_X~ to change the channel. Press ~INPUT_CONTEXT~ to stand up.",
     "Press ~INPUT_CONTEXT~ to drink more whiskey.~n~Press ~INPUT_SCRIPT_RUP~ to stop drinking.~n~"};
   if (!getenv("PG_TEST_TOOTH") || (PGGameStatus() & 16) || frames > 4800 || ++frames < 1200) return;
@@ -2092,11 +2211,138 @@ static void pg_asi_frame(w2c_game *instance) {
 // Scripts/prepare_asi_script_tick.py); script mods get their turn just before the "main" script, and
 // so does Settings › Cheats (vehicles must not be created from the controller thread, see
 // NativeVehicleSpawn.inc). A paused (suspended) script isn't run, so neither are these.
+// Trailers: unhitching one is holding the headlight input, which nobody guesses on touch, so the touch controls
+// show a Detach trailer button while the player's vehicle pulls a trailer (GTA-76). Checked here on the game thread
+// every 15 frames (IS_VEHICLE_ATTACHED_TO_TRAILER on the vehicle the player is in).
+static uint64_t pg_f32_arg(float value);
+static uint32_t pgSubmarine;
+// Submersibles hold out to 200 m (GTA-134). The Merryweather Heist's device lies about 180 m down; the engine's
+// default crush depths are -150/-170/-185 m, and a script's SET_SUBMARINE_CRUSH_DEPTHS lasts one frame only
+// (CSubmarineHandling::ProcessCrushDepth clears it on the frame's last physics step), so it is set every frame while
+// the player is in a submersible. In the simulator the sub imploded beside the device without it.
+static void pg_submarine_depth_tick(w2c_game *instance) {
+  if (!pgSubmarine || (PGGameStatus() & 16)) return;
+  pg_asi_game = instance;
+  const uint64_t previous = pg_asi_enter_script(instance);
+  const uint64_t depth = pg_f32_arg(-200.0f);
+  pg_test_call(instance, 0xc59872a5134879c7ull, 5, (uint64_t[]){pgSubmarine, 0, depth, depth, depth});   // SET_SUBMARINE_CRUSH_DEPTHS
+  pg_asi_leave_script(instance, previous);
+}
+static void pg_trailer_tick(w2c_game *instance) {
+  static unsigned frames;
+  if (++frames % 15 || (PGGameStatus() & 16)) return;
+  pg_asi_game = instance;
+  const uint64_t previous = pg_asi_enter_script(instance);
+  const uint64_t ped = pg_test_call(instance, 0xd80958fc74e988a6ull, 0, NULL) & 0xffffffff;                    // PLAYER_PED_ID
+  const uint64_t vehicle = pg_test_call(instance, 0x9a9112a0fe9a4713ull, 2, (uint64_t[]){ped, 0}) & 0xffffffff;  // GET_VEHICLE_PED_IS_IN
+  const uint64_t answer = vehicle && vehicle != 0xffffffff ? pg_test_call(instance, 0xe7cf3c4f9f489f0cull, 1, (uint64_t[]){vehicle}) : 0;  // IS_VEHICLE_ATTACHED_TO_TRAILER
+  const bool attached = answer != (uint64_t)-1 && (answer & 1);
+  // The submersible the player is in, if any, for pg_submarine_depth_tick (checked here twice a second).
+  uint32_t sub = 0;
+  if (vehicle && vehicle != 0xffffffff) {
+    const uint32_t model = (uint32_t)pg_test_call(instance, 0x9f47b058362c84b5ull, 1, (uint64_t[]){vehicle});   // GET_ENTITY_MODEL
+    if (model == 0x2dff622fu || model == 0xc07107eeu) sub = (uint32_t)vehicle;   // submersible, submersible2
+  }
+  pgSubmarine = sub;
+  pg_asi_leave_script(instance, previous);
+  atomic_store(&pg_trailer_attached, attached);
+}
+// Trackify (GTA-134). The players' game files have apptrackify.ysc only as a 5-byte stub (GTA-102), so the phone's
+// Trackify app never ran and The Merryweather Heist (Offshore), Fresh Meat, scuba diving and the nuclear waste hunt had
+// no way to find their targets. While the phone waits for Trackify (its app state is 7 and the selected app is
+// appTrackify, which the request guard turns away), this does what the app script does: every 125 ms it gives the
+// phone's own Trackify screen (view 23) the target's angle from where the player faces, its distance and its height,
+// and pings (APP_FUNCTION 1) faster as the player gets closer. Script globals of the pinned build (the PC build's
+// minus 683 for the phone, minus 666 for its flags): phone app state 20384, phone movie 20364, flags 8254/8255, the
+// mission's Trackify target PG_TRACKIFY_TARGET.
+#define PG_TRACKIFY_TARGET 22831   // the PC build's Global_23531 less 700 (harness: the Offshore heist's device, 180 m down)
+static uint32_t pg_global_u32(uint64_t index) {
+  const uint64_t at = pg_script_global(index); uint32_t value = 0;
+  if (at) memcpy(&value, pg_pointer(&env, at, 4), 4);
+  return value;
+}
+static float pg_global_f32(uint64_t index) { const uint32_t bits = pg_global_u32(index); float value; memcpy(&value, &bits, 4); return value; }
+// Open from the phone's request for apptrackify (missions open it directly by its table index, 17, so the phone's
+// "selected app" global doesn't say which app it is; the request comes once, then the phone waits) until the phone
+// leaves its app state (7): Back, or the phone put away.
+static bool pg_trackify_open(void) {
+  static bool open;
+  if (pg_global_u32(20384) != 7) open = false;
+  else if (timeMS(CLOCK_MONOTONIC) - atomic_load(&pgTrackifyRequestedAt) < 1000) open = true;
+  return open;
+}
+static uint64_t pg_wasm_text(uint64_t *slot, const char *text) {
+  if (!*slot) { *slot = pg_asi_alloc(strlen(text) + 1); if (*slot) memcpy(pg_pointer(&env, *slot, strlen(text) + 1), text, strlen(text) + 1); }
+  return *slot;
+}
+static uint64_t pg_f32_arg(float value) { uint32_t bits; memcpy(&bits, &value, 4); return bits; }
+static void pg_trackify_tick(w2c_game *instance) {
+  static double lastData, lastPing; static bool wasOpen;
+  if (PGGameStatus() & 16) return;
+  const bool open = pg_trackify_open();
+  if (open != wasOpen) { wasOpen = open; pg_log(open ? "Trackify: opened (port-made app, GTA-134)." : "Trackify: closed."); }
+  if (!open) return;
+  const double now = timeMS(CLOCK_MONOTONIC);
+  if (now - lastData < 125) return;
+  lastData = now;
+  pg_asi_game = instance;
+  const float target[3] = {pg_global_f32(PG_TRACKIFY_TARGET), pg_global_f32(PG_TRACKIFY_TARGET + 1), pg_global_f32(PG_TRACKIFY_TARGET + 2)};
+  const uint64_t movie = pg_global_u32(20364);
+  if (!movie || (target[0] == 0 && target[1] == 0)) return;
+  const uint64_t previous = pg_asi_enter_script(instance);
+  const uint64_t ped = pg_test_call(instance, 0xd80958fc74e988a6ull, 0, NULL) & 0xffffffff;   // PLAYER_PED_ID
+  pg_test_call(instance, 0x3fef770d40960d5aull, 2, (uint64_t[]){ped, 1});                     // GET_ENTITY_COORDS
+  float player[3] = {0, 0, 0};
+  for (int k = 0; k < 3; k++) memcpy(&player[k], pg_pointer(&env, pg_test_buffer + 8 * 32 + 8 * k, 4), 4);
+  const uint64_t headingBits = pg_test_call(instance, 0xe83d4f9ba2a38914ull, 1, (uint64_t[]){ped});  // GET_ENTITY_HEADING
+  float heading; uint32_t hb = (uint32_t)headingBits; memcpy(&heading, &hb, 4);
+  const float dx = target[0] - player[0], dy = target[1] - player[1], dz = target[2] - player[2];
+  // Angle on the screen: the bearing (clockwise from north) less the way the player faces (the game's heading turns
+  // anticlockwise), 0-360.
+  float angle = atan2f(dx, dy) * 180.0f / (float)M_PI + heading;
+  angle = fmodf(fmodf(angle, 360.0f) + 360.0f, 360.0f);
+  const float flat = sqrtf(dx * dx + dy * dy), full = sqrtf(dx * dx + dy * dy + dz * dz);
+  static uint64_t setDataSlot, displayView, appFunction;
+  const uint32_t flags = pg_global_u32(8254), flags2 = pg_global_u32(8255);   // the PC build's Global_8920 and 8921, less 666
+  pg_test_call(instance, 0xf6e48914c7a8694eull, 2, (uint64_t[]){movie, pg_wasm_text(&setDataSlot, "SET_DATA_SLOT")});
+  pg_test_call(instance, 0xc3d0841a0cc546a6ull, 1, (uint64_t[]){23});
+  pg_test_call(instance, 0xc3d0841a0cc546a6ull, 1, (uint64_t[]){0});
+  pg_test_call(instance, 0xc3d0841a0cc546a6ull, 1, (uint64_t[]){(uint32_t)(int32_t)floorf(angle)});
+  pg_test_call(instance, 0xc3d0841a0cc546a6ull, 1, (uint64_t[]){(uint32_t)(int32_t)floorf(flat)});
+  pg_test_call(instance, 0xc3d0841a0cc546a6ull, 1, (uint64_t[]){100});
+  pg_test_call(instance, 0xc3d0841a0cc546a6ull, 1, (uint64_t[]){(flags >> 22) & 1});
+  pg_test_call(instance, 0xc58424ba936eb458ull, 1, (uint64_t[]){(flags >> 29) & 1 ? 0 : 1});
+  if ((flags2 >> 1) & 1) pg_test_call(instance, 0xd69736aae04db51aull, 1, (uint64_t[]){pg_f32_arg(dz)});
+  pg_test_call(instance, 0xc6796a8ffa375e53ull, 0, NULL);
+  pg_test_call(instance, 0xf6e48914c7a8694eull, 2, (uint64_t[]){movie, pg_wasm_text(&displayView, "DISPLAY_VIEW")});
+  pg_test_call(instance, 0xc3d0841a0cc546a6ull, 1, (uint64_t[]){23});
+  pg_test_call(instance, 0xc3d0841a0cc546a6ull, 1, (uint64_t[]){1});
+  pg_test_call(instance, 0xc6796a8ffa375e53ull, 0, NULL);
+  // The ping: more often the closer the target (30 ms a metre, at least 150 ms apart), at least every 2 s.
+  const double gap = now - lastPing;
+  if ((gap > floorf(full) * 30 && gap > 150) || gap > 2000) {
+    lastPing = now;
+    pg_test_call(instance, 0xf6e48914c7a8694eull, 2, (uint64_t[]){movie, pg_wasm_text(&appFunction, "APP_FUNCTION")});
+    pg_test_call(instance, 0xc3d0841a0cc546a6ull, 1, (uint64_t[]){1});
+    pg_test_call(instance, 0xc6796a8ffa375e53ull, 0, NULL);
+  }
+  pg_asi_leave_script(instance, previous);
+}
+#if TARGET_OS_SIMULATOR
+#include "NativeDebugChannel.inc"
+#endif
 void pg_asi_script_tick(w2c_game *instance, u64 thread) {
+#if TARGET_OS_SIMULATOR
+  if (thread && strcmp(pg_string(&env, thread + 428), "main")) pg_debug_tick(instance, false);
+#endif
   if (!thread || strcmp(pg_string(&env, thread + 428), "main")) return;
   pg_asi_frame(instance);
+  pg_trailer_tick(instance);
+  pg_submarine_depth_tick(instance);
   pg_cheats_menu_tick(instance);
+  pg_trackify_tick(instance);
 #if TARGET_OS_SIMULATOR
+  pg_debug_tick(instance, true);
   pg_test_spawn();
   pg_test_cheat(instance);
   pg_test_text(instance);
@@ -2522,6 +2768,9 @@ static void *boot(void *ignored) {
   if(limit){char *end;unsigned long mb=strtoul(limit,&end,10);if(end!=limit&&!*end&&mb>=2048&&mb<=8192)simulatedProcessLimit=(uint64_t)mb*1048576;}
 #endif
   if(nativeMemoryGuard)pg_log("Native streaming memory guard enabled with 384 MB of reserve.");
+  // Device A/B switches (GTA-117, GTA-128), named in the log so each run says which side it was.
+  if(nativeMemoryGuard&&getenv("PG_GUARD_SPARE_MB"))pg_log("Memory guard A/B: fast nudges only with PG_GUARD_SPARE_MB to spare.");
+  if(nativeMemoryGuard&&getenv("PG_GUARD_POOL_ROOM")&&atoi(getenv("PG_GUARD_POOL_ROOM"))==0)pg_log("Memory guard: the resource pool's free space doesn't count as room (PG_GUARD_POOL_ROOM=0).");
   pg_assets_prewarm();
   nativeEngineCores=pg_engine_core_configuration(getenv("PG_ENGINE_CORES"));
   char coresOption[32];snprintf(coresOption,sizeof coresOption,"-numCores=%u",nativeEngineCores);
@@ -2648,6 +2897,8 @@ void PGStartEngine(const char *path, const char *filesRoot, PGLogCallback callba
   pthread_attr_t attributes;
   pthread_attr_init(&attributes);
   pthread_attr_setstacksize(&attributes, 16 * 1024 * 1024);
+  extern void pg_engine_thread_attributes(pthread_attr_t *attrs);	// NativeThreads.c (GTA-92 A/B)
+  pg_engine_thread_attributes(&attributes);
   pthread_t thread;
   int result = pthread_create(&thread, &attributes, boot, NULL);
   pthread_attr_destroy(&attributes);
@@ -2673,12 +2924,34 @@ int PGInputPolledWithin(int action, double ms) {
   double at = atomic_load_explicit(&inputPolledAt[action], memory_order_relaxed);
   return at > 0 && timeMS(CLOCK_MONOTONIC) - at < ms;
 }
+// When scripts last read each input in any way, including the script commands that read it without going through
+// the commands above (IS_CONTROL_PRESSED, IS_CONTROL_JUST_PRESSED and others; pg_control_script_read). Only the
+// "Prompt: scripts read inputs" log uses these so far: the touch layouts still follow PGInputPolledWithin (GTA-129).
+static _Atomic double inputReadAt[400];
+int PGInputReadWithin(int action, double ms) {
+  if (action < 0 || action >= 400) return 0;
+  double at = atomic_load_explicit(&inputReadAt[action], memory_order_relaxed);
+  return at > 0 && timeMS(CLOCK_MONOTONIC) - at < ms;
+}
+static void pg_control_trace(u32 kind, u32 action, f32 value);
 void pg_control_read(u32 kind, u32 control, u32 action, f32 value) {
-  if (action < 400) atomic_store_explicit(&inputPolledAt[action], timeMS(CLOCK_MONOTONIC), memory_order_relaxed);
+  (void)control;
+  if (action < 400) {
+    double now = timeMS(CLOCK_MONOTONIC);
+    atomic_store_explicit(&inputPolledAt[action], now, memory_order_relaxed);
+    atomic_store_explicit(&inputReadAt[action], now, memory_order_relaxed);
+  }
+  pg_control_trace(kind, action, value);
+}
+void pg_control_script_read(u32 kind, u32 control, u32 action, f32 value) {
+  (void)control;
+  if (action < 400) atomic_store_explicit(&inputReadAt[action], timeMS(CLOCK_MONOTONIC), memory_order_relaxed);
+  pg_control_trace(kind, action, value);
+}
+static void pg_control_trace(u32 kind, u32 action, f32 value) {
   static int on = -1;
   if (on < 0) on = getenv("PG_TEST_CONTROLS") != NULL;
   if (!on || kind > 4 || action >= 400) return;
-  (void)control;
   atomic_fetch_add(&controlReads[kind][action], 1);
   float magnitude = fabsf(kind == 1 ? (value - 127.f) / 127.f : value);
   if (magnitude > atomic_load(&controlMax[kind][action])) atomic_store(&controlMax[kind][action], magnitude);

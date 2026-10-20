@@ -81,6 +81,18 @@
             "state": "translated",
             "value": "\n\nAhora el juego se inicia con su resolución habitual"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\n\nGame sẽ chạy ở độ phân giải thông thường"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\n\nاللعبة تبدأ الأن بدقتها الأصلية"
+          }
         }
       }
     },
@@ -163,6 +175,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "\n\nAhora el juego se inicia con {arg0}"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\n\nGame sẽ chạy ở {arg0}"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\n\nاللعبه ستبدأ في {arg0}"
           }
         }
       }
@@ -828,6 +852,18 @@
             "state": "translated",
             "value": " Puedes cambiarlo cuando quieras en Configuración."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " Bạn có thể thay đổi bất kì lúc nào trong Cài đặt."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " تستطيع تغيير هذا في أي وقت في الإعدادات"
+          }
         }
       }
     },
@@ -911,6 +947,18 @@
             "state": "translated",
             "value": " a {arg0}p"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " ở {arg0}p"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " في {arg0}"
+          }
         }
       }
     },
@@ -993,6 +1041,18 @@
           "stringUnit": {
             "state": "translated",
             "value": " y resolución Auto."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " với độ phân giải Tự động."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " مع الدقة التلقائية"
           }
         }
       }
@@ -1159,6 +1219,18 @@
           "stringUnit": {
             "state": "translated",
             "value": ". Eso suele significar que esta configuración necesita más memoria de la que iOS le da a la app en este iPhone (unos {arg0} MB)."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ". Có nghĩa là mức cài đặt này cần nhiều RAM hơn mức iOS cấp cho app trên iPhone (tầm {arg0} MB)"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا يعني عادة أن هذا الإعداد يحتاج إلى ذاكرة ( RAM ) أكثر مما يعطيه نظام التشغيل iOS للتطبيق على جهاز iPhone هذا (تقريباً {arg0} ميجابايت"
           }
         }
       }
@@ -3567,6 +3639,18 @@
             "state": "translated",
             "value": "Elige Modo historia o Sandbox para jugar."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chọn chế độ Cốt truyện hoặc Tự do để chơi."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اختار وضع القصة أول الـ Sandbox للبدأ"
+          }
         }
       }
     },
@@ -3650,6 +3734,18 @@
             "state": "translated",
             "value": "Control: ninguno conectado"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tay cầm: chưa được kết nối"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جهاز التحكم: غير موجود"
+          }
         }
       }
     },
@@ -3732,6 +3828,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Control: {arg0}"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tay cầm: {arg0}"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جهاز التحكم: {arg0}"
           }
         }
       }
@@ -4313,6 +4421,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Abajo"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lùi"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اسفل"
           }
         }
       }
@@ -5476,6 +5596,18 @@
             "state": "translated",
             "value": "Proyecto de fans · usa tus propios archivos del juego"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dự án fan làm - chơi bằng file game của bạn"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشروع المُعجبين: العب بملفات اللعبة الخاصة بك"
+          }
         }
       }
     },
@@ -6555,6 +6687,18 @@
             "state": "translated",
             "value": "GTA V Port"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GTA V Port"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جتا 5 بورت"
+          }
         }
       }
     },
@@ -6887,6 +7031,18 @@
             "state": "translated",
             "value": "No se encontraron los archivos del juego"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Không tìm thấy file game"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ملفات اللعبة غير موجودة"
+          }
         }
       }
     },
@@ -6969,6 +7125,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fotogramas por segundo del juego"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fps của game"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "معدل إطارات اللعبة"
           }
         }
       }
@@ -7301,6 +7469,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Gráficos reducidos a {arg0}"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Độ phân giải đã hạ xuống {arg0}"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم تخفيض الرسومات إلى {arg0}"
           }
         }
       }
@@ -9045,6 +9225,18 @@
             "state": "translated",
             "value": "Izquierda"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trái"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يسار"
+          }
         }
       }
     },
@@ -9127,6 +9319,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cargando…"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đang chạy..."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جاري التحميل…"
           }
         }
       }
@@ -11203,6 +11407,18 @@
             "state": "translated",
             "value": "開始遊戲"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chơi"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ابدأ"
+          }
         }
       }
     },
@@ -11285,6 +11501,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Preparando recursos… {arg0}% · {arg1}"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chuẩn bị tài nguyên... {arg0}% • {arg1}"
           }
         }
       }
@@ -12697,6 +12919,18 @@
             "state": "translated",
             "value": "Resolución restablecida a Auto"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đã tự động chuyển độ phân giải về Tự động"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تمت إعادة الدقة الى تلقائية"
+          }
         }
       }
     },
@@ -12945,6 +13179,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Derecha"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Phải"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يمين"
           }
         }
       }
@@ -13776,6 +14022,18 @@
             "state": "translated",
             "value": "設定"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cài đặt"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الإعدادات"
+          }
         }
       }
     },
@@ -13858,6 +14116,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "分享紀錄"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chia sẻ log"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشاركة سجل الخطأ"
           }
         }
       }
@@ -15602,6 +15872,12 @@
             "state": "translated",
             "value": "El juego se cerró al iniciarse con {arg0}"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Game bị thoát khi đang chạy ở {arg0}"
+          }
         }
       }
     },
@@ -15767,6 +16043,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "La carpeta del juego se movió o se eliminó. Vuelve a ponerla en Archivos › En mi iPhone › GTA V Port o elígela de nuevo."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thư mục game đã bị di chuyển hoặc xoá. Đặt nó lại ở Tệp > iPhone của tôi > GTA V Port, hoặc chọn lại."
           }
         }
       }
@@ -16681,6 +16963,12 @@
             "state": "translated",
             "value": "Controles táctiles listos"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Điều khiển qua cảm ứng chạm đã sẵn sàng"
+          }
         }
       }
     },
@@ -16930,6 +17218,12 @@
             "state": "translated",
             "value": "Volver a probar {arg0}"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thử {arg0} lại"
+          }
         }
       }
     },
@@ -17178,6 +17472,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Arriba"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiến lên"
           }
         }
       }
@@ -17843,6 +18143,12 @@
             "state": "translated",
             "value": "verificando…"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "đang kiểm tra..."
+          }
         }
       }
     },
@@ -17926,6 +18232,12 @@
             "state": "translated",
             "value": "conectado ✓"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "đã kết nối"
+          }
         }
       }
     },
@@ -18008,6 +18320,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "dirección no válida"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ko phải địa chỉ hợp lệ"
           }
         }
       }
@@ -18590,6 +18908,12 @@
             "state": "translated",
             "value": "Mapa"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bản đồ"
+          }
         }
       }
     },
@@ -18673,6 +18997,12 @@
             "state": "translated",
             "value": "Mapa de Sandbox: "
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bản đồ tự do: "
+          }
         }
       }
     },
@@ -18755,6 +19085,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Disposición de los controles"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Layout điều khiển"
           }
         }
       }
@@ -20416,6 +20752,12 @@
             "state": "translated",
             "value": "Buscando los archivos del juego…"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đang tìm file game của bạn..."
+          }
         }
       }
     },
@@ -20498,6 +20840,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Toca para ver el progreso."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ấn để xem tiến trình."
           }
         }
       }
@@ -20582,6 +20930,12 @@
             "state": "translated",
             "value": "En la carpeta GTA V Port"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trong thư mục GTA V Port"
+          }
         }
       }
     },
@@ -20664,6 +21018,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "En este iPhone"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trên iPhone này"
           }
         }
       }
@@ -20748,6 +21108,12 @@
             "state": "translated",
             "value": "Se encontró la carpeta del juego, pero todavía no se puede usar. Toca para ver por qué y cómo solucionarlo."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đã tìm thấy thư mục game, nhưng hiện ko thể sử dụng. Ấn để xem lý do và cách xử lý."
+          }
         }
       }
     },
@@ -20830,6 +21196,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "La dirección del servidor no es una dirección web"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Địa chỉ server ko phải địa chỉ web"
           }
         }
       }
@@ -20914,6 +21286,12 @@
             "state": "translated",
             "value": "Toca para cambiarla."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ấn để thay đổi."
+          }
         }
       }
     },
@@ -20996,6 +21374,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Agrega los archivos del juego"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thêm file game của bạn"
           }
         }
       }
@@ -21080,6 +21464,12 @@
             "state": "translated",
             "value": "Toca para buscarlos en este iPhone u obtenerlos desde un enlace o un archivo comprimido."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ấn để tìm trên iPhone này. hoặc tải về từ link hoặc lấy từ file nén (zip, rar)"
+          }
         }
       }
     },
@@ -21162,6 +21552,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Se encontró un archivo comprimido del juego. Toca para descomprimirlo."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Đã tìm thấy file nén của game. Ấn để giải nén."
           }
         }
       }
@@ -22820,6 +23216,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Kontroler"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tay cầm"
           }
         }
       }
@@ -29541,6 +29943,12 @@
             "state": "translated",
             "value": "遊戲檔案：{arg0}。{arg1}"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File game: {arg0}.{arg1}"
+          }
         }
       }
     },
@@ -29623,6 +30031,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "{arg0} · 1 個問題檔案，仍繼續遊玩"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{arg0}. có 1 file lỗi, cứ chơi"
           }
         }
       }
@@ -29707,6 +30121,12 @@
             "state": "translated",
             "value": "{arg0} · {arg1} 個問題檔案，仍繼續遊玩"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{arg0}.{arg1} file lỗi, cứ chơi"
+          }
         }
       }
     },
@@ -29789,6 +30209,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "{arg0} · 所有檔案皆已檢查"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{arg0} tất cả file đã kiểm tra"
           }
         }
       }
@@ -31334,6 +31760,12 @@
             "state": "translated",
             "value": "Telegram"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telegram"
+          }
         }
       }
     },
@@ -31416,6 +31848,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Telegram 上的 Five Star Port"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Five Star Port trên Telegram"
           }
         }
       }
@@ -35649,6 +36087,12 @@
             "state": "translated",
             "value": "此 iPhone 記憶體不足"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Không đủ bộ nhớ (RAM) trên iPhone này"
+          }
         }
       }
     },
@@ -35725,6 +36169,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "iOS 無法在此 iPhone 上為遊戲提供所需的記憶體。iPhone 8、8 Plus 和 X 通常無法用免費 Apple ID 執行；付費開發者帳號或 TrollStore 可能有幫助。如果你的 iPhone 更新，請傳送記錄。"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS ko thể cấp đủ bộ nhớ ram mà nó cần trên iPhone này. iPhone 8, 8 Plus và X thường ko chạy dc với tài khoản Apple free, một tài khoản developer trả phí hoặc TrollStore có thể sẽ chạy dc. Gửi log nếu iPhone của bạn là đời cao hơn."
           }
         }
       }
@@ -48341,6 +48791,2911 @@
           "stringUnit": {
             "state": "translated",
             "value": "遊戲沒有回應。請回到正常遊戲後再試。"
+          }
+        }
+      }
+    },
+    "Detach trailer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detach trailer"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anhänger abkoppeln"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soltar el remolque"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soltar el remolque"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Détacher la remorque"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sgancia il rimorchio"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トレーラーを切り離す"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "트레일러 분리"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Odczep przyczepę"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soltar o reboque"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отцепить прицеп"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分离拖车"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分離拖車"
+          }
+        }
+      }
+    },
+    "Ad blocking": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ad blocking"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Werbeblocker"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloqueo de anuncios"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloqueo de anuncios"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blocage des pubs"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blocco pubblicità"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "広告ブロック"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "광고 차단"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blokowanie reklam"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloqueio de anúncios"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Блокировка рекламы"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "广告拦截"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "廣告封鎖"
+          }
+        }
+      }
+    },
+    "Ad blocking is off for this site. Tap the page's download button again.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ad blocking is off for this site. Tap the page's download button again."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Werbeblocker ist für diese Seite aus. Tippe noch einmal auf den Download-Button der Seite."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El bloqueo de anuncios está desactivado en este sitio. Vuelve a tocar el botón de descarga de la página."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El bloqueo de anuncios está desactivado en este sitio. Vuelve a tocar el botón de descarga de la página."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le blocage des pubs est désactivé pour ce site. Touchez à nouveau le bouton de téléchargement de la page."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il blocco pubblicità è disattivato per questo sito. Tocca di nuovo il pulsante di download della pagina."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このサイトでは広告ブロックがオフになっています。もう一度ページのダウンロードボタンをタップしてください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 사이트에서는 광고 차단이 꺼져 있습니다. 페이지의 다운로드 버튼을 다시 탭하세요."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blokowanie reklam jest wyłączone dla tej strony. Stuknij ponownie przycisk pobierania na stronie."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O bloqueio de anúncios está desligado para este site. Toque de novo no botão de download da página."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Блокировка рекламы для этого сайта выключена. Нажмите кнопку загрузки на странице ещё раз."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已对此网站关闭广告拦截。请再次轻点网页上的下载按钮。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已對此網站關閉廣告封鎖。請再次點按網頁上的下載按鈕。"
+          }
+        }
+      }
+    },
+    "The game stopped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The game stopped"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Spiel wurde beendet"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El juego se detuvo"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El juego se ha detenido"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le jeu s’est arrêté"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il gioco si è fermato"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ゲームが停止しました"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "게임이 멈췄습니다"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gra się zatrzymała"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O jogo parou"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Игра остановилась"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "游戏已停止"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "遊戲已停止"
+          }
+        }
+      }
+    },
+    "Please send the log so this can be fixed, then close the app and open it again to keep playing.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Please send the log so this can be fixed, then close the app and open it again to keep playing."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitte sende das Protokoll, damit das behoben werden kann. Schließe dann die App und öffne sie erneut, um weiterzuspielen."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envía el registro para que esto se pueda arreglar; después cierra la app y vuelve a abrirla para seguir jugando."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envía el registro para que esto se pueda arreglar; después cierra la app y vuelve a abrirla para seguir jugando."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyez le journal pour que ce problème puisse être corrigé, puis fermez l’app et rouvrez-la pour continuer à jouer."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invia il registro così il problema può essere risolto, poi chiudi l’app e riaprila per continuare a giocare."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "修正のためにログを送信してください。その後、アプリを閉じてもう一度開くとプレイを続けられます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "문제를 고칠 수 있도록 로그를 보내 주세요. 그런 다음 앱을 닫았다가 다시 열면 계속 플레이할 수 있습니다."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wyślij dziennik, żeby można było to naprawić, a potem zamknij aplikację i otwórz ją ponownie, aby grać dalej."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envie o registro para que isso possa ser corrigido, depois feche o app e abra de novo para continuar jogando."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправьте журнал, чтобы это можно было исправить, затем закройте приложение и откройте его снова, чтобы продолжить игру."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请发送日志以便修复此问题，然后关闭 App 并重新打开即可继续游玩。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請傳送紀錄以便修正此問題，然後關閉 App 再重新開啟即可繼續遊玩。"
+          }
+        }
+      }
+    },
+    "{arg0}, resolution, frame rate, memory": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{arg0}, resolution, frame rate, memory"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{arg0}, Auflösung, Bildrate, Speicher"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{arg0}, resolución, fotogramas por segundo, memoria"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{arg0}, resolución, fotogramas por segundo, memoria"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{arg0}, résolution, fréquence d’images, mémoire"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{arg0}, risoluzione, frequenza fotogrammi, memoria"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{arg0}、解像度、フレームレート、メモリ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{arg0}, 해상도, 프레임 속도, 메모리"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{arg0}, rozdzielczość, liczba klatek, pamięć"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{arg0}, resolução, taxa de quadros, memória"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{arg0}, разрешение, частота кадров, память"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{arg0}、分辨率、帧率、内存"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{arg0}、解析度、幀率、記憶體"
+          }
+        }
+      }
+    },
+    "Controls": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controls"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steuerung"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controles"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controles"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commandes"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comandi"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "조작"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sterowanie"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controles"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Управление"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操控"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操控"
+          }
+        }
+      }
+    },
+    "Camera, buttons, layout, gyro, controller and keyboard": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Camera, buttons, layout, gyro, controller and keyboard"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kamera, Tasten, Layout, Gyroskop, Controller und Tastatur"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cámara, botones, diseño, giroscopio, control y teclado"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cámara, botones, diseño, giroscopio, mando y teclado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Caméra, boutons, disposition, gyroscope, manette et clavier"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visuale, pulsanti, layout, giroscopio, controller e tastiera"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カメラ、ボタン、レイアウト、ジャイロ、コントローラ、キーボード"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "카메라, 버튼, 레이아웃, 자이로, 컨트롤러 및 키보드"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kamera, przyciski, układ, żyroskop, kontroler i klawiatura"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Câmera, botões, layout, giroscópio, controle e teclado"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Камера, кнопки, раскладка, гироскоп, геймпад и клавиатура"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "镜头、按钮、布局、陀螺仪、控制器和键盘"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "鏡頭、按鈕、版面配置、陀螺儀、控制器和鍵盤"
+          }
+        }
+      }
+    },
+    "Game mode and language": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Game mode and language"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spielmodus und Sprache"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modo de juego e idioma"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modo de juego e idioma"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mode de jeu et langue"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modalità di gioco e lingua"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ゲームモードと言語"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "게임 모드 및 언어"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tryb gry i język"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modo de jogo e idioma"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Режим игры и язык"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "游戏模式与语言"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "遊戲模式與語言"
+          }
+        }
+      }
+    },
+    "Where the game is, checking and downloading its files": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Where the game is, checking and downloading its files"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wo das Spiel liegt, Prüfen und Herunterladen seiner Dateien"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dónde está el juego, comprobación y descarga de sus archivos"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dónde está el juego, comprobación y descarga de sus archivos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Emplacement du jeu, vérification et téléchargement de ses fichiers"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dove si trova il gioco, verifica e download dei suoi file"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ゲームの場所、ファイルの確認とダウンロード"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "게임 위치, 파일 확인 및 다운로드"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gdzie jest gra, sprawdzanie i pobieranie jej plików"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Onde o jogo está, verificação e download dos arquivos"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Где находится игра, проверка и загрузка её файлов"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "游戏位置、文件检查与下载"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "遊戲位置、檔案檢查與下載"
+          }
+        }
+      }
+    },
+    "Memory, logs and the Telegram group": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory, logs and the Telegram group"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speicher, Protokolle und die Telegram-Gruppe"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memoria, registros y el grupo de Telegram"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memoria, registros y el grupo de Telegram"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mémoire, journaux et groupe Telegram"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memoria, registri e gruppo Telegram"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモリ、ログ、Telegram グループ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "메모리, 로그 및 Telegram 그룹"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pamięć, dzienniki i grupa na Telegramie"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memória, registros e o grupo do Telegram"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Память, журналы и группа в Telegram"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内存、日志和 Telegram 群组"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記憶體、紀錄和 Telegram 群組"
+          }
+        }
+      }
+    },
+    "Sprint button": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sprint button"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sprint-Taste"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Botón de correr"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Botón de correr"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bouton de sprint"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulsante scatto"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダッシュボタン"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "달리기 버튼"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Przycisk sprintu"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Botão de correr"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Кнопка бега"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "冲刺按钮"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "衝刺按鈕"
+          }
+        }
+      }
+    },
+    "Tap it while moving to sprint until you let go of the stick; hold it to open a parachute. Holding the stick at its edge sprints too.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap it while moving to sprint until you let go of the stick; hold it to open a parachute. Holding the stick at its edge sprints too."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippe sie beim Laufen an, um zu sprinten, bis du den Stick loslässt; halte sie gedrückt, um einen Fallschirm zu öffnen. Den Stick bis zum Rand zu drücken, lässt dich ebenfalls sprinten."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tócalo mientras te mueves para correr hasta que sueltes el stick; mantenlo presionado para abrir el paracaídas. Llevar el stick hasta el borde también te hace correr."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tócalo mientras te mueves para correr hasta que sueltes el stick; mantenlo pulsado para abrir el paracaídas. Llevar el stick hasta el borde también te hace correr."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touchez-le en vous déplaçant pour sprinter jusqu’à ce que vous relâchiez le stick ; maintenez-le pour ouvrir un parachute. Pousser le stick jusqu’au bord fait aussi sprinter."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toccalo mentre ti muovi per scattare finché non lasci la levetta; tienilo premuto per aprire il paracadute. Anche spingere la levetta fino al bordo fa scattare."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移動中にタップすると、スティックを離すまでダッシュします。長押しでパラシュートを開きます。スティックを端まで倒してもダッシュします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이동 중에 탭하면 스틱에서 손을 뗄 때까지 달립니다. 길게 누르면 낙하산을 펼칩니다. 스틱을 끝까지 밀어도 달립니다."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stuknij go w ruchu, aby biec sprintem, dopóki nie puścisz drążka; przytrzymaj, aby otworzyć spadochron. Wychylenie drążka do krawędzi też uruchamia sprint."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toque nele enquanto se move para correr até soltar o direcional; segure para abrir o paraquedas. Levar o direcional até a borda também faz correr."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нажмите её во время движения, чтобы бежать, пока не отпустите стик; удерживайте, чтобы раскрыть парашют. Стик, отведённый до края, тоже включает бег."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移动时轻点即可冲刺，直到松开摇杆；按住可打开降落伞。把摇杆推到边缘也会冲刺。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移動時點按即可衝刺，直到放開搖桿；按住可打開降落傘。把搖桿推到邊緣也會衝刺。"
+          }
+        }
+      }
+    },
+    "Airplane right stick": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Airplane right stick"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechter Stick im Flugzeug"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stick derecho en aviones"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stick derecho en aviones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stick droit en avion"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Levetta destra in aereo"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "飛行機の右スティック"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "비행기 오른쪽 스틱"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prawy drążek w samolocie"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Direcional direito no avião"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Правый стик в самолёте"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "飞机右摇杆"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "飛機右搖桿"
+          }
+        }
+      }
+    },
+    "Drag up or down to set throttle, left or right for rudder. Helicopters keep their buttons.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drag up or down to set throttle, left or right for rudder. Helicopters keep their buttons."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach oben oder unten ziehen für den Schub, nach links oder rechts für das Seitenruder. Hubschrauber behalten ihre Tasten."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desliza arriba o abajo para la potencia y a izquierda o derecha para el timón. Los helicópteros mantienen sus botones."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desliza arriba o abajo para la potencia y a izquierda o derecha para el timón. Los helicópteros mantienen sus botones."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glissez vers le haut ou le bas pour les gaz, à gauche ou à droite pour la gouverne de direction. Les hélicoptères gardent leurs boutons."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trascina su o giù per la potenza, a sinistra o a destra per il timone. Gli elicotteri mantengono i loro pulsanti."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上下にドラッグでスロットル、左右でラダーを操作します。ヘリコプターはボタンのままです。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "위아래로 드래그하면 추력, 좌우로 드래그하면 러더를 조절합니다. 헬리콥터는 버튼을 그대로 사용합니다."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Przeciągnij w górę lub w dół, aby ustawić ciąg, w lewo lub w prawo dla steru kierunku. Helikoptery zachowują swoje przyciski."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arraste para cima ou para baixo para a potência, para a esquerda ou direita para o leme. Helicópteros mantêm os botões."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ведите вверх или вниз для тяги, влево или вправо для руля направления. У вертолётов остаются кнопки."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上下拖动控制油门，左右拖动控制方向舵。直升机仍使用按钮。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上下拖曳控制油門，左右拖曳控制方向舵。直升機仍使用按鈕。"
+          }
+        }
+      }
+    },
+    "Sprint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sprint"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sprinten"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correr"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correr"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sprinter"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scatto"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダッシュ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "달리기"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sprint"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correr"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Бег"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "冲刺"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "衝刺"
+          }
+        }
+      }
+    },
+    "Update available": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update available"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update verfügbar"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualización disponible"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualización disponible"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mise à jour disponible"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiornamento disponibile"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アップデートがあります"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "업데이트 가능"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dostępna aktualizacja"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atualização disponível"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Доступно обновление"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有可用更新"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有可用的更新"
+          }
+        }
+      }
+    },
+    "Version {arg0} is out. You have {arg1}.\n\nThe new IPA is posted in the Releases topic of our Telegram group. Install it the same way you installed this one.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version {arg0} is out. You have {arg1}.\n\nThe new IPA is posted in the Releases topic of our Telegram group. Install it the same way you installed this one."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version {arg0} ist da. Du hast {arg1}.\n\nDie neue IPA ist im Releases-Thema unserer Telegram-Gruppe gepostet. Installiere sie genauso wie diese."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ya está disponible la versión {arg0}. Tienes la {arg1}.\n\nLa nueva IPA está publicada en el tema Releases de nuestro grupo de Telegram. Instálala igual que instalaste esta."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ya está disponible la versión {arg0}. Tienes la {arg1}.\n\nLa nueva IPA está publicada en el tema Releases de nuestro grupo de Telegram. Instálala igual que instalaste esta."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La version {arg0} est sortie. Vous avez la {arg1}.\n\nLa nouvelle IPA est publiée dans le sujet Releases de notre groupe Telegram. Installez-la comme vous avez installé celle-ci."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È uscita la versione {arg0}. Tu hai la {arg1}.\n\nLa nuova IPA è pubblicata nell’argomento Releases del nostro gruppo Telegram. Installala come hai installato questa."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "バージョン {arg0} が公開されました。現在のバージョンは {arg1} です。\n\n新しい IPA は Telegram グループの Releases トピックに投稿されています。このアプリと同じ方法でインストールしてください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "버전 {arg0}이(가) 나왔습니다. 현재 버전은 {arg1}입니다.\n\n새 IPA는 Telegram 그룹의 Releases 토픽에 올라와 있습니다. 이 앱을 설치한 것과 같은 방법으로 설치하세요."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wyszła wersja {arg0}. Masz {arg1}.\n\nNowa IPA jest w temacie Releases w naszej grupie na Telegramie. Zainstaluj ją tak samo jak tę."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A versão {arg0} saiu. Você tem a {arg1}.\n\nO novo IPA está no tópico Releases do nosso grupo no Telegram. Instale do mesmo jeito que instalou este."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вышла версия {arg0}. У вас {arg1}.\n\nНовый IPA опубликован в теме Releases нашей группы в Telegram. Установите его так же, как этот."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "版本 {arg0} 已发布。你当前的版本是 {arg1}。\n\n新的 IPA 已发布在 Telegram 群组的 Releases 话题中。请用安装此 App 的相同方式安装。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "版本 {arg0} 已推出。你目前的版本是 {arg1}。\n\n新的 IPA 已發布在 Telegram 群組的 Releases 話題中。請用安裝此 App 的相同方式安裝。"
+          }
+        }
+      }
+    },
+    "Later": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Later"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Später"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más tarde"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más tarde"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus tard"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Più tardi"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "あとで"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "나중에"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Później"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Depois"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Позже"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "稍后"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "稍後"
+          }
+        }
+      }
+    },
+    "Open Telegram": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Telegram"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telegram öffnen"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir Telegram"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir Telegram"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir Telegram"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri Telegram"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telegram を開く"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telegram 열기"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otwórz Telegram"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir o Telegram"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть Telegram"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 Telegram"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟 Telegram"
+          }
+        }
+      }
+    },
+    "Include my latest save (game progress only, about 0.5 MB), so the developer can load the game where it happened": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include my latest save (game progress only, about 0.5 MB), so the developer can load the game where it happened"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meinen letzten Spielstand mitsenden (nur Spielfortschritt, etwa 0,5 MB), damit der Entwickler das Spiel an dieser Stelle laden kann"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incluir mi última partida guardada (solo el progreso del juego, unos 0,5 MB) para que el desarrollador pueda cargar el juego donde ocurrió"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incluir mi última partida guardada (solo el progreso del juego, unos 0.5 MB) para que el desarrollador pueda cargar el juego donde pasó"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Joindre ma dernière sauvegarde (progression du jeu uniquement, environ 0,5 Mo) pour que le développeur puisse charger la partie là où c'est arrivé"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Includi il mio ultimo salvataggio (solo i progressi di gioco, circa 0,5 MB), così lo sviluppatore può caricare la partita dove è successo"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最新のセーブデータを含める（ゲームの進行状況のみ、約0.5 MB）。開発者が問題の起きた場所からゲームを読み込めます"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최신 저장 파일 포함(게임 진행 상황만, 약 0.5MB). 개발자가 문제가 생긴 지점에서 게임을 불러올 수 있습니다"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dołącz mój ostatni zapis (tylko postęp w grze, około 0,5 MB), aby twórca mógł wczytać grę w miejscu, w którym to się stało"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incluir meu último jogo salvo (só o progresso do jogo, cerca de 0,5 MB) para o desenvolvedor carregar o jogo onde aconteceu"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приложить моё последнее сохранение (только прогресс игры, около 0,5 МБ), чтобы разработчик мог загрузить игру там, где это случилось"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "附上我最新的存档（仅游戏进度，约 0.5 MB），方便开发者从出问题的地方载入游戏"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "附上我最新的存檔（僅遊戲進度，約 0.5 MB），方便開發者從出問題的地方載入遊戲"
+          }
+        }
+      }
+    },
+    "Minimap": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimap"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimap"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimapa"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimapa"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mini-carte"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimappa"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ミニマップ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "미니맵"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimapa"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimapa"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Мини-карта"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小地图"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小地圖"
+          }
+        }
+      }
+    },
+    "Bottom left": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bottom left"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unten links"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abajo a la izquierda"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abajo a la izquierda"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En bas à gauche"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In basso a sinistra"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左下"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "왼쪽 아래"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lewy dolny róg"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inferior esquerdo"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Слева внизу"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左下角"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左下角"
+          }
+        }
+      }
+    },
+    "Top left": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Top left"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oben links"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arriba a la izquierda"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arriba a la izquierda"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En haut à gauche"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In alto a sinistra"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左上"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "왼쪽 위"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lewy górny róg"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Superior esquerdo"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Слева вверху"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左上角"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左上角"
+          }
+        }
+      }
+    },
+    "Custom": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eigene Position"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personalizado"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personalizado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personnalisée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personalizzata"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カスタム"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사용자 지정"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Własne położenie"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personalizado"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Своё положение"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自定义"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自訂"
+          }
+        }
+      }
+    },
+    "Where the map sits. Changes apply the next time the game starts.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Where the map sits. Changes apply the next time the game starts."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wo die Karte sitzt. Änderungen gelten ab dem nächsten Spielstart."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dónde aparece el mapa. Los cambios se aplican la próxima vez que inicies el juego."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dónde aparece el mapa. Los cambios se aplican la próxima vez que inicies el juego."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’emplacement de la carte. Les changements s’appliquent au prochain lancement du jeu."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dove si trova la mappa. Le modifiche valgono dal prossimo avvio del gioco."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "マップの位置です。変更は次回のゲーム起動時に反映されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지도가 표시되는 위치입니다. 변경 사항은 다음에 게임을 시작할 때 적용됩니다."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gdzie jest mapa. Zmiany działają od następnego uruchomienia gry."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Onde o mapa fica. As mudanças valem a partir da próxima vez que o jogo iniciar."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Где находится карта. Изменения вступят в силу при следующем запуске игры."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地图显示的位置。更改将在下次启动游戏时生效。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地圖顯示的位置。變更會在下次啟動遊戲時生效。"
+          }
+        }
+      }
+    },
+    "Drag the map to move it · pinch to resize": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drag the map to move it · pinch to resize"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Karte ziehen zum Verschieben · zusammenziehen zum Ändern der Größe"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastra el mapa para moverlo · pellizca para cambiar su tamaño"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastra el mapa para moverlo · pellizca para cambiar su tamaño"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites glisser la carte pour la déplacer · pincez pour la redimensionner"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trascina la mappa per spostarla · pizzica per ridimensionarla"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "マップをドラッグして移動 · ピンチでサイズ変更"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지도를 드래그하여 이동 · 핀치하여 크기 조절"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Przeciągnij mapę, aby ją przesunąć · uszczypnij, aby zmienić rozmiar"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arraste o mapa para movê-lo · faça pinça para redimensionar"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Перетащите карту, чтобы переместить · сведите пальцы, чтобы изменить размер"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖动地图即可移动 · 双指缩放可调整大小"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖曳地圖即可移動 · 雙指縮放可調整大小"
+          }
+        }
+      }
+    },
+    "Tap it while moving to sprint until you let go of the stick; hold it to open a parachute. The stick alone never sprints while this is on.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap it while moving to sprint until you let go of the stick; hold it to open a parachute. The stick alone never sprints while this is on."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippe sie beim Laufen an, um zu sprinten, bis du den Stick loslässt; halte sie gedrückt, um einen Fallschirm zu öffnen. Der Stick allein sprintet nie, solange das an ist."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tócalo mientras te mueves para correr hasta que sueltes el stick; mantenlo presionado para abrir el paracaídas. Con esto activado, el stick solo nunca te hace correr."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tócalo mientras te mueves para correr hasta que sueltes el stick; mantenlo pulsado para abrir el paracaídas. Con esto activado, el stick solo nunca te hace correr."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touchez-le en vous déplaçant pour sprinter jusqu’à ce que vous relâchiez le stick ; maintenez-le pour ouvrir un parachute. Tant que c’est activé, le stick seul ne fait jamais sprinter."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toccalo mentre ti muovi per scattare finché non lasci la levetta; tienilo premuto per aprire il paracadute. Finché è attivo, la levetta da sola non fa mai scattare."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移動中にタップすると、スティックを離すまでダッシュします。長押しでパラシュートを開きます。オンの間は、スティックだけではダッシュしません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이동 중에 탭하면 스틱에서 손을 뗄 때까지 달립니다. 길게 누르면 낙하산을 펼칩니다. 켜져 있는 동안에는 스틱만으로는 달리지 않습니다."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stuknij go w ruchu, aby biec sprintem, dopóki nie puścisz drążka; przytrzymaj, aby otworzyć spadochron. Gdy to jest włączone, sam drążek nigdy nie uruchamia sprintu."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toque nele enquanto se move para correr até soltar o direcional; segure para abrir o paraquedas. Com isso ligado, só o direcional nunca faz correr."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нажмите её во время движения, чтобы бежать, пока не отпустите стик; удерживайте, чтобы раскрыть парашют. Пока это включено, один стик никогда не включает бег."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移动时轻点即可冲刺，直到松开摇杆；按住可打开降落伞。开启后，单靠摇杆不会冲刺。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移動時點按即可衝刺，直到放開搖桿；按住可打開降落傘。開啟後，單靠搖桿不會衝刺。"
+          }
+        }
+      }
+    },
+    "Smarter texture loading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smarter texture loading"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intelligenteres Laden von Texturen"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carga de texturas más inteligente"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carga de texturas más inteligente"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chargement des textures plus intelligent"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Caricamento texture più intelligente"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "よりスマートなテクスチャ読み込み"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "더 똑똑한 텍스처 로딩"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inteligentniejsze wczytywanie tekstur"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carregamento de texturas mais inteligente"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Умная загрузка текстур"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更智能的贴图加载"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更聰明的貼圖載入"
+          }
+        }
+      }
+    },
+    "Experimental. Keeps the ground and roads from turning grey after long play. Turn off if the game runs out of memory.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. Keeps the ground and roads from turning grey after long play. Turn off if the game runs out of memory."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimentell. Verhindert, dass Boden und Straßen nach langem Spielen grau werden. Ausschalten, wenn dem Spiel der Speicher ausgeht."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. Evita que el suelo y las carreteras se vuelvan grises tras jugar mucho rato. Desactívalo si el juego se queda sin memoria."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. Evita que el suelo y las carreteras se vuelvan grises tras jugar mucho rato. Desactívalo si el juego se queda sin memoria."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expérimental. Empêche le sol et les routes de devenir gris après une longue partie. Désactivez si le jeu manque de mémoire."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sperimentale. Evita che terreno e strade diventino grigi dopo tanto gioco. Disattivalo se il gioco esaurisce la memoria."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "試験的機能。長時間プレイしても地面や道路がグレーになるのを防ぎます。メモリ不足になる場合はオフにしてください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "실험적 기능. 오래 플레이해도 땅과 도로가 회색으로 변하지 않게 합니다. 게임 메모리가 부족해지면 끄세요."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eksperymentalne. Zapobiega szarzeniu ziemi i dróg po długiej grze. Wyłącz, jeśli grze brakuje pamięci."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. Evita que o chão e as ruas fiquem cinza depois de jogar muito tempo. Desligue se o jogo ficar sem memória."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Экспериментально. Не даёт земле и дорогам становиться серыми после долгой игры. Выключите, если игре не хватает памяти."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "实验性功能。防止长时间游玩后地面和道路变成灰色。如果游戏内存不足，请关闭。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "實驗性功能。防止長時間遊玩後地面和道路變成灰色。如果遊戲記憶體不足，請關閉。"
+          }
+        }
+      }
+    },
+    "Lighter big textures": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lighter big textures"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leichtere große Texturen"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texturas grandes más ligeras"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texturas grandes más ligeras"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grandes textures plus légères"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texture grandi più leggere"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "大きなテクスチャを軽量化"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "더 가벼운 큰 텍스처"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lżejsze duże tekstury"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texturas grandes mais leves"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Облегчённые большие текстуры"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更轻量的大贴图"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更輕量的大貼圖"
+          }
+        }
+      }
+    },
+    "Experimental. The largest textures use a quarter of the memory on iPhones before the 15 Pro, so more of the world stays sharp. Turn off for the sharpest close-ups.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. The largest textures use a quarter of the memory on iPhones before the 15 Pro, so more of the world stays sharp. Turn off for the sharpest close-ups."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimentell. Die größten Texturen brauchen auf iPhones vor dem 15 Pro nur ein Viertel des Speichers, so bleibt mehr von der Welt scharf. Ausschalten für die schärfsten Nahaufnahmen."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. Las texturas más grandes usan una cuarta parte de la memoria en iPhone anteriores al 15 Pro, así más parte del mundo se ve nítida. Desactívalo para los primeros planos más nítidos."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. Las texturas más grandes usan una cuarta parte de la memoria en iPhone anteriores al 15 Pro, así más parte del mundo se ve nítida. Desactívalo para los primeros planos más nítidos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expérimental. Les plus grandes textures utilisent un quart de la mémoire sur les iPhone antérieurs au 15 Pro, donc une plus grande partie du monde reste nette. Désactivez pour des gros plans plus nets."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sperimentale. Le texture più grandi usano un quarto della memoria sugli iPhone precedenti al 15 Pro, così più parte del mondo resta nitida. Disattivalo per i primi piani più nitidi."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "試験的機能。iPhone 15 Pro より前の機種で、最大級のテクスチャのメモリ使用量を4分の1にし、より多くの場所が鮮明に表示されます。最も鮮明なクローズアップが必要な場合はオフにしてください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "실험적 기능. iPhone 15 Pro 이전 기종에서 가장 큰 텍스처가 메모리를 4분의 1만 사용해 더 많은 장면이 선명하게 유지됩니다. 가장 선명한 근접 화면을 원하면 끄세요."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eksperymentalne. Największe tekstury zajmują ćwierć pamięci na iPhone’ach starszych niż 15 Pro, więc więcej świata pozostaje ostre. Wyłącz dla najostrzejszych zbliżeń."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. As maiores texturas usam um quarto da memória em iPhones anteriores ao 15 Pro, então mais partes do mundo ficam nítidas. Desligue para closes mais nítidos."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Экспериментально. Самые большие текстуры занимают четверть памяти на iPhone до 15 Pro, поэтому больше мира остаётся чётким. Выключите для самых чётких крупных планов."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "实验性功能。在 iPhone 15 Pro 之前的机型上，最大的贴图只占用四分之一的内存，让更多画面保持清晰。如需最清晰的近景，请关闭。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "實驗性功能。在 iPhone 15 Pro 之前的機型上，最大的貼圖只占用四分之一的記憶體，讓更多畫面保持清晰。如需最清晰的近景，請關閉。"
+          }
+        }
+      }
+    },
+    "Faster engine threads": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faster engine threads"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schnellere Engine-Threads"
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hilos del motor más rápidos"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hilos del motor más rápidos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Threads du moteur plus rapides"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thread del motore più veloci"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エンジンスレッドを高速化"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "더 빠른 엔진 스레드"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szybsze wątki silnika"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Threads do motor mais rápidos"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Быстрые потоки движка"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更快的引擎线程"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更快的引擎執行緒"
+          }
+        }
+      }
+    },
+    "Experimental. Keeps the game on the fast processor cores for steadier FPS. Turn off if your iPhone gets too hot.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. Keeps the game on the fast processor cores for steadier FPS. Turn off if your iPhone gets too hot."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimentell. Hält das Spiel auf den schnellen Prozessorkernen für eine gleichmäßigere Bildrate. Ausschalten, wenn dein iPhone zu heiß wird."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. Mantiene el juego en los núcleos rápidos del procesador para unos FPS más estables. Desactívalo si tu iPhone se calienta demasiado."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. Mantiene el juego en los núcleos rápidos del procesador para unos FPS más estables. Desactívalo si tu iPhone se calienta demasiado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expérimental. Garde le jeu sur les cœurs rapides du processeur pour des FPS plus stables. Désactivez si votre iPhone chauffe trop."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sperimentale. Mantiene il gioco sui core veloci del processore per FPS più stabili. Disattivalo se il tuo iPhone si scalda troppo."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "試験的機能。ゲームを高速なプロセッサコアで動かし、FPS を安定させます。iPhone が熱くなりすぎる場合はオフにしてください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "실험적 기능. 게임을 빠른 프로세서 코어에서 실행해 FPS를 더 안정적으로 유지합니다. iPhone이 너무 뜨거워지면 끄세요."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eksperymentalne. Utrzymuje grę na szybkich rdzeniach procesora dla stabilniejszej liczby klatek. Wyłącz, jeśli iPhone za bardzo się nagrzewa."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental. Mantém o jogo nos núcleos rápidos do processador para um FPS mais estável. Desligue se o seu iPhone esquentar demais."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Экспериментально. Держит игру на быстрых ядрах процессора для более стабильного FPS. Выключите, если iPhone слишком нагревается."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "实验性功能。让游戏在高速处理器核心上运行，帧率更稳定。如果 iPhone 过热，请关闭。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "實驗性功能。讓遊戲在高速處理器核心上執行，幀率更穩定。如果 iPhone 過熱，請關閉。"
+          }
+        }
+      }
+    },
+    "Applies the next time the app starts.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applies the next time the app starts."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gilt ab dem nächsten Start der App."
+          }
+        },
+        "es-419": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se aplica la próxima vez que se inicie la app."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se aplica la próxima vez que se inicie la app."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S’applique au prochain lancement de l’app."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vale dal prossimo avvio dell’app."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "次回アプリ起動時に反映されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다음에 앱을 시작할 때 적용됩니다."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Działa od następnego uruchomienia aplikacji."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vale a partir da próxima vez que o app iniciar."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вступит в силу при следующем запуске приложения."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下次启动 App 时生效。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下次啟動 App 時生效。"
           }
         }
       }

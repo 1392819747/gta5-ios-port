@@ -88,6 +88,24 @@ Mods/common.rpf/data/ai/vehicleaihandlinginfo.meta
 
 Paths under `update/update.rpf/common/...` work as well.
 
+## Your own PC audio files
+
+The common web game files have very little car-engine audio (`STREAMED_VEHICLES_GRANULAR.rpf` is about 6 MB, against hundreds of MB on PC). That's why many engines sound faint or all the same. If you have your own copy of the PC game, you can use its audio archives:
+
+- **Put them in Mods, not in the game folder.** Copying a PC audio file over the game folder's file makes the game files check fail on its size (and **Play anyway** only allows up to 20 problem files). Files in Mods aren't size-checked.
+- Use the same path as on PC, under `x64/audio/sfx/`:
+
+```
+Mods/x64/audio/sfx/STREAMED_VEHICLES_GRANULAR.rpf
+Mods/x64/audio/sfx/RADIO_14_DANCE_02.rpf
+```
+
+Use the archives as they come with your PC copy. An archive re-saved by a tool **without encryption** stops the game ("Unencrypted archives no longer supported"); in the next update the app leaves such a file in Mods out and says why. Re-save it with OpenIV or use the original.
+
+Whole PC audio archives already work this way: players have used a 412 MB `RADIO_14_DANCE_02.rpf` in place of the 22 MB one for 15 to 20 minute sessions with no audio errors in their logs.
+
+- `x64/audio/audio_rel.rpf` (the sound definitions) from a newer PC version is untested. It may not match this game version: use it at your own risk, and take it out again if sounds break.
+
 ## Scripts (`.asi`)
 
 Script Hook V scripts are Windows files. The app runs them in a built-in interpreter, so the same `.asi` file from gta5-mods.com works.
