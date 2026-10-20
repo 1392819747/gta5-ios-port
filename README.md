@@ -119,6 +119,8 @@ Anyone can add a language to the app or finish one with the Translate page on th
 
 ## Community and help
 
+**[Questions and answers](docs/FAQ.md)**: the answers to the most common questions (install, game files, memory, controls, missions, crashes), the same ones the helper bot gives.
+
 **[Five Star Port on Telegram](https://t.me/fivestarport)** has everything: every new release as it comes out, help with installs and builds, and a community that has solved most problems before. Please ask there instead of by email or DM.
 
 Bugs can also go to this repository's [Issues](https://github.com/kevinerikjs/gta5-ios-port/issues). Please attach your log from Settings › Share log.
