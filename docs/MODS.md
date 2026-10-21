@@ -78,6 +78,8 @@ Mods/update/x64/dlcpacks/a80/dlc.rpf
 
 Skip the step where the readme asks you to edit `dlclist.xml`: the app adds every pack it finds to the list. The car's spawn name is in the mod's readme. Spawn it with a trainer.
 
+**Several add-on cars:** give each car its own pack folder, for example `Mods/update/x64/dlcpacks/a80/dlc.rpf` and `Mods/update/x64/dlcpacks/veneno/dlc.rpf` (or install each one with **Settings › Mods**, which does that for you). Don't put two `dlc.rpf` files in one folder: the Files app renames the second one `dlc 2.rpf`. The app copes with that and with two cars that use the same pack name: each still loads as a pack of its own (the log says "loaded as …"), and the same car installed twice loads once.
+
 **OpenIV package** (`.oiv`): put the file in Mods as it is, for example `Mods/Lamborghini Veneno.oiv`. An unpacked package (a folder with `assembly.xml` and `content/`) works too. The app installs it the way OpenIV would, including the edits it makes to game files.
 
 **Data file** (Faster AI Drivers):
@@ -100,7 +102,7 @@ Mods/x64/audio/sfx/STREAMED_VEHICLES_GRANULAR.rpf
 Mods/x64/audio/sfx/RADIO_14_DANCE_02.rpf
 ```
 
-Use the archives as they come with your PC copy. An archive re-saved by a tool **without encryption** stops the game ("Unencrypted archives no longer supported"); in the next update the app leaves such a file in Mods out and says why. Re-save it with OpenIV or use the original.
+Use the archives as they come with your PC copy. An archive re-saved by a tool **without encryption** stops the game ("Unencrypted archives no longer supported"); in Mods the app leaves such a file out and says why. Re-save it with OpenIV or use the original.
 
 Whole PC audio archives already work this way: players have used a 412 MB `RADIO_14_DANCE_02.rpf` in place of the 22 MB one for 15 to 20 minute sessions with no audio errors in their logs.
 

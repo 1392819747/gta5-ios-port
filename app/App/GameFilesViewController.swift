@@ -70,6 +70,7 @@ final class GameFilesViewController: UIViewController, UIDocumentPickerDelegate,
         stack.addArrangedSubview(archiveSection())
         stack.addArrangedSubview(progressSection())
         NotificationCenter.default.addObserver(self, selector: #selector(installChanged), name: .gameInstallChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(cameBack), name: UIApplication.didBecomeActiveNotification, object: nil)
         // An install may already be running (started before this screen was closed).
         if install.isRunning { installChanged() } else { refresh(recheck: true) }
         // Automation: --install-link <url> starts a link install; --install-cancel-after <s> cancels it.
@@ -142,8 +143,13 @@ final class GameFilesViewController: UIViewController, UIDocumentPickerDelegate,
         pick.addAction(UIAction { [weak self] _ in self?.pickFolder() }, for: .touchUpInside)
         let buttons = UIStackView(arrangedSubviews: [find, pick, UIView()])
         buttons.spacing = 10
+        let files = Theme.glassButton(AppLanguage.choose("Open GTA V Port in Files"), symbol: "arrow.up.forward.app")
+        files.addAction(UIAction { [weak self] _ in self?.openAppFolderInFiles() }, for: .touchUpInside)
+        let filesRow = UIStackView(arrangedSubviews: [files, UIView()])
         return card(AppLanguage.choose("Already on this iPhone"), [
             note(AppLanguage.choose("Easiest: in the Files app, move your unpacked game folder into On My iPhone › GTA V Port. The app finds it there by itself, however deep it is.")),
+            note(AppLanguage.choose("This button opens that folder in Files. Move your game folder into it (touch and hold the game folder › Move), then come back: the app checks it by itself.")),
+            filesRow,
             note(AppLanguage.choose("Somewhere else? Choose any folder above it, even On My iPhone itself, and the app searches everything inside.")),
             note(AppLanguage.choose("In the picker, tap the folder so you see what's inside it, then tap Open at the top. If Open stays grey (it can on some sideloaded installs), use the easiest way above.")),
             buttons
@@ -352,6 +358,39 @@ final class GameFilesViewController: UIViewController, UIDocumentPickerDelegate,
         refresh(recheck: true)
     }
 
+    /// The way that works on every install (GTA-62): the Files app opens at this app's own folder, the
+    /// player moves the game folder in, and coming back to the app looks there again.
+    private var lookWhenBack = false
+    private func openAppFolderInFiles() {
+        try? FileManager.default.createDirectory(at: GameFolder.appFolder, withIntermediateDirectories: true)
+        guard let url = URL(string: "shareddocuments://" + GameFolder.appFolder.path) else { return }
+        GameFolder.log("Game files: opened the app's folder in Files to move the game in")
+        UIApplication.shared.open(url) { [weak self] opened in
+            guard let self else { return }
+            if opened {
+                self.lookWhenBack = true
+            } else {
+                self.setStatus(false, title: AppLanguage.choose("Files didn't open"), detail: AppLanguage.choose("Open the Files app yourself and go to On My iPhone › GTA V Port, move your game folder there, then come back."))
+            }
+        }
+    }
+
+    @objc private func cameBack() {
+        guard lookWhenBack, !install.isRunning else { return }
+        lookWhenBack = false
+        // A complete game folder picked elsewhere stays in use; only without one does the app's folder take over.
+        if GameFolder.isChosen, !GameFolder.inAppFolder, lastReport?.isComplete == true { refresh(recheck: false); return }
+        lookInAppFolder()
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        guard !pickingArchive else { return }
+        // On some sideloaded installs the picker's Open never answers, so players can only cancel (GTA-62).
+        GameFolder.log("Game files: the folder picker was closed without a folder")
+        if GameFolder.isChosen, lastReport?.isComplete == true { return }   // the game is set up already
+        setStatus(nil, title: AppLanguage.choose("Open didn't work?"), detail: AppLanguage.choose("Some sideloaded installs can't hand a folder to the app. Tap Open GTA V Port in Files, move your game folder there, then come back: the app finds it by itself."))
+    }
+
     private func pickFolder() {
         pickingArchive = false
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder])
@@ -376,6 +415,17 @@ final class GameFilesViewController: UIViewController, UIDocumentPickerDelegate,
             return
         }
         guard let folder = urls.first else { return }
+        // On some sideloaded installs iOS hands over a copy in tmp/…-Inbox instead of the folder itself (player
+        // logs, GTA-62), and iOS may clear tmp at any time: keep the copy by moving it into the app's own folder.
+        if folder.path.contains("-Inbox/") {
+            let kept = GameFolder.appFolder.appendingPathComponent(folder.lastPathComponent)
+            if !FileManager.default.fileExists(atPath: kept.path), (try? FileManager.default.moveItem(at: folder, to: kept)) != nil {
+                GameFolder.log("Game files: the picker gave a copy (\(folder.lastPathComponent)); moved it into the app's folder")
+                lookInAppFolder()
+                return
+            }
+            GameFolder.log("Game files: the picker gave a copy in \(folder.deletingLastPathComponent().lastPathComponent) and it couldn't be moved")
+        }
         setStatus(nil, title: AppLanguage.interpolate(AppLanguage.choose("Searching \"{arg0}\"…"), [folder.lastPathComponent]), detail: AppLanguage.choose("Looking through every folder inside for your game, then checking each file."))
         DispatchQueue.global(qos: .userInitiated).async {
             let choice = GameFolder.choose(folder)

@@ -13,6 +13,9 @@ python3 Scripts/prepare_handler_frame.py
 python3 Scripts/prepare_netlog_flush.py
 python3 Scripts/prepare_input_exclusive.py
 python3 Scripts/prepare_restore_flush.py
+python3 Scripts/prepare_destroyed_phases.py
+python3 Scripts/prepare_heap_sizes.py
+python3 Scripts/prepare_dependency_guard.py
 python3 Scripts/prepare_script_request_guard.py
 python3 Scripts/prepare_missing_txd.py
 python3 Scripts/prepare_missing_scaleform.py

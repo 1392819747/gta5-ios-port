@@ -52,8 +52,15 @@ final class ModsViewController: UITableViewController, UIDocumentPickerDelegate 
                 content.secondaryText! += " · " + AppLanguage.interpolate(ModInstaller.hasGameIndex
                     ? AppLanguage.choose("{arg0} not in this game version") : AppLanguage.choose("{arg0} placed when the game starts"), [String(mod.waiting)])
             }
+            // Changed while the game is running: applied at the next start (ModInstaller.pending).
+            let change = ModInstaller.pending[mod.name]
+            if let change {
+                content.secondaryText! += " · " + (change == "remove" ? AppLanguage.choose("removed when the game starts again")
+                    : change == "on" ? AppLanguage.choose("switched on when the game starts again") : AppLanguage.choose("switched off when the game starts again"))
+            }
             let toggle = UISwitch()
-            toggle.isOn = mod.enabled
+            toggle.isOn = change.map { $0 == "on" } ?? mod.enabled
+            toggle.isEnabled = change != "remove"
             toggle.addAction(UIAction { [weak self] action in
                 guard let self, let toggle = action.sender as? UISwitch else { return }
                 do { try ModInstaller.setEnabled(mod, toggle.isOn) } catch { toggle.isOn = !toggle.isOn; self.show(error) }
@@ -88,7 +95,7 @@ final class ModsViewController: UITableViewController, UIDocumentPickerDelegate 
         guard indexPath.section == 1, !mods.isEmpty else { return nil }
         let mod = mods[indexPath.row]
         let delete = UIContextualAction(style: .destructive, title: AppLanguage.choose("Remove")) { [weak self] _, _, done in
-            do { try ModInstaller.remove(mod) } catch { self?.show(error) }
+            do { try ModInstaller.remove(mod) } catch { self?.show(error, title: AppLanguage.choose("Couldn't remove the mod")) }
             self?.reload(); done(true)
         }
         return UISwipeActionsConfiguration(actions: [delete])
@@ -152,8 +159,8 @@ final class ModsViewController: UITableViewController, UIDocumentPickerDelegate 
         present(alert, animated: true)
     }
 
-    private func show(_ error: Error) {
-        let alert = UIAlertController(title: AppLanguage.choose("Couldn't install the mod"), message: error.localizedDescription, preferredStyle: .alert)
+    private func show(_ error: Error, title: String = AppLanguage.choose("Couldn't install the mod")) {
+        let alert = UIAlertController(title: title, message: error.localizedDescription, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: AppLanguage.choose("OK"), style: .cancel))
         present(alert, animated: true)
     }

@@ -39,6 +39,17 @@ ignores a button, trace the script that draws it and look at what it reads:
 The race result screen (GTA-98) showed `IS_CONTROL_JUST_PRESSED(2, 215) -> 0` while A was held; `n
 IS_CONTROL_ENABLED 2 215` then showed the input disabled.
 
+## Reading a mission's logic
+
+- The game's scripts, decompiled (a newer game version, but the mission logic matches): Sainan's
+  [GTA-V-Decompiled-Scripts](https://github.com/Sainan/GTA-V-Decompiled-Scripts) (`decompiled_scripts/<script>.c`). Search
+  a stage's help and objective labels, the controls it reads (`PAD::GET_CONTROL_VALUE(2, 218)` = the left stick's X axis)
+  and its timers. Friend Request (lester1) waits for a channel change, then accepts the call only 77-170 s later.
+- Any text label while its mission runs: `./gta.py n GET_FILENAME_FOR_AUDIO_CONVERSATION s:CUT_HELP`. Help texts name the
+  inputs (`~INPUT_SCRIPT_RT~`) the touch layout has to offer.
+- Script names aren't titles: Friend Request is `lester1`, Monkey Business `fbi5A`, Scouting the Port `docks_setup`.
+  `./gta.py checkpoint 0` restarts a running mission from its start.
+
 ## Scenarios
 
 `scenarios/*.py` reproduce reported moments and check them; each says what it needs (save, launch mode) and how

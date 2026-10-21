@@ -79,7 +79,7 @@ struct Texture : Object {
 	bool alphaView = false;		// A8 render target: stored as R8, sampled through a (0,0,0,R) swizzled view
 	int bcKind = 0;			// 1..7: block-compressed source (decoded on the CPU unless bcNative)
 	bool bcNative = false;		// stored as a Metal BC format: uploads, copies and readbacks use the blocks as they are
-	bool astc = false;		// BC1 rewritten as ASTC 4x4 on upload (gASTCBC1); readbacks use the original blocks
+	bool astc = false;		// BC1 (or BC3, gASTCBC3) rewritten as ASTC 4x4 on upload (gASTCBC1); readbacks use the original blocks
 	bool bcSrgb = false;
 	// Lite build (gSkipTopMip): GPU levels dropped from the top. The GPU texture is that many times half
 	// the size and has that many fewer levels; width/height/mips stay the game's, so GPU level = mip - skip.
@@ -162,7 +162,7 @@ struct FormatInfo {
 	int bc = 0;			// BC1..7 source
 	bool srgb = false, a8 = false;
 	bool bcNative = false;		// kept compressed on the GPU (gNativeBC), not decoded on the CPU
-	bool astc = false;		// BC1 stored as ASTC 4x4 (gASTCBC1)
+	bool astc = false;		// BC1 (or BC3, gASTCBC3) stored as ASTC 4x4 (gASTCBC1)
 };
 // The GPU samples BC1-7 itself (Apple silicon iPads and Macs; not iPhones): BC textures stay
 // compressed, 2 to 8 times smaller than decoded. Set once by the renderer before any texture.
@@ -173,6 +173,7 @@ extern bool gPackedBC1;
 // BC1 rewritten block by block as ASTC 4x4 (Source/BC1ToASTC.c): 8 bits per texel, half of A1BGR5 and a
 // quarter of RGBA8, for sRGB BC1 too. Every Apple GPU reads ASTC; takes precedence over gPackedBC1.
 extern bool gASTCBC1;
+extern bool gASTCBC3;		// BC3 as ASTC too (on; PG_ASTC_BC3=0 or Settings › Experimental turns it off; lossy alpha, GTA-118)
 // Lite build: the game's loaded textures go to the GPU without their largest mip level (a quarter
 // of the memory; at phone render resolutions that level is rarely sampled), as consoles shipped them.
 extern bool gSkipTopMip;

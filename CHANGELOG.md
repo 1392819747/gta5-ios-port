@@ -1,5 +1,42 @@
 # Changelog
 
+## v1.4.4
+
+### Missions
+- **Friend Request**: the mission waits for a channel change on the couch ("Find Weazel News"), then lets you call Jay Norris from 1:17 to 2:50 of the presentation, when he holds the phone up on TV. With a black TV neither moment could be seen, so players waited forever or missed the call. The couch now has arrow buttons for the TV (channel and volume), and a note says what to do and when ("Call now: … Phone › Contacts › Jay Norris, before 2:50").
+- **Phone camera**: while the phone is out, its touch buttons show A, B and X, the letters the game's own hints name ("Take Photo A", "Send X"); Scouting the Port's photos and sending them to Ron are easy to find.
+
+### Mods
+- **Several add-on cars**: a loose `dlc.rpf` (or "dlc 2.rpf", as the Files app renames a second one) becomes an add-on pack of its own; two mods that use the same pack name both load (the second as `name_2`); the same car installed twice loads once.
+- **Changing mods while playing**: switching a mod off or removing it in Settings › Mods during play pulled its files away from the game ("Game file missing from your folder", then a stop). Such changes now wait until the game starts again, and the row says so.
+- **Unencrypted archives**: an archive saved without encryption stopped the game ("Unencrypted archives no longer supported"); the app leaves it out and says to re-save it with OpenIV or use the original.
+- **Removing hand-copied mods**: folders with read-only files can be removed in Settings › Mods.
+- The log no longer fills with "ENTITY SET FOUND" lines while a script mod like Simple Trainer runs.
+
+### Game files and saves
+- **Import a Story save**: Settings › Game mode › Import a Story save… puts a save from a PC or a friend (SGTA50000…) into a free slot.
+- **Folder picker**: on many sideloaded installs iOS doesn't hand the picked folder to the app (logs show it copying the whole folder instead). The Game files screen has "Open GTA V Port in Files": move the game folder there and come back, the app finds it by itself. Closing the picker without a folder explains this.
+
+### Display
+- **Subtitles above the home bar**: the subtitle line sat under the iPhone's home bar; it now sits 5% higher (Settings › Touch controls › Subtitles above the home bar, on by default on iPhones with a home bar). The game's own Safezone Size doesn't move subtitles.
+
+### Performance
+- **Less CPU**: one part of the game engine (its lowest-level code, including drawing and controller input) was built without optimization; it now is. In the simulator the app uses about 17% less CPU at the same FPS: less heat, more headroom.
+- **Sharper textures for longer on iPhones before the 15 Pro**: the texture budget follows what textures really take on your iPhone (measured while you play) instead of a fixed half.
+
+### Experimental
+- **Compressed see-through textures** (on): on iPhones before the 15 Pro, leaves, fences, smoke and decals (BC3 textures, about 4 in 10) stay compressed instead of taking 4x the memory: in the simulator's iPhone mode the textures at the same spots went from 600 to 427 MB. Soft see-through edges can show steps; Settings › This device › Experimental turns it off.
+- **More engine memory** (off by default): about 270 MB more room inside the game's 4 GB on 6-8 GB iPhones, for fewer stops after long play: turn it on in Settings › This device › Experimental (and off again if the game stops more often).
+
+### Stability
+- **Changing the resolution during play**: a resolution change in Settings (or a TV) could still stop the game right after the screen came back ("Invalid call_indirect"; v1.4.3's fix covered the render thread, this one the main thread). A render phase the change destroyed stayed in the game's list; it's now dropped.
+- **Long sessions on 6-8 GB iPhones**: near the end of the engine's 4 GB, v1.4.3's memory guard counted small free pieces as room, kept loading, and the game could stop on a big load ("Read request … some of which are NULL"). The guard now counts those pieces only while there's real room left.
+- **Random stops with "Error allocating … bytes in heap 0"**: a background worker sometimes picked up a job whose memory had already been freed and asked for a 3.7 GB buffer (or called a garbage function). It now drops such a job and keeps going.
+
+### Stats
+- **Anonymous play stats**: a random install ID, the app and iPhone model, play time, FPS, missions started and failed, engine stops and Cheats rows used; no names, saves, game files, mod names or IP addresses. Exactly what is sent: [docs/STATS.md](docs/STATS.md).
+- Other bug fixes and improvements.
+
 ## v1.4.3
 
 ### Missions

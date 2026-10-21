@@ -10,13 +10,17 @@ A fan project that runs the WebAssembly build of GTA V natively on iPhone: the e
 
 > Not affiliated with or endorsed by Rockstar Games or Take-Two Interactive. Rights holders: contact kevin@aether.ee and the repository will be taken down promptly.
 
+**Website:** [fivestarport.site](https://fivestarport.site): the guide, the builder and the translate page in one place.
+
+**On a Mac?** The same app runs natively on Apple Silicon Macs with keyboard and mouse: **[gta5-macos-port](https://github.com/kevinerikjs/gta5-macos-port)** ([setup guide](docs/MAC.md)).
+
 ## What you need
 
 | | |
 |---|---|
 | **Your own game files** | Web build `8b0b5899ed`: the folder that contains `data/` and `b/8b0b5899ed/`, about 21 GB. |
 | **An iPhone with 6 GB of memory** | iPhone 12 Pro, 13 Pro, any iPhone 14 or newer, on iOS 16 or later, with about 30 GB free. Older 4 GB iPhones will most likely run out of memory. |
-| **A GitHub account** (free) | It builds the app for you. No card needed. |
+| **A GitHub account** (free) | It builds the app for you. No card needed. Not needed if you use a prebuilt IPA. |
 | **SideStore or AltStore** (free) | Installs the app with your normal Apple ID. Setting it up needs a computer once (an Apple rule). [SideStore](https://sidestore.io) · [AltStore](https://altstore.io) |
 
 No paid Apple account is needed.
@@ -31,13 +35,17 @@ Any way that gets the folder there works, for example:
 - **AirDrop** it from a Mac, or download and unzip it in the Files app.
 - **With a cable**, once the app is installed (step 3): Finder on a Mac, or the Apple Devices app on Windows. Select your iPhone, open **Files**, and drag the folder onto **GTA V Port**. It then shows up in Files under On My iPhone › GTA V Port.
 
-### 2. Build your app with 5★ Port Builder
+### 2. Get the app: build it or use a prebuilt IPA
+
+Build it yourself from your own game files with 5★ Port Builder (free, about 25 minutes), or use a prebuilt IPA from the Telegram group. Either way you end up with `GTA5Port.ipa`.
+
+#### Option A: build it with 5★ Port Builder
 
 **Watch the 3-minute tutorial:**
 
 https://github.com/user-attachments/assets/1efff2dc-675e-473d-b988-0c23784404ed
 
-Open **[fivestarport.vercel.app](https://fivestarport.vercel.app)** on your iPhone and follow the steps:
+Open **[fivestarport.site/build](https://fivestarport.site/build/)** on your iPhone and follow the steps:
 1. **Connect GitHub.** The builder makes a private copy of this repository in your account. GitHub asks you to approve it once; keep "All repositories" selected.
 2. **Pick three files** from your game folder:
    - `b/8b0b5899ed/game.wasm`
@@ -46,6 +54,10 @@ Open **[fivestarport.vercel.app](https://fivestarport.vercel.app)** on your iPho
 3. **Upload and build.** About 85 MB goes to your own private repository; the big `data` folder stays on your phone. GitHub then builds the app in about 25 minutes. You can close the page and come back later.
 
 When it's done, tap **Download my app** to get `GTA5Port.ipa`. It also stays in your GitHub account, under your repository's Releases.
+
+#### Option B: use a prebuilt IPA
+
+Don't want to build? Ready-made `GTA5Port.ipa` files are shared in the **[Releases topic of the Five Star Port Telegram](https://t.me/fivestarport/786)**: the newest post there is the newest version. If you're looking for one, that's the place to check. Get it there rather than from random sites, which can have old or modified copies. Then go on to step 3.
 
 ### 3. Install it
 
@@ -70,7 +82,7 @@ Everything plays from your phone: no server, no internet needed while playing.
 - **Graphics.** Settings has six presets, from Battery to Max, and a separate resolution choice that changes while you play. Presets above the recommended one show a warning. If a setting needs more memory than your iPhone gives the app, the game closes; on the next launch the app tells you and goes back to a setting that works. Settings that already ran fine on your phone are never lowered.
 - **Something went wrong?** Settings › **Send log to the developer** sends this run's log and the previous one (the one from a crash) in one tap. **Share log** lets you save or send it yourself.
 - **Controls.** Move, resize or hide every touch button with **Edit controls layout** (start screen or Settings). Assisted aim, gyro aiming and tilt steering are in Settings. Bluetooth controllers work too; the touch controls hide while one is connected. Settings › Controls › **Airplane right stick** optionally replaces the airplane throttle and rudder buttons with a visible second stick: drag vertically to set throttle (it stays set when released), and horizontally for rudder (it recentres). Helicopters keep their buttons.
-- **Updating.** When a new version comes out, open the builder again and tap **Build again**. Your game folder and saves stay where they are.
+- **Updating.** When a new version comes out, open the builder again and tap **Build again**, or get the newest prebuilt IPA from the [Releases topic](https://t.me/fivestarport/786). Your game folder and saves stay where they are.
 
 ## Get the most performance
 
@@ -80,7 +92,7 @@ The biggest upgrade is **more memory**: iOS normally gives the app about half of
 
 Players report this works great and makes the game far more playable.
 
-1. Build with **Enable increased memory entitlements** ticked on [fivestarport.vercel.app](https://fivestarport.vercel.app). It's on by default; if you built with it off, tick it and tap **Build again**.
+1. Build with **Enable increased memory entitlements** ticked on [fivestarport.site/build](https://fivestarport.site/build/). It's on by default; if you built with it off, tick it and tap **Build again**.
 2. Install the new `GTA5Port.ipa` with **SideStore** as usual.
 3. Install **[GetMoreRam](https://github.com/hugeBlack/GetMoreRam)**, sign in with the **same Apple ID** you use in SideStore, pick **GTA V Port** and add **Increased Memory Limit**.
 4. In SideStore, **refresh** GTA V Port so it picks up the change.
@@ -109,11 +121,17 @@ PC mods work as downloaded: car and character replacements, add-on cars, OpenIV 
 
 **Settings › Cheats** has a vehicle spawner (search any vehicle the game has, it appears in front of you), God mode and Never wanted switches, repair and clean, time of day and weather, Set money and the game's own story cheats. See [docs/CHEATS.md](docs/CHEATS.md).
 
+## Anonymous play stats
+
+Since v1.4.4 the app sends a few anonymous numbers so we can see what to fix first: how many people play, on which iPhones and versions, FPS, crashes, and which missions fail. No names, saves, game files, mod names or IP addresses. Exactly what is sent: [docs/STATS.md](docs/STATS.md).
+
 ## Translate the app
 
 Anyone can add a language to the app or finish one with the Translate page on the builder website. Vietnamese and Arabic are the first community translations. See [docs/TRANSLATING.md](docs/TRANSLATING.md).
 
 ## Community and help
+
+**[Questions and answers](docs/FAQ.md)**: the answers to the most common questions (install, game files, memory, controls, missions, crashes), the same ones the helper bot gives.
 
 **[Five Star Port on Telegram](https://t.me/fivestarport)** has everything: every new release as it comes out, help with installs and builds, and a community that has solved most problems before. Please ask there instead of by email or DM.
 

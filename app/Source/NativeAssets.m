@@ -126,7 +126,7 @@ static bool pg_resource_version_problem(const char *name,uint32_t version,char *
   for(size_t i=0;i<sizeof pgResourceVersions/sizeof *pgResourceVersions;i++){
     if(strcasecmp(dot+1,pgResourceVersions[i].ext)||version==pgResourceVersions[i].legacy)continue;
     const char *base=strrchr(name,'/');base=base?base+1:name;
-    if(version==pgResourceVersions[i].enhanced)snprintf(why,n,"made for GTA V Enhanced (%s is version %u, this game reads %u)",base,version,pgResourceVersions[i].legacy);
+    if(version==pgResourceVersions[i].enhanced)snprintf(why,n,"made for GTA V Enhanced (%s is version %u, this game reads %u; install the mod's Legacy (original PC) version)",base,version,pgResourceVersions[i].legacy);
     else snprintf(why,n,"made for another game version (%s is version %u, this game reads %u)",base,version,pgResourceVersions[i].legacy);
     return true;
   }
@@ -161,6 +161,9 @@ bool PGModFileProblem(const char *path,char *why,size_t n){
   uint32_t header[4]={0};bool problem=false;
   if(fread(header,4,4,file)==4){
     if(header[0]==0x37435352)problem=pg_resource_version_problem(path,header[1],why,n);
+    // An archive saved with no encryption at all (key 0; OpenIV saves OPEN, some RPF tools save none) stops
+    // the engine: "Unencrypted archives no longer supported" (log 1121, a PC audio archive).
+    else if(header[0]==0x52504637&&header[3]==0){snprintf(why,n,"an archive saved without encryption, which this game can't read (re-save it with OpenIV, or use the original file)");problem=true;}
     else if(header[0]==0x52504637)problem=pg_rpf_version_problem(file,0,0,why,n);
   }
   fclose(file);return problem;
@@ -253,6 +256,7 @@ static NSArray *applyMods(NSArray *files,NSDictionary *manifest){
   NSMutableArray *merged=nil;NSMutableDictionary *mods=[NSMutableDictionary dictionary];
   NSMutableDictionary<NSNumber *,NSMutableArray *> *inside=[NSMutableDictionary dictionary];   // archive id -> @[inner, full]
   NSMutableArray<NSString *> *packs=[NSMutableArray array];
+  NSMutableDictionary<NSNumber *,NSMutableArray<NSString *> *> *packFiles=[NSMutableDictionary dictionary];   // size -> pack files added
   NSString *resolvedFolder=folder.stringByResolvingSymlinksInPath;
   // OpenIV packages (NativeOIV.m) become mod files at PC paths; their own files in Mods are left to them.
   bool oivNeedsGame=false;NSArray<NSString *> *oivOwned=nil;
@@ -287,10 +291,29 @@ static NSArray *applyMods(NSArray *files,NSDictionary *manifest){
     NSString *original=candidate[0],*full=candidate[1];NSNumber *size=candidate[2];
     char why[200];
     if(PGModFileProblem(full.fileSystemRepresentation,why,sizeof why)){
-      char line[PATH_MAX+300];snprintf(line,sizeof line,"Mods: %s is %s; ignored, or the game would stop. Install the mod's Legacy (original PC) version.",original.UTF8String,why);pg_log(line);continue;
+      char line[PATH_MAX+300];snprintf(line,sizeof line,"Mods: %s is %s; ignored, or the game would stop.",original.UTF8String,why);pg_log(line);continue;
     }
     modCount++;
     NSString *relative=modTranslate(original),*lower=relative.lowercaseString;
+    // A bare add-on pack: "dlc.rpf" dropped into Mods or a mod folder, or "dlc 2.rpf" when the Files app
+    // renamed a second one. It becomes a pack of its own, named after its folder or file (GTA-138).
+    if(lower.pathComponents.count==1&&[lower rangeOfString:@"^dlc[ _-]*\\(?[0-9]*\\)?\\.rpf$" options:NSRegularExpressionSearch].location!=NSNotFound){
+      NSString *dir=full.stringByDeletingLastPathComponent,*stem=original.stringByDeletingPathExtension;
+      NSString *base=[dir isEqualToString:resolvedFolder]?stem:[stem.lowercaseString isEqualToString:@"dlc"]?dir.lastPathComponent:[dir.lastPathComponent stringByAppendingFormat:@"_%@",stem];
+      NSString *pack=[[base componentsSeparatedByCharactersInSet:NSCharacterSet.alphanumericCharacterSet.invertedSet] componentsJoinedByString:@"_"];
+      if(!pack.length)pack=@"addon";
+      relative=[NSString stringWithFormat:@"x64/dlcPacks/%@/dlc.rpf",pack];lower=relative.lowercaseString;
+    }
+    // Two mods with the same pack folder name: the second gets a name of its own instead of replacing the
+    // first (players install several add-on cars from mods that reuse one name, GTA-138).
+    NSArray *packParts=lower.pathComponents;
+    if(packParts.count==4&&[packParts[0] isEqualToString:@"x64"]&&[packParts[1] isEqualToString:@"dlcpacks"]&&[packParts[3] isEqualToString:@"dlc.rpf"]&&
+       ids[lower]&&[ids[lower] unsignedIntegerValue]>=files.count){
+      NSString *pack=relative.pathComponents[2];NSString *unique=pack;
+      for(int n=2;ids[[NSString stringWithFormat:@"x64/dlcpacks/%@/dlc.rpf",unique].lowercaseString];n++)unique=[NSString stringWithFormat:@"%@_%d",pack,n];
+      char line[PATH_MAX+160];snprintf(line,sizeof line,"Mods: %s uses the add-on pack name %s again; loaded as %s.",original.UTF8String,pack.UTF8String,unique.UTF8String);pg_log(line);
+      relative=[NSString stringWithFormat:@"x64/dlcPacks/%@/dlc.rpf",unique];lower=relative.lowercaseString;
+    }
     NSNumber *identity=ids[lower];
     if(!identity){
       // Inside an archive the game has: the outermost "<archive>.rpf/" prefix that is a game file.
@@ -310,6 +333,12 @@ static NSArray *applyMods(NSArray *files,NSDictionary *manifest){
       // A new add-on pack: x64/dlcPacks/<pack>/dlc.rpf, added to the file list and the game's pack list.
       NSArray *parts=lower.pathComponents;
       if(parts.count==4&&[parts[0] isEqualToString:@"x64"]&&[parts[1] isEqualToString:@"dlcpacks"]&&[parts[3] isEqualToString:@"dlc.rpf"]){
+        // The same pack twice (one car installed two ways, or a copy left in Mods) loads once: two copies
+        // would register its cars twice.
+        bool again=false;for(NSString *other in packFiles[size])if([NSFileManager.defaultManager contentsEqualAtPath:other andPath:full]){again=true;break;}
+        if(again){char line[PATH_MAX+96];snprintf(line,sizeof line,"Mods: %s is the same add-on pack as one already loaded; loaded once.",original.UTF8String);pg_log(line);continue;}
+        if(!packFiles[size])packFiles[size]=[NSMutableArray array];
+        [packFiles[size] addObject:full];
         if(!merged)merged=[files mutableCopy];
         NSString *pack=relative.pathComponents[2];
         NSString *path=[NSString stringWithFormat:@"x64/dlcPacks/%@/dlc.rpf",pack];
@@ -802,8 +831,11 @@ static void gameConfigOverlay(uint32_t id,uint64_t offset,uint8_t *destination,i
 // pieces' places relative to each other: offsets in the game's HUD units (fractions of the screen; with
 // alignY="B" a negative posY is higher up) and a size factor around the minimap's own corner. The expanded
 // map moves with it but stays on screen. A Mods replacement of the file is moved too. Same compact-and-pad as gameconfig.
-static double minimapDX, minimapDY, minimapScale = 1;
+static double minimapDX, minimapDY, minimapScale = 1, subtitleRaise;
 static NSData *frontendLayout;
+// Subtitles above the home bar (GTA-95): HUD_SUBTITLE_TEXT sits at the bottom edge (alignY="B" posY=".0051"), where
+// the home bar covers it; it moves up by this fraction of the screen height. (The game's safe zone doesn't move it.)
+void PGSetSubtitleRaise(double raise) { subtitleRaise = raise >= 0 && raise < 0.3 ? raise : 0; }
 void PGSetMinimapLayout(double dx, double dy, double scale) {
   minimapDX = dx; minimapDY = dy; minimapScale = scale > 0.4 && scale < 2.5 ? scale : 1;
 }
@@ -826,6 +858,14 @@ NSData *PGFrontendRewrite(NSData *original, double dx, double dy, double scale) 
   }
   if (!found[0]) return nil;
   NSMutableString *changed = [text mutableCopy];
+  if (subtitleRaise > 0) {
+    NSRegularExpression *subtitle = [NSRegularExpression regularExpressionWithPattern:@"(<component name=\"HUD_SUBTITLE_TEXT\"[^>]*?posY=\")([-\\d.]+)(\")" options:0 error:nil];
+    NSTextCheckingResult *t = [subtitle firstMatchInString:changed options:0 range:NSMakeRange(0, changed.length)];
+    if (t) [changed replaceCharactersInRange:[t rangeAtIndex:2] withString:[NSString stringWithFormat:@"%.4f", [[changed substringWithRange:[t rangeAtIndex:2]] doubleValue] - subtitleRaise]];
+  }
+  // The subtitle entry comes before the minimap's in the file: find the minimap entries again in the edited text.
+  matches = [entry matchesInString:changed options:0 range:NSMakeRange(0, changed.length)];
+  text = [changed copy];
   for (NSTextCheckingResult *m in matches.reverseObjectEnumerator) {
     int set = [[text substringWithRange:[m rangeAtIndex:2]] isEqualToString:@"bigmap"];
     double x = [[text substringWithRange:[m rangeAtIndex:4]] doubleValue], y = [[text substringWithRange:[m rangeAtIndex:6]] doubleValue];
@@ -863,14 +903,14 @@ static void frontendOverlay(uint32_t id, uint64_t offset, uint8_t *destination, 
       // A mod's frontend.xml is moved too: the player chose the place, and the default changes nothing.
       // (A leftover copy of the game's own file in Mods kept the setting from working, GTA-131.)
       NSData *rewritten = nil;
-      if (minimapDX != 0 || minimapDY != 0 || minimapScale != 1) {
+      if (minimapDX != 0 || minimapDY != 0 || minimapScale != 1 || subtitleRaise > 0) {
         uint64_t size = [assetFiles[id][1] unsignedLongLongValue];
         NSMutableData *original = [NSMutableData dataWithLength:(NSUInteger)size];
         if (readAssetImpl(id, 0, original.mutableBytes, (uint32_t)size) == (int64_t)size)
           rewritten = PGFrontendRewrite(original, minimapDX, minimapDY, minimapScale);
         char line[160];
-        snprintf(line, sizeof line, rewritten ? "Minimap: moved by %.3f, %.3f, size %.2f%s." : "Minimap: frontend.xml not as expected; position %.3f, %.3f, size %.2f not applied%s.",
-                 minimapDX, minimapDY, minimapScale, modFiles[@(id)] ? " (in a mod's frontend.xml)" : "");
+        snprintf(line, sizeof line, rewritten ? "Minimap: moved by %.3f, %.3f, size %.2f; subtitles raised by %.3f%s." : "Minimap: frontend.xml not as expected; position %.3f, %.3f, size %.2f, subtitles %.3f not applied%s.",
+                 minimapDX, minimapDY, minimapScale, subtitleRaise, modFiles[@(id)] ? " (in a mod's frontend.xml)" : "");
         pg_log(line);
       }
       frontendLayout = rewritten ?: [NSData data];
